@@ -4,8 +4,8 @@ on:
   schedule:
     - cron: "17 */6 * * *"   # every 6 hours (Remotive asks for at most 4 calls a day)
   workflow_dispatch:          # "Run workflow" button in the Actions tab
-  push:                       # re-fetch right away when the rules or resume change
-    paths: [config.json, keywords.json, resume.txt, fetch_jobs.py]
+  push:                       # re-fetch right away when the rules change
+    paths: [config.json, keywords.json, fetch_jobs.py]
 
 permissions:
   contents: write

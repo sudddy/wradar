@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Poll public job boards, keep jobs that fit the resume, score keyword matches, write docs/jobs.js.
+"""Poll public job boards, keep software engineering jobs, tag their skills, write docs/jobs.js.
 
 Rules only, no AI at runtime. Standard library only. Run: python3 fetch_jobs.py
+Resume matching happens in the dashboard, against whichever resume the viewer uploads.
 """
 import html
 import json
@@ -388,8 +389,8 @@ def years_required(body):
 
 def load_rules(root=ROOT):
     cfg = json.loads((root / "config.json").read_text())
-    kw = compile_keywords(json.loads((root / "keywords.json").read_text()))
-    return dict(cfg=cfg, kw=kw, resume=skills(kw, (root / "resume.txt").read_text()),
+    keywords = {k: v for k, v in json.loads((root / "keywords.json").read_text()).items() if not k.startswith("_")}
+    return dict(cfg=cfg, keywords=keywords, kw=compile_keywords(keywords),
                 include=re.compile(cfg["title_include"], re.I), exclude=re.compile(cfg["title_exclude"], re.I))
 
 
@@ -408,16 +409,11 @@ def evaluate(job, r, cutoff):
         return None
     body = text(val("description"))
     found = skills(r["kw"], f"{title}\n{body}")
-    matched = [k for k in r["kw"] if k in found and k in r["resume"]]
-    if len(matched) < cfg["min_matched_keywords"]:
-        return None
     return dict(title=title, company=job["company"].strip(), where=tags, location=location[:120],
                 url=job["url"], posted=posted.isoformat() if posted else None, source=job["source"],
                 type=job_type(val("type"), title, body), level=level(title), role=family(title, found),
                 applicants=job.get("applicants"),  # no public board API exposes this; dashboard shows "Not available"
-                score=round(100 * len(matched) / len(found)) if found else 0, matched=matched,
-                missing=[k for k in r["kw"] if k in found and k not in r["resume"]],
-                years_required=years_required(body))
+                skills=[k for k in r["kw"] if k in found], years_required=years_required(body))
 
 
 def describe(e):
@@ -478,11 +474,10 @@ def main():
             else:
                 rows[key] = dict(row, first_seen=seen.get(row["url"], NOW.isoformat()))
 
-    jobs = sorted(rows.values(), key=lambda j: (-j["score"], -len(j["matched"]), j["company"]))
+    jobs = sorted(rows.values(), key=lambda j: j["posted"] or j["first_seen"], reverse=True)
     sources = sorted((s for s, _ in results), key=lambda s: (not s["ok"], s["name"].lower()))
-    data = dict(generated_at=NOW.isoformat(), candidate=cfg["candidate"], years_experience=cfg["years_experience"],
-                resume_skills=[k for k in r["kw"] if k in r["resume"]],
-                rules={k: cfg[k] for k in ("max_age_days", "min_matched_keywords", "locations")}, sources=sources, jobs=jobs)
+    data = dict(generated_at=NOW.isoformat(), keywords=r["keywords"],  # the dashboard matches uploaded resumes with these
+                rules={k: cfg[k] for k in ("max_age_days", "locations")}, sources=sources, jobs=jobs)
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(PREFIX + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n")
     ok = sum(s["ok"] for s in sources)

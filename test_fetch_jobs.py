@@ -36,11 +36,10 @@ class Keywords(unittest.TestCase):
         self.assertIn("Go", self.has("Golang"))
         self.assertNotIn("Go", self.has("Go-to-market team. Go beyond the basics."))
 
-    def test_resume_core_skills(self):
-        for k in ("Java", "Python", "Kafka", "AWS", "Kubernetes", "PostgreSQL", "Payments", "CQRS", "SWIFT"):
-            self.assertIn(k, R["resume"])
-        self.assertNotIn("Go", R["resume"])
-        self.assertNotIn("Ruby on Rails", R["resume"])  # "payment rails" is not Rails
+    def test_lookalikes(self):
+        self.assertNotIn("Ruby on Rails", self.has("event-driven payment rails"))
+        self.assertIn("SWIFT", self.has("payment tracking via SWIFT GPI"))
+        self.assertNotIn("Swift", self.has("payment tracking via SWIFT GPI"))
 
 
 class Locations(unittest.TestCase):
@@ -90,25 +89,21 @@ class Classify(unittest.TestCase):
 
 
 class Evaluate(unittest.TestCase):
-    def test_keeps_and_scores(self):
+    def test_keeps_and_tags(self):
         row = f.evaluate(job(), R, CUTOFF)
         self.assertEqual(row["where"], ["Canada"])
-        self.assertIn("Kafka", row["matched"])
-        self.assertEqual(set(row["missing"]), {"Go", "gRPC"})
+        self.assertEqual(row["skills"], ["Java", "Go", "gRPC", "Kafka", "AWS", "Kubernetes", "PostgreSQL", "Payments"])
         self.assertEqual(row["years_required"], 5)
         self.assertIsNone(row["applicants"])
         self.assertEqual(row["type"], "Not specified")
         self.assertEqual((row["level"], row["role"]), ("Senior", "Backend"))
-        self.assertEqual(row["score"], round(100 * len(row["matched"]) / (len(row["matched"]) + 2)))
 
     def test_rules_reject(self):
         self.assertIsNone(f.evaluate(job(title="Engineering Manager, Payments"), R, CUTOFF))
         self.assertIsNone(f.evaluate(job(title="Account Executive"), R, CUTOFF))
         self.assertIsNone(f.evaluate(job(location="Berlin, Germany"), R, CUTOFF))
         self.assertIsNone(f.evaluate(job(posted=(NOW - timedelta(days=60)).isoformat()), R, CUTOFF))
-        strict = dict(R, cfg=dict(R["cfg"], min_matched_keywords=5))
-        self.assertIsNone(f.evaluate(job(description="Ruby and Rails"), strict, CUTOFF))
-        self.assertIsNotNone(f.evaluate(job(description="Ruby and Rails"), R, CUTOFF))  # default keeps every tech
+        self.assertIsNotNone(f.evaluate(job(description="Ruby and Rails"), R, CUTOFF))  # every technology is kept
         self.assertIsNone(f.evaluate(job(url="javascript:alert(1)"), R, CUTOFF))
 
     def test_lazy_fields_only_fetched_when_needed(self):

@@ -1,10 +1,6 @@
 {
-  "candidate": "Dharunkumar Natarajan",
-  "years_experience": 7,
-
   "locations": ["US", "Canada", "Remote"],
   "max_age_days": 30,
-  "min_matched_keywords": 0,
   "title_include": "\\b(engineer|developer|swe|programmer|architect|member of technical staff)\\b",
   "title_exclude": "\\b(intern|internship|co-?op|new grad|graduate|manager|director|head|vp|vice president|sales|solutions?|support|customer|field|hardware|electrical|mechanical|recruit\\w*|designer)\\b",
 
