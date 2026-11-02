@@ -21,7 +21,7 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).parent
 OUT = ROOT / "docs" / "jobs.js"
 PREFIX = "window.JOB_DATA = "
-UA = "job-radar/1.0 (personal job search)"
+UA = "wradar/1.0 (+https://github.com/sudddy/wradar)"
 NOW = datetime.now(timezone.utc)
 
 US_STATES = ("alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho"
