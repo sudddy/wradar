@@ -1,0 +1,36 @@
+{
+  "candidate": "Dharunkumar Natarajan",
+  "years_experience": 7,
+
+  "locations": ["US", "Canada", "Remote"],
+  "max_age_days": 30,
+  "min_matched_keywords": 5,
+  "title_include": "\\b(engineer|developer|swe|programmer|member of technical staff)\\b",
+  "title_exclude": "\\b(intern|internship|co-?op|new grad|graduate|junior|entry|manager|director|head|vp|vice president|principal|distinguished|sales|solutions?|support|customer|field|hardware|electrical|mechanical|firmware|embedded|ios|android|mobile|front[- ]?end|qa|quality|test|sdet|recruit\\w*|designer)\\b",
+
+  "feeds": ["remotive", "remoteok", "jobicy"],
+
+  "_companies_help": "Career-board slug as used by Greenhouse, Lever or Ashby (auto-detected). Add '|Display Name' when the slug isn't the name.",
+  "companies": [
+    "stripe", "plaid", "brex", "ramp", "mercury", "chime", "affirm", "marqeta", "coinbase", "kraken",
+    "gemini", "circle", "paxos", "ripple", "anchorage|Anchorage Digital", "chainalysis", "fireblocks",
+    "bitgo|BitGo", "moonpay|MoonPay", "alchemy", "consensys|ConsenSys", "uniswaplabs|Uniswap Labs", "phantom",
+    "robinhood", "sofi|SoFi", "carta", "gusto", "rippling", "deel", "moderntreasury|Modern Treasury", "lithic",
+    "unit", "increase", "column", "moov", "finix", "highnote", "adyen", "toast", "airwallex", "nium",
+    "dapperlabs|Dapper Labs", "wealthsimple", "koho|KOHO", "neofinancial|Neo Financial", "clearco", "wave|Wave",
+    "borrowell", "float|Float", "trulioo",
+
+    "datadog", "cloudflare", "mongodb|MongoDB", "elastic", "confluent", "gitlab|GitLab", "twilio", "okta",
+    "vercel", "planetscale|PlanetScale", "cockroachlabs|Cockroach Labs", "temporal", "launchdarkly|LaunchDarkly",
+    "pagerduty|PagerDuty", "fivetran", "dbtlabsinc|dbt Labs", "airbyte", "clickhouse|ClickHouse", "supabase",
+    "posthog|PostHog", "sentry", "grafanalabs|Grafana Labs", "chronosphere", "honeycomb", "redpanda|Redpanda Data",
+    "materialize", "neon|Neon", "render", "railway", "netlify", "linear", "retool", "airtable", "notion", "figma",
+    "asana", "dropbox", "discord", "reddit", "pinterest", "lyft", "airbnb", "instacart", "databricks", "samsara",
+    "scaleai|Scale AI", "anthropic", "openai|OpenAI", "cohere", "modal", "vanta", "drata", "1password|1Password",
+    "tailscale", "zapier", "webflow", "squarespace", "duolingo", "grammarly",
+
+    "clio", "hootsuite", "ada", "faire", "benevity", "jobber", "thinkific", "klue", "visier", "d2l|D2L",
+    "league", "unbounce", "procurify", "tealbook", "rewind", "fullscript", "coveo", "dialogue|Dialogue Health",
+    "sanctuaryai|Sanctuary AI", "certn"
+  ]
+}

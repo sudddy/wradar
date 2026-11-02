@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Radar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5f4f0; --panel: #ffffff; --ink: #1b1a17; --muted: #6a675f; --line: #e3e0d8; --soft: #efede7;
+  --accent: #0e6655;
+  --strong: #17703f; --strong-bg: #e2f2e8;
+  --good: #8a5a00; --good-bg: #f9edcf;
+  --low: #6a675f; --low-bg: #ecebe6;
+  --gap: #a8401b; --gap-bg: #fae6dc;
+  --new: #2b4fd8;
+  --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141412; --panel: #1c1c19; --ink: #ecebe6; --muted: #a09d94; --line: #2e2d29; --soft: #252521;
+    --accent: #4fc2a9;
+    --strong: #6fd69a; --strong-bg: #173525;
+    --good: #e8b54d; --good-bg: #3a2e12;
+    --low: #a09d94; --low-bg: #2a2925;
+    --gap: #f08a62; --gap-bg: #3d2117;
+    --new: #8ea6ff;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141412; --panel: #1c1c19; --ink: #ecebe6; --muted: #a09d94; --line: #2e2d29; --soft: #252521;
+  --accent: #4fc2a9; --strong: #6fd69a; --strong-bg: #173525; --good: #e8b54d; --good-bg: #3a2e12;
+  --low: #a09d94; --low-bg: #2a2925; --gap: #f08a62; --gap-bg: #3d2117; --new: #8ea6ff;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); }
+a { color: var(--accent); }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 28px 16px 64px; }
+
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 24px; margin-bottom: 22px; }
+h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; font-weight: 700; }
+h1 span { color: var(--accent); }
+.sub { color: var(--muted); font-size: 14px; }
+
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.tile b { display: block; font: 600 26px/1.1 var(--mono); letter-spacing: -0.02em; }
+.tile small { color: var(--muted); font-size: 13px; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 22px; align-items: start; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+.filters input[type=search], .filters select { font: inherit; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+.filters input[type=search] { flex: 1 1 220px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; font-size: 14px; border: 0; background: var(--bg); color: var(--muted); padding: 7px 11px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.filters label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); }
+.filters input[type=range] { width: 110px; accent-color: var(--accent); }
+.count { color: var(--muted); font-size: 13px; margin: 0 2px 10px; }
+
+.job { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; }
+.job[open] { border-color: var(--accent); }
+.job summary { list-style: none; cursor: pointer; display: grid; gap: 4px 16px; padding: 14px 16px;
+  grid-template-columns: 64px minmax(0, 1fr) 120px 110px 92px; align-items: center; }
+.job summary::-webkit-details-marker { display: none; }
+.job summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 12px; }
+.score { font: 600 17px/1 var(--mono); text-align: center; padding: 9px 0; border-radius: 9px; }
+.score.strong { color: var(--strong); background: var(--strong-bg); }
+.score.good { color: var(--good); background: var(--good-bg); }
+.score.low { color: var(--low); background: var(--low-bg); }
+.role b { display: block; font-weight: 600; font-size: 16px; line-height: 1.3; }
+.role span { color: var(--muted); font-size: 14px; }
+.new { display: inline-block; font: 600 11px/1 var(--sans); letter-spacing: .04em; text-transform: uppercase;
+  color: var(--new); border: 1px solid currentColor; border-radius: 4px; padding: 2px 5px; margin-left: 6px; vertical-align: 2px; }
+.meta { font-size: 13px; color: var(--muted); }
+.meta strong { display: block; color: var(--ink); font-weight: 500; font-size: 14px; }
+.na { color: var(--muted); font-style: italic; }
+
+.detail { border-top: 1px solid var(--line); padding: 16px; display: grid; gap: 14px; }
+.verdict { font-size: 15px; }
+.verdict b.strong { color: var(--strong); } .verdict b.good { color: var(--good); } .verdict b.low { color: var(--low); }
+.detail h3 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 13px; padding: 3px 9px; border-radius: 999px; background: var(--soft); color: var(--ink); }
+.chip.hit { background: var(--strong-bg); color: var(--strong); }
+.chip.miss { background: var(--gap-bg); color: var(--gap); }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.btn { display: inline-block; background: var(--ink); color: var(--bg); text-decoration: none; font-weight: 600;
+  font-size: 14px; padding: 9px 16px; border-radius: 8px; }
+.loc { color: var(--muted); font-size: 13px; }
+
+#more { display: block; margin: 14px auto 0; font: inherit; font-weight: 600; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px; padding: 9px 18px; cursor: pointer; }
+.empty { background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; padding: 28px; text-align: center; color: var(--muted); }
+
+aside { display: grid; gap: 14px; position: sticky; top: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.card h2 { margin: 0 0 4px; font-size: 15px; }
+.card p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+.gaps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.gaps li { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; font-size: 14px; }
+.gaps i { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: var(--soft); overflow: hidden; }
+.gaps i::after { content: ""; display: block; height: 100%; width: var(--w); background: var(--gap); }
+.gaps span { color: var(--muted); font: 500 12px var(--mono); }
+.src { list-style: none; margin: 0; padding: 0; font-size: 13px; max-height: 260px; overflow: auto; }
+.src li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.src li span { color: var(--muted); font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+.src.bad li span { font-family: var(--sans); white-space: normal; text-align: right; }
+details.more summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-top: 10px; }
+
+@media (max-width: 960px) {
+  .layout { grid-template-columns: 1fr; }
+  aside { position: static; }
+}
+@media (max-width: 640px) {
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+  .job summary { grid-template-columns: 56px minmax(0, 1fr); }
+  .job summary .meta { grid-column: 2; display: flex; gap: 6px; }
+  .job summary .meta strong { display: inline; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Job <span>Radar</span></h1>
+      <div class="sub" id="who"></div>
+    </div>
+    <div class="sub" id="updated"></div>
+  </header>
+
+  <section class="tiles" id="tiles"></section>
+
+  <div class="layout">
+    <main>
+      <div class="filters" role="search">
+        <input type="search" id="q" placeholder="Search title, company, skill…" aria-label="Search jobs">
+        <div class="seg" id="where" role="group" aria-label="Location">
+          <button aria-pressed="true" data-v="">All</button><button aria-pressed="false" data-v="US">US</button><button aria-pressed="false" data-v="Canada">Canada</button><button aria-pressed="false" data-v="Remote">Remote</button>
+        </div>
+        <label>Min match <input type="range" id="min" min="0" max="90" step="5" value="0"> <span id="minv">0%</span></label>
+        <select id="src" aria-label="Source"><option value="">All sources</option></select>
+        <label><input type="checkbox" id="fresh"> New only</label>
+        <select id="sort" aria-label="Sort"><option value="score">Best match</option><option value="new">Newest</option></select>
+      </div>
+      <div class="count" id="count"></div>
+      <div id="list"></div>
+      <button id="more" hidden>Show more</button>
+    </main>
+
+    <aside>
+      <section class="card">
+        <h2>Most-requested missing skills</h2>
+        <p>Across the jobs shown. Add any you've actually used to the resume.</p>
+        <ol class="gaps" id="gaps"></ol>
+      </section>
+      <section class="card">
+        <h2>Sources</h2>
+        <p id="srcsum"></p>
+        <ul class="src" id="srcok"></ul>
+        <details class="more" id="srcbadwrap"><summary></summary><ul class="src bad" id="srcbad"></ul></details>
+      </section>
+      <section class="card">
+        <h2>Skills found on the resume</h2>
+        <p id="rescount"></p>
+        <details class="more"><summary>Show all</summary><div class="chips" id="resume" style="margin-top:10px"></div></details>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script src="jobs.js"></script>
+<script>
+const D = window.JOB_DATA;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const DAY = 864e5;
+const ago = iso => { if (!iso) return "—"; const d = (Date.now() - new Date(iso)) / DAY; return d < 1 ? "today" : d < 2 ? "yesterday" : Math.floor(d) + "d ago"; };
+const isNew = j => Date.now() - new Date(j.first_seen) < 2 * DAY;
+const tier = s => s >= 70 ? "strong" : s >= 50 ? "good" : "low";
+const list = a => a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1];
+const state = { q: "", where: "", min: 0, src: "", fresh: false, sort: "score", limit: 50 };
+
+function why(j) {
+  const n = j.matched.length, t = n + j.missing.length, yrs = D.years_experience;
+  const label = { strong: "Strong fit", good: "Good fit", low: "Stretch" }[tier(j.score)];
+  let s = `<b class="${tier(j.score)}">${label}.</b> The resume covers ${n} of the ${t} skills this posting names, including ${esc(list(j.matched.slice(0, 4)))}. `;
+  if (j.years_required == null) s += "No explicit years-of-experience requirement found. ";
+  else if (yrs >= j.years_required) s += `It asks for ${j.years_required}+ years; the resume shows ${yrs}+. `;
+  else s += `It asks for ${j.years_required}+ years against ${yrs}+ on the resume, so lead with scope and impact. `;
+  s += j.missing.length ? `To close the gap, add ${esc(list(j.missing.slice(0, 3)))} to the resume if they've been used, or address them in a cover note.`
+                        : "No skill gaps against this posting.";
+  return s;
+}
+
+function filtered() {
+  const q = state.q.toLowerCase();
+  const out = D.jobs.filter(j => j.score >= state.min
+    && (!state.where || j.where.includes(state.where))
+    && (!state.src || j.source === state.src)
+    && (!state.fresh || isNew(j))
+    && (!q || [j.title, j.company, j.location, ...j.matched, ...j.missing].join(" ").toLowerCase().includes(q)));
+  if (state.sort === "new") out.sort((a, b) => new Date(b.posted || b.first_seen) - new Date(a.posted || a.first_seen));
+  return out;
+}
+
+function row(j) {
+  const url = /^https?:\/\//.test(j.url) ? j.url : "#";
+  const applicants = j.applicants == null ? '<span class="na">Not available</span>' : esc(j.applicants);
+  return `<details class="job"><summary>
+      <div class="score ${tier(j.score)}" aria-label="${j.score}% match">${j.score}%</div>
+      <div class="role"><b>${esc(j.title)}${isNew(j) ? '<span class="new">New</span>' : ""}</b><span>${esc(j.company)} · ${esc(j.where.join(" / "))}</span></div>
+      <div class="meta"><strong>${j.matched.length}/${j.matched.length + j.missing.length}</strong> keywords</div>
+      <div class="meta"><strong>${applicants}</strong> applicants</div>
+      <div class="meta"><strong>${ago(j.posted)}</strong> ${esc(j.source)}</div>
+    </summary>
+    <div class="detail">
+      <div class="verdict">${why(j)}</div>
+      <div><h3>Matched (${j.matched.length})</h3><div class="chips">${j.matched.map(k => `<span class="chip hit">${esc(k)}</span>`).join("")}</div></div>
+      <div><h3>Missing (${j.missing.length})</h3><div class="chips">${j.missing.map(k => `<span class="chip miss">${esc(k)}</span>`).join("") || '<span class="na">None</span>'}</div></div>
+      <div class="actions"><a class="btn" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open posting ↗</a>
+        <span class="loc">${esc(j.location)}${j.years_required ? ` · asks ${j.years_required}+ yrs` : ""}</span></div>
+    </div></details>`;
+}
+
+function render() {
+  const jobs = filtered();
+  $("#count").textContent = `${jobs.length} of ${D.jobs.length} jobs`;
+  $("#list").innerHTML = jobs.slice(0, state.limit).map(row).join("")
+    || '<div class="empty">No jobs match these filters.</div>';
+  $("#more").hidden = jobs.length <= state.limit;
+
+  const gaps = {};
+  jobs.forEach(j => j.missing.forEach(k => gaps[k] = (gaps[k] || 0) + 1));
+  const top = Object.entries(gaps).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  $("#gaps").innerHTML = top.map(([k, n]) => `<li>${esc(k)}<span>${n} job${n > 1 ? "s" : ""}</span><i style="--w:${Math.round(100 * n / top[0][1])}%"></i></li>`).join("")
+    || '<li class="na">No gaps in this view.</li>';
+}
+
+function init() {
+  if (!D) {
+    $("#list").innerHTML = '<div class="empty">No data yet. Run <code>python3 fetch_jobs.py</code>, then reload.</div>';
+    return;
+  }
+  $("#who").textContent = `Matched against ${D.candidate}'s resume`;
+  $("#updated").textContent = `Updated ${ago(D.generated_at)} · ${new Date(D.generated_at).toLocaleString()}`;
+  const ok = D.sources.filter(s => s.ok), bad = D.sources.filter(s => !s.ok);
+  const scores = D.jobs.map(j => j.score).sort((a, b) => a - b);
+  const tiles = [
+    [D.jobs.length, "matching jobs"],
+    [D.jobs.filter(isNew).length, "new in last 48h"],
+    [D.jobs.filter(j => j.score >= 70).length, "strong fits (70%+)"],
+    [scores.length ? scores[Math.floor(scores.length / 2)] + "%" : "—", "median match"],
+  ];
+  $("#tiles").innerHTML = tiles.map(([v, l]) => `<div class="tile"><b>${v}</b><small>${l}</small></div>`).join("");
+
+  [...new Set(D.jobs.map(j => j.source))].sort().forEach(s => $("#src").insertAdjacentHTML("beforeend", `<option>${esc(s)}</option>`));
+  $("#srcsum").textContent = `${ok.length} of ${D.sources.length} sources read on the last run.`;
+  $("#srcok").innerHTML = ok.map(s => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a><span>${s.kept}/${s.seen}</span></li>`).join("");
+  $("#srcbadwrap").hidden = !bad.length;
+  $("#srcbadwrap summary").textContent = `${bad.length} couldn't be read`;
+  $("#srcbad").innerHTML = bad.map(s => `<li>${esc(s.name)}<span>${esc(s.error)}</span></li>`).join("");
+  $("#rescount").textContent = `${D.resume_skills.length} skills detected. Edit resume.txt to change them.`;
+  $("#resume").innerHTML = D.resume_skills.map(k => `<span class="chip">${esc(k)}</span>`).join("");
+
+  const set = (k, v) => { state[k] = v; state.limit = 50; render(); };
+  $("#q").addEventListener("input", e => set("q", e.target.value));
+  $("#min").addEventListener("input", e => { $("#minv").textContent = e.target.value + "%"; set("min", +e.target.value); });
+  $("#src").addEventListener("change", e => set("src", e.target.value));
+  $("#fresh").addEventListener("change", e => set("fresh", e.target.checked));
+  $("#sort").addEventListener("change", e => set("sort", e.target.value));
+  $("#where").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    $("#where").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    set("where", b.dataset.v);
+  });
+  $("#more").addEventListener("click", () => { state.limit += 50; render(); });
+  render();
+}
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+Dharunkumar Natarajan
+Vancouver BC, Canada
+
+Summary
+Senior Software Engineer with 7+ years of experience spanning enterprise and startup environments—architecting mission-critical, fault-tolerant, multi-tenant distributed backends across high-stakes domains (fintech, digital assets, and enterprise data). Delivers end-to-end full-stack production systems and shared internal frameworks, SDKs and developer tooling used by multi-team engineering orgs—spanning backend microservices, frontends, cloud infrastructure and system architecture in Java, Python and TypeScript.
+Recent wins: Engineered event-driven payment rails securing $7B in annualized volume, architected a 0-to-1 platform monetization engine scaling to $1M+ ARR.
+Anchors large, ambiguous initiatives, mentors engineers, and establishes rigorous architectural standards; consistently recognized with multiple internal company awards for technical excellence, urgent project delivery, and innovative cross-functional impact.
+
+Skills
+Programming Languages & Frameworks: Python, Java, Node.js, Django, Javalin, Spring Boot, Hibernate, DropWizard, SQL, NoSQL, TypeScript/React
+Cloud & Distributed Systems: GraphQL, REST/OpenAPI, Microservices, Event-Driven Systems(Kafka), Docker, Kubernetes, GCP, AWS services (EKS, SQS, SNS, Lambda, ALB, S3, RDS, CloudWatch, Kinesis), API Gateway, IAM, KMS
+Unit Testing Frameworks: Pytest, Junit, Mockito
+Databases: MySQL, Postgres, MongoDB, Elasticsearch, Snowflake, Redis, ClickHouse, AWS Redshift
+Observability & Tools: Logz.io, Opensearch, Postman, Terraform, OAuth 2.0/OIDC, Jira, Sentry, Datadog, Jenkins, CI/CD, Prometheus, Grafana, Agile, Git
+AI Tools: Claude code, Cursor, Codex, Model Context Protocol (MCP), LLMs, AI Agentic skills/Workflows
+
+Professional Experience
+Software Engineer II, Circle Internet Financial, Canada  Jul 2025 – Present
+Distributed systems, performance & scale:
+- Architected event driven real-time payment tracking via SWIFT GPI on AWS (EKS, SQS, ALB) using Java, DropWizard to power B2B, B2C, C2C flows, supporting $7B in annualized network volume across a multi-tenant Circle Payments Network (CPN) and driving the architecture through tech-council review.
+- Utilized CQRS and the Idempotent Consumer pattern using SWIFT UETR keys to decouple high-throughput webhook ingestion from state queries, guaranteeing reliable network monitoring with zero message loss.
+- Built a deterministic state-machine engine to resolve out-of-order banking callbacks, buffering webhook surges via Kafka event streams and auto-scaling EKS worker pods utilizing Dead-Letter Queues (DLQ) to ensure fault-tolerant ledger synchronization; published on-call runbook and wired Rootly alerts.
+Reliability, observability & testing:
+- Led a cross-functional team of 4 engineering Zero-Downtime mTLS Rollover for automated certificate lifecycle and mTLS rotation engine in Java and React; deployed a dual-trust overlap window and dynamic secret reloading (Envoy SDS) to eliminate manual key provisioning across global banking partners.
+- Root-caused and eliminated recurring database query timeouts across sharded blockchain PostgreSQL chain schemas; re-architected cross-chain token lookups from O(N) per-schema loops into cross-schema aggregations using Scatter-Gather pattern, eliminating connection pool starvation and reducing latency by 10 times.
+- Identified and remediated a live downstream currency routing fault within 1 hour of expanding the Hong Kong payout rail to multi-currency (USD/HKD); prevented cross-border transaction SLA breaches, deployed emergency hotfix, and presented a comprehensive root-cause analysis (RCA) to partners and stakeholders.
+Agentic AI & Developer Velocity:
+- Reduced compliance-related payment failures by 60% by building an AI skill that analyzes decrypted test transaction patterns to automatically generate and adapt Travel Rule compliance schemas, empowering engineers to accelerate onboarding for new geographic integrations with custom rule definitions.
+- Spearheaded AI adoption across engineering teams by developing and integrating standardized AI skills, promoting best coding practices and designing multi agent automated code generation & review workflows.
+- Engineered a centralized internal dashboard and Agentic AI workflow to manage service integration issues across 20 global banking partners; with autonomous classification of incident severity, analyzes thread replies to verify actual resolution, and triggers SLA-specific follow-ups with providers, enforcing SLA compliance.
+
+Software Engineer, Covalent Research & Development, Burnaby, Canada  Apr 2022 – Jul 2025
+Financial Reporting & Audit Systems:
+- Architected and deployed an event-driven scheduling and delivery engine on ECS using Java/Quartz scheduler with bounded concurrency, backed by SQS, DynamoDB and S3 aggregating multi-source transaction data to deliver end-of-day financial balance sheet and source-of-funds reporting.
+Distributed systems, performance & scale:
+- Architected Covalent's billing and monetization microservice from scratch using Python/Django and PostgreSQL with Stripe; implemented Orchestration Saga and Transactional Outbox patterns to coordinate metered/usage billing, webhook deduplication, bootstrapping the platform from $0 to $1M+ in ARR.
+- Engineered a Redis-backed distributed rate limiter (Token Bucket algorithm) integrated with PostgreSQL to strictly enforce real-time API usage quotas, preventing network abuse without degrading database latency.
+- Hardened core system architecture to achieve SOC 2 compliance, directly enabling enterprise marketplace listings on Google Cloud and QuickNode that drove a 30% increase in platform revenue.
+- Architected a high-throughput asset ingestion pipeline processing 700M+ assets in real time on GCP (Cloud Functions, Cloud Run, Pub/Sub); balanced competing constraints around latency budgets, external rate limits, and cloud compute costs to optimize pipeline reliability; received Top Performer Award.
+Core API Infrastructure:
+- Built the NFT REST API endpoints using Spring Boot, Hibernate, PostgreSQL, with CI/CD via GitHub Actions & infrastructure provisioned via Terraform to provide the richest blockchain data based on various user parameters and increased the API traffic by 20%.
+- Developed the Bitcoin hierarchical deterministic (HD) wallet balance endpoints using Java leveraging Test-Driven Development (TDD), enabling an enterprise client to launch a critical feature on schedule; honored with the Urgency Award.
+- Designed a dynamic, self-serve API engine using Django, React, PostgreSQL/ClickHouse secured via OAuth 2.0/JWT token authorization enabling product teams and enterprise users to generate custom analytical endpoints via SQL with sub-second query execution.
+
+Software Engineer (R&D), Informatica Business Solutions, Bangalore, India  Sep 2020 – Sep 2021
+- Engineered mission-critical backend components in Java for AWS Kinesis, AWS S3 and enterprise data warehouses, driving a 70% throughput improvement on bulk customer data synchronization.
+- Collaborated across platform engineering teams to integrate database connectors into Informatica's enterprise ETL ecosystem via decoupled RESTful microservices (Awarded Shout Out / Do Good Award).
+- Designed dynamic query optimization overrides across cloud-native data warehouse connectors (Snowflake, Amazon Redshift and MySQL), reducing metadata ingestion latency by 20%.
+
+Engineer, Qualcomm India Pvt Ltd, Chennai, India  Jul 2018 – Sep 2020
+- Led a 4-engineer team to design and launch a full-stack machine learning driven bug classification platform as part of internal developer tooling (Python, Django, MongoDB, Vue.js); deployed a Universal Sentence Encoder (USE) vector-embedding model with 75% accuracy that slashed duplicate defect filings by 60% and increased various engineering team's developer productivity by 50%; received Qualstar award.
+- Developed an end-to-end telemetry and log-analytics platform from scratch using Python, Node.js, Elasticsearch and Jenkins for CI/CD as part of internal tooling; ingested distributed log streams to detect recurring error signatures, synchronized visual analytics across multi-source time-series data, and cut root-cause investigation time by 80% (Awarded ThankQ Award).
+
+Education
+Masters in Computer Science, Simon Fraser University, Canada (Sep 2021 – Apr 2023)
+Bachelor of IT, PSG College of Technology, India (Jul 2014 – Apr 2018)
