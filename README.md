@@ -1,14 +1,14 @@
-# Job Radar
+# wradar
 
-Finds software engineering jobs in the US, Canada and remote, for every technology. Anyone can add their own resume in the dashboard to see how well each job matches them.
+A job radar for software engineers. Finds software engineering jobs in the US, Canada and remote, for every technology. Anyone can add their own resume to see how well each job matches them.
 
 No AI runs here. A Python script (standard library only) polls public job sources on a schedule and applies fixed rules.
 
 ## Using the app
 
-Open **https://sudddy.github.io/job-radar/** (GitHub Pages). It has four sections:
+Open **https://sudddy.github.io/wradar/** (GitHub Pages). It has four sections:
 
-- **Jobs:** filters on the left, the job list in the middle, the selected job on the right with its link, your match and the skills you have or are missing.
+- **Jobs:** the radar (each blip is a job, each wedge a role, closer to the center means a better match, or newer before you add a resume), filters, the job list, and the selected job with its link, your match and the skills you have or are missing.
 - **My resume:** add your resume, fix the skills it found, and see the skills jobs ask for most that you don't list, plus your best matches.
 - **Insights:** most-requested skills and how the jobs break down by role, seniority, location and type.
 - **Sources:** how jobs are found and which of the 332 sources were read on the last run.
@@ -19,7 +19,7 @@ To run it on your own machine instead: `python3 fetch_jobs.py`, then open `docs/
 
 ## Your resume
 
-Click **Choose file** (PDF, Word .docx or text) or paste the text. The dashboard reads it in the browser, finds the skills it lists and the years of experience, and scores every job against them. Nothing is uploaded: only the file name, the detected skills and the years are remembered, in that browser. **Edit skills** adds or removes skills by hand; **Replace** and **Remove** do what they say. Without a resume every filter still works; the match columns just stay empty.
+Click **Choose file** (PDF, Word .docx or text) or paste the text. The app reads it in the browser, finds the skills it lists and the years of experience, and scores every job against them. Nothing is uploaded: only the file name, the detected skills and the years are remembered, in that browser. Skills can be added or removed by hand, and **Replace** and **Remove** do what they say. Without a resume every filter still works; the match columns just stay empty.
 
 PDF and Word files are read with PDF.js and Mammoth, loaded from cdnjs the first time they're needed, so that step needs an internet connection. Pasting text works offline.
 
@@ -58,6 +58,7 @@ LinkedIn, Indeed and Glassdoor aren't polled: they have no public jobs API and t
 | `docs/index.html`, `docs/app.css`, `docs/app.js` | The app (plain HTML, CSS and JavaScript, no build step) |
 | `docs/jobs.js` | Job data from the last run |
 | `.github/workflows/fetch-jobs.yml` | The 6-hourly schedule |
+| `CLAUDE.md` | Notes for working on the project with Claude Code |
 
 ## Changing the rules
 
@@ -66,7 +67,7 @@ LinkedIn, Indeed and Glassdoor aren't polled: they have no public jobs API and t
 | `config.json` | Allowed locations, max job age, title include/exclude patterns, boards and feeds |
 | `keywords.json` | The skill dictionary used for both job postings and resumes. Add a skill and its aliases; `=Alias` is case-sensitive, `re:` is a raw regex (keep it valid in both Python and JavaScript). |
 
-To add a company, find its careers page and put the slug under the matching platform in `config.json` → `boards` (the help text there shows each URL pattern). The dashboard's Sources panel lists any source that couldn't be read on the last run.
+To add a company, find its careers page and put the slug under the matching platform in `config.json` → `boards` (the help text there shows each URL pattern). The app's Sources page lists any source that couldn't be read on the last run.
 
 ## Tests
 

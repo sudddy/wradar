@@ -1,24 +1,27 @@
 "use strict";
-// Job Radar: jobs come from jobs.js (written by fetch_jobs.py); resume matching happens here, in the browser.
+// wradar: jobs come from jobs.js (written by fetch_jobs.py); resume matching happens here, in the browser.
 const D = window.JOB_DATA;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const DAY = 864e5;
-const ago = iso => { if (!iso) return "—"; const d = (Date.now() - new Date(iso)) / DAY; return d < 1 ? "today" : d < 2 ? "yesterday" : Math.floor(d) + "d ago"; };
+const age = j => (Date.now() - new Date(j.posted || j.first_seen)) / DAY;
+const ago = iso => { if (!iso) return "date unknown"; const d = (Date.now() - new Date(iso)) / DAY; return d < 1 ? "today" : d < 2 ? "yesterday" : Math.floor(d) + " days ago"; };
 const isNew = j => Date.now() - new Date(j.first_seen) < 2 * DAY;
-const tier = s => s == null ? "low" : s >= 70 ? "strong" : s >= 50 ? "good" : "low";
+const tier = s => s == null ? "none" : s >= 70 ? "hot" : s >= 50 ? "warm" : "cool";
+const TIER = { hot: "Hot match", warm: "Warm match", cool: "Cool match" };
 const list = a => a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1];
-const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+const plural = (n, w, ws = w + "s") => `${n.toLocaleString()} ${n === 1 ? w : ws}`;
 const store = {  // per-browser memory; the app works the same without it
   get: k => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } },
   set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
-const wide = () => matchMedia("(min-width: 761px)").matches;
+const wide = () => matchMedia("(min-width: 821px)").matches;
 const LEVELS = ["Junior", "Mid", "Senior", "Staff+"];
+const ROLE_ORDER = ["Backend", "Full stack", "Frontend", "Mobile", "Data", "ML / AI", "DevOps / SRE", "Security", "QA / Test", "Embedded", "General"];
 const DEFAULTS = { q: "", role: "", level: "", type: "", where: "", min: 0, src: "", fresh: false, sort: "score", techs: [], mode: "any" };
-const state = { ...DEFAULTS, ...(store.get("job-radar-filters") || {}), limit: 50, sel: null };
-let me = store.get("job-radar-resume");  // { name, skills, years }; the resume text itself is never kept
-let pasting = false, status = "", reads = 0;
+const state = { ...DEFAULTS, ...(store.get("wradar-filters") || {}), limit: 40, sel: null };
+let me = store.get("wradar-resume");  // { name, skills, years }; the resume text itself is never kept
+let pasting = false, status = "", reads = 0, booted = false;
 
 // ---- Resume reading and matching ----
 const rxEscape = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -60,7 +63,7 @@ function useResume(name, text) {
   if (!skills.length) { status = "No skills were recognized in that resume. Check it's the right file, or paste the text."; return refresh(); }
   me = { name, skills, years: detectYears(text) };
   status = ""; pasting = false; state.sort = "score";
-  store.set("job-radar-resume", me);
+  store.set("wradar-resume", me);
   refresh();
 }
 
@@ -72,7 +75,7 @@ async function onFile(file) {
   catch (e) { if (read === reads) { status = e.message || "Couldn't read that file. Try a PDF, .docx or .txt, or paste the text."; renderMe(); } }
 }
 
-function saveMe() { store.set("job-radar-resume", me); refresh(); }
+function saveMe() { store.set("wradar-resume", me); refresh(); }
 
 function score() {
   const mine = new Set(me?.skills || []);
@@ -85,67 +88,135 @@ function score() {
 
 function why(j) {
   const n = j.matched.length, t = j.skills.length;
-  if (!t) return "This posting doesn't name any skills Job Radar recognizes, so it can't be scored. Open it to read the details.";
-  const label = { strong: "Strong fit", good: "Good fit", low: "Stretch" }[tier(j.score)];
-  let s = `<b class="${tier(j.score)}">${label}.</b> Your resume covers ${n} of the ${t} skills this posting names`
+  if (!t) return "This posting doesn't name any skills wradar recognizes, so it can't be scored. Open it to read the details.";
+  let s = `<b>${TIER[tier(j.score)]}.</b> Your resume covers ${n} of the ${t} skills this posting names`
     + (n ? `, including ${esc(list(j.matched.slice(0, 4)))}. ` : ". ");
-  if (j.years_required == null) s += "No explicit years-of-experience requirement found. ";
-  else if (!me.years) s += `It asks for ${j.years_required}+ years. `;
-  else if (me.years >= j.years_required) s += `It asks for ${j.years_required}+ years; you have ${me.years}+. `;
+  if (j.years_required == null) s += "It doesn't state a years-of-experience requirement. ";
+  else if (!me.years) s += `It asks for ${j.years_required}+ years of experience. `;
+  else if (me.years >= j.years_required) s += `It asks for ${j.years_required}+ years and you have ${me.years}+. `;
   else s += `It asks for ${j.years_required}+ years against your ${me.years}+, so lead with scope and impact. `;
-  return s + (j.missing.length ? `To close the gap, add ${esc(list(j.missing.slice(0, 3)))} to your resume if you've used them, or cover them in a note.`
-                               : "No skill gaps against this posting.");
+  return s + (j.missing.length ? `If you've used ${esc(list(j.missing.slice(0, 3)))}, add them to your resume or cover them in your note.`
+                               : "Nothing it asks for is missing from your resume.");
 }
 
-// ---- Jobs view ----
+// ---- Filtering ----
 function hasTech(j) {
   if (!state.techs.length) return true;
   return state.mode === "all" ? state.techs.every(t => j.skills.includes(t)) : state.techs.some(t => j.skills.includes(t));
 }
 
-function filtered(withTech = true) {
+function filtered({ tech = true, role = true } = {}) {
   const q = state.q.toLowerCase();
   const out = D.jobs.filter(j => (!me || j.score >= state.min)
-    && (!withTech || hasTech(j))
-    && (!state.role || j.role === state.role)
+    && (!tech || hasTech(j))
+    && (!role || !state.role || j.role === state.role)
     && (!state.level || j.level === state.level)
     && (!state.where || j.where.includes(state.where))
     && (!state.type || j.type === state.type)
     && (!state.src || j.source === state.src)
     && (!state.fresh || isNew(j))
     && (!q || [j.title, j.company, j.location, ...j.skills].join(" ").toLowerCase().includes(q)));
-  const newest = (a, b) => new Date(b.posted || b.first_seen) - new Date(a.posted || a.first_seen);
+  const newest = (a, b) => age(a) - age(b);
   return out.sort(me && state.sort === "score" ? (a, b) => b.score - a.score || b.matched.length - a.matched.length || newest(a, b) : newest);
 }
 
+// ---- Radar scope ----
+const jitter = (i, salt) => (((i + 1) * 2654435761 + salt * 40503) >>> 0) % 1000 / 1000;
+function renderScope(jobs) {
+  const C = 230, R = 172, roles = ROLE_ORDER.filter(r => D.jobs.some(j => j.role === r));
+  const span = 2 * Math.PI / roles.length, maxAge = D.rules?.max_age_days || 30;
+  const pt = (a, r) => [C + r * Math.sin(a), C - r * Math.cos(a)].map(v => v.toFixed(1));  // 0 rad is straight up, clockwise
+  const frac = j => me ? (100 - j.score) / 100 : Math.min(1, age(j) / maxAge);
+  const rings = me ? [[.25, "75%"], [.5, "50%"], [.75, "25%"], [1, "0%"]] : [[7 / maxAge, "1 wk"], [14 / maxAge, "2 wk"], [21 / maxAge, "3 wk"], [1, `${maxAge} d`]];
+  let svg = `<defs><linearGradient id="swg" gradientUnits="userSpaceOnUse" x1="${C}" y1="${C - R}" x2="${pt(-0.7, R)[0]}" y2="${pt(-0.7, R)[1]}">
+      <stop offset="0" stop-color="var(--signal)" stop-opacity=".45"/><stop offset="1" stop-color="var(--signal)" stop-opacity="0"/></linearGradient></defs>`;
+  if (state.role) {
+    const s = roles.indexOf(state.role), [x1, y1] = pt(s * span, R), [x2, y2] = pt((s + 1) * span, R);
+    svg += `<path class="r-wedge on" d="M${C} ${C}L${x1} ${y1}A${R} ${R} 0 0 1 ${x2} ${y2}Z"/>`;
+  }
+  rings.forEach(([f, label], k) => {
+    svg += `<circle class="r-ring${k === rings.length - 1 ? " edge" : ""}" cx="${C}" cy="${C}" r="${(10 + f * (R - 10)).toFixed(1)}"/>`;
+    svg += `<text class="r-ringlabel" x="${C + 5}" y="${(C - 10 - f * (R - 10) + 13).toFixed(1)}">${label}</text>`;
+  });
+  roles.forEach((role, s) => {
+    const [x, y] = pt(s * span, R);
+    svg += `<line class="r-spoke" x1="${C}" y1="${C}" x2="${x}" y2="${y}"/>`;
+    const mid = (s + 0.5) * span, [lx, ly] = pt(mid, R + 20), sin = Math.sin(mid);
+    const anchor = sin > 0.2 ? "start" : sin < -0.2 ? "end" : "middle";
+    svg += `<text class="r-role${state.role === role ? " on" : ""}" x="${lx}" y="${ly}" text-anchor="${anchor}" dominant-baseline="middle" data-role="${esc(role)}" tabindex="0" role="button" aria-pressed="${state.role === role}">${esc(role)}</text>`;
+  });
+  svg += `<g class="r-sweep"><path d="M${C} ${C}L${C} ${C - R}A${R} ${R} 0 0 0 ${pt(-0.7, R).join(" ")}Z" fill="url(#swg)"/><line x1="${C}" y1="${C}" x2="${C}" y2="${C - R}" stroke="var(--signal)" stroke-width="1.5"/></g>`;
+  const shown = jobs.slice(0, 600);
+  shown.forEach(j => {
+    const s = roles.indexOf(j.role), a = (s + 0.1 + 0.8 * jitter(j.i, 1)) * span;
+    const r = 10 + frac(j) * (R - 10) + (jitter(j.i, 2) - 0.5) * 6;
+    const [x, y] = pt(a, Math.max(4, Math.min(R - 2, r)));
+    const cls = me ? tier(j.score) : "plain", sel = j.i === state.sel;
+    if (sel) svg += `<circle class="r-selring" cx="${x}" cy="${y}" r="9"/>`;
+    svg += `<circle class="blip ${cls}${sel ? " sel" : ""}" cx="${x}" cy="${y}" r="${sel ? 5 : 3.6}" data-i="${j.i}" style="--d:${(a / (2 * Math.PI) * 2).toFixed(2)}s"><title>${esc(j.title)} at ${esc(j.company)}${me ? `, ${j.score}% match` : ""}</title></circle>`;
+  });
+  const el = $("#radar");
+  el.innerHTML = svg;
+  if (!booted) { booted = true; el.classList.add("boot"); setTimeout(() => el.classList.remove("boot"), 3000); }
+  $("#radar-legend").textContent = (me ? "Closer to the center means a better match for your resume." : "Closer to the center means newer.")
+    + " Each wedge is a role." + (jobs.length > shown.length ? ` Showing the first ${shown.length} of ${jobs.length.toLocaleString()} jobs.` : "");
+  el.setAttribute("aria-label", `Radar of ${jobs.length} jobs by role`);
+}
+
+function renderBand(jobs) {
+  const N = D.jobs.length, hot = me ? D.jobs.filter(j => j.score >= 70).length : 0;
+  $("#headline").textContent = `${plural(N, "software role")} on the scope`;
+  $("#subline").textContent = `Pulled from ${D.sources.filter(s => s.ok).length} company career sites and job boards across the US, Canada and remote. ${D.jobs.filter(isNew).length.toLocaleString()} are new in the last two days.`;
+  $("#youline").innerHTML = me
+    ? `<span><span class="tier hot">${plural(hot, "hot match", "hot matches")}</span> for <b>${esc(me.name)}</b></span><a class="btn onnavy" href="#resume">Change resume</a>`
+    : `<span>Add your resume to see which of these fit you.</span><a class="btn" href="#resume">Add your resume</a>`;
+  const counts = {};
+  filtered({ role: false }).forEach(j => counts[j.role] = (counts[j.role] || 0) + 1);
+  $("#sectors").innerHTML = ROLE_ORDER.filter(r => D.jobs.some(j => j.role === r))
+    .map(r => `<button type="button" class="sector" data-role="${esc(r)}" aria-pressed="${state.role === r}">${esc(r)}<b>${(counts[r] || 0).toLocaleString()}</b></button>`).join("");
+  renderScope(jobs);
+}
+
+// ---- Jobs list and detail ----
 const chips = (a, cls = "") => a.map(k => `<span class="chip ${cls}">${esc(k)}</span>`).join("") || '<span class="na">None</span>';
+const matchNum = j => me ? `<span class="match ${tier(j.score)}">${j.score}<small>%</small></span>` : '<span class="match none" aria-label="No resume yet">–</span>';
 
 function item(j) {
   return `<li><button type="button" class="jitem" data-i="${j.i}" aria-current="${state.sel === j.i}">
-    <span class="score ${tier(j.score)}" aria-label="${me ? j.score + "% match" : "No resume yet"}">${me ? j.score + "%" : "—"}</span>
-    <span class="jbody"><b>${esc(j.title)}${isNew(j) ? '<em class="new">New</em>' : ""}</b>
-      <span class="co">${esc(j.company)}</span>
-      <span class="jmeta">${esc(j.where.join(" / "))} · ${esc(j.level)} ${esc(j.role)} · ${esc(j.type)} · ${ago(j.posted)}</span></span>
+    ${matchNum(j)}
+    <span class="jtext"><span class="jtitle">${esc(j.title)}</span><span class="jco">${esc(j.company)}</span>
+      <span class="jfacts"><span>${esc(j.where.join(" / "))}</span><span>${esc(j.level)} ${esc(j.role)}</span><span>${esc(j.type)}</span>
+        ${isNew(j) ? '<span class="fresh">New</span>' : `<span>${ago(j.posted)}</span>`}</span></span>
   </button></li>`;
 }
 
+function gauge(j) {
+  const c = 2 * Math.PI * 32, v = j.score / 100 * c;
+  return `<div class="gauge ${tier(j.score)}" style="color:var(--${tier(j.score)})">
+    <svg width="84" height="84" viewBox="0 0 84 84" aria-hidden="true"><circle class="g-track" cx="42" cy="42" r="32" fill="none" stroke-width="7"/>
+      <circle class="g-val" cx="42" cy="42" r="32" fill="none" stroke-width="7" stroke-linecap="round" stroke-dasharray="${v.toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 42 42)"/>
+      <text x="42" y="48" text-anchor="middle" class="match ${tier(j.score)}" fill="currentColor" font-size="17">${j.score}%</text></svg>
+    <small>${TIER[tier(j.score)]}</small></div>`;
+}
+
 function detail(j) {
-  if (!j) return '<div class="empty">No job selected. Pick one from the list.</div>';
+  if (!j) return '<div class="empty">Pick a job from the list to see the details.</div>';
   const link = /^https?:\/\//.test(j.url)
-    ? `<a class="btn" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">Open posting ↗</a>`
+    ? `<a class="btn" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">Open posting</a>`
     : '<span class="na">No link for this posting</span>';
-  const pill = (label, v) => `<span class="pill">${label} <b>${v}</b></span>`;
-  return `<button type="button" class="btn ghost back" id="back">← Back to jobs</button>
-    <div class="dhead"><h2 id="dtitle">${esc(j.title)}</h2><p>${esc(j.company)}</p></div>
-    <div class="pills">${pill("Where", esc(j.where.join(" / ")))}${pill("Type", esc(j.type))}${pill("Level", esc(j.level))}${pill("Role", esc(j.role))}
-      ${pill("Posted", ago(j.posted))}${pill("Applicants", j.applicants == null ? "Not available" : esc(j.applicants))}${pill("Source", esc(j.source))}</div>
+  const fact = (k, v) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
+  return `<button type="button" class="btn quiet back" id="back">Back to jobs</button>
+    <div class="dtop"><div><p class="dco">${esc(j.company)}</p><h2 id="dtitle">${esc(j.title)}</h2></div>${me ? gauge(j) : ""}</div>
     <div class="row">${link}</div>
-    ${me ? `<div class="fit"><div class="score ${tier(j.score)}">${j.score}%</div><p>${why(j)}</p></div>
-        <div><h3>You have (${j.matched.length})</h3><div class="chips">${chips(j.matched, "hit")}</div></div>
-        <div><h3>Missing (${j.missing.length})</h3><div class="chips">${chips(j.missing, "miss")}</div></div>`
-      : `<div class="nudge"><span>Add your resume to see how well you match this job.</span><a class="btn" href="#resume">Add resume</a></div>
-        <div><h3>Skills in this posting (${j.skills.length})</h3><div class="chips">${chips(j.skills)}</div></div>`}
-    <div><h3>Location</h3><p>${esc(j.location || "Not listed")}${j.years_required ? ` · asks for ${j.years_required}+ years` : ""}</p></div>`;
+    <dl class="facts">${fact("Where", esc(j.where.join(" / ")))}${fact("Job type", esc(j.type))}${fact("Seniority", esc(j.level))}${fact("Role", esc(j.role))}
+      ${fact("Posted", ago(j.posted))}${fact("Experience asked", j.years_required ? j.years_required + "+ years" : "Not stated")}
+      ${fact("Applicants", j.applicants == null ? '<span class="na">Not available</span>' : esc(j.applicants))}${fact("Found on", esc(j.source))}</dl>
+    ${me ? `<p class="why">${why(j)}</p>
+        <div class="dsec"><h3>On your resume (${j.matched.length})</h3><div class="chips">${chips(j.matched, "have")}</div></div>
+        <div class="dsec"><h3>Missing from your resume (${j.missing.length})</h3><div class="chips">${chips(j.missing, "miss")}</div></div>`
+      : `<div class="nudge"><p>Add your resume to see how well you match this job.</p><a class="btn" href="#resume">Add your resume</a></div>
+        <div class="dsec"><h3>Skills this posting names (${j.skills.length})</h3><div class="chips">${chips(j.skills)}</div></div>`}
+    <div class="dsec"><h3>Location as posted</h3><p>${esc(j.location || "Not listed")}</p></div>`;
 }
 
 function activeFilters() {
@@ -155,68 +226,70 @@ function activeFilters() {
 
 function renderTechs() {
   const counts = {};
-  filtered(false).forEach(j => j.skills.forEach(k => counts[k] = (counts[k] || 0) + 1));
-  const shown = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 20);
+  filtered({ tech: false }).forEach(j => j.skills.forEach(k => counts[k] = (counts[k] || 0) + 1));
+  const shown = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 18);
   state.techs.forEach(t => shown.includes(t) || shown.unshift(t));
-  $("#techs").innerHTML = shown.map(k => `<button type="button" class="tchip" data-k="${esc(k)}" aria-pressed="${state.techs.includes(k)}">${esc(k)}<span>${counts[k] || 0}</span></button>`).join("");
+  $("#techs").innerHTML = shown.map(k => `<button type="button" class="tchip" data-k="${esc(k)}" aria-pressed="${state.techs.includes(k)}">${esc(k)}<span>${(counts[k] || 0).toLocaleString()}</span></button>`).join("");
 }
 
 function renderJobs() {
   const { limit, sel, ...keep } = state;
-  store.set("job-radar-filters", keep);
+  store.set("wradar-filters", keep);
   renderTechs();
   const jobs = filtered();
   if (!jobs.some(j => j.i === state.sel)) state.sel = wide() && jobs.length ? jobs[0].i : null;
+  renderBand(jobs);
   const n = activeFilters();
-  $("#nfilters").textContent = n ? `(${n})` : "";
+  $("#nfilters").textContent = n ? `(${n} on)` : "";
   $("#minlabel").classList.toggle("off", !me);
   $("#min").disabled = !me;
-  $("#nudge").innerHTML = me ? "" : '<div class="nudge"><span>Add your resume to see your match on every job.</span><a class="btn" href="#resume">Add resume</a></div>';
-  $("#count").textContent = (jobs.length !== D.jobs.length ? `${jobs.length} of ${plural(D.jobs.length, "job")}` : plural(jobs.length, "job"))
-    + (state.techs.length ? ` · ${state.mode === "all" ? "all of" : "any of"} ${state.techs.join(", ")}` : "");
-  $("#list").innerHTML = jobs.slice(0, state.limit).map(item).join("") || '<li class="empty">No jobs match these filters. Try removing one.</li>';
+  $("#count").textContent = jobs.length === D.jobs.length ? plural(jobs.length, "job") : `${jobs.length.toLocaleString()} of ${plural(D.jobs.length, "job")}`;
+  $("#list").innerHTML = jobs.slice(0, state.limit).map(item).join("") || '<li class="empty">No jobs match these filters. Try clearing one.</li>';
   $("#more").hidden = jobs.length <= state.limit;
   $("#detail").innerHTML = detail(D.jobs[state.sel]);
 }
 
 function openJob(i) {
   state.sel = i;
+  const at = filtered().findIndex(j => j.i === i);
+  if (at >= state.limit) state.limit = at + 1;
   renderJobs();
-  $("#jobs").classList.add("showing");
-  if (!wide()) $("#detail").scrollTop = 0;
-  $("#detail").focus({ preventScroll: wide() });
+  $("#board").classList.add("showing");
+  if (wide()) $(`.jitem[data-i="${i}"]`)?.scrollIntoView({ block: "nearest" });
+  else $("#detail").scrollTop = 0;
+  $("#detail").focus({ preventScroll: true });
 }
 
-// ---- My resume view ----
+// ---- My resume ----
 function renderMe() {
   const err = status && !status.startsWith("Reading");
   const statusLine = status ? `<p class="status${err ? " err" : ""}" role="status">${esc(status)}</p>` : "";
   if (!me) {
-    $("#me").innerHTML = `<h2>Add your resume</h2>
-      <div class="drop" id="drop">
-        <p>Drop a PDF, Word (.docx) or text file here, or choose one.</p>
-        <div class="row"><button class="btn" type="button" id="pick">Choose file</button>
-          <button class="linkbtn" type="button" id="pastebtn">${pasting ? "Hide paste box" : "Paste text instead"}</button></div>
+    $("#me").innerHTML = `<div class="drop" id="drop">
+        <h2>Drop your resume here</h2>
+        <p>PDF, Word (.docx) or plain text. wradar finds the skills and years of experience it lists, then scores every job against them.</p>
+        <div class="row"><button class="btn" type="button" id="pick">Choose a file</button>
+          <button class="linkbtn" type="button" id="pastebtn">${pasting ? "Hide the text box" : "Paste the text instead"}</button></div>
         ${pasting ? `<textarea id="pastetext" aria-label="Resume text" placeholder="Paste your resume text here"></textarea>
-          <button class="btn ghost" type="button" id="usepaste">Use this text</button>` : ""}
+          <button class="btn quiet" type="button" id="usepaste">Use this text</button>` : ""}
         ${statusLine}
       </div>`;
     return;
   }
-  $("#me").innerHTML = `<div class="row" style="justify-content:space-between">
-      <div><h2>${esc(me.name)}</h2><span class="mestats">${plural(me.skills.length, "skill")} · ${me.years ? me.years + "+ years" : "years not found"}</span></div>
-      <div class="row"><button class="btn ghost" type="button" id="pick">Replace</button><button class="linkbtn" type="button" id="forget">Remove</button></div>
+  $("#me").innerHTML = `<div class="mehead">
+      <div><h2>${esc(me.name)}</h2><span class="mestats">${plural(me.skills.length, "skill")} found, ${me.years ? me.years + "+ years of experience" : "years of experience not found"}</span></div>
+      <div class="row"><button class="btn quiet" type="button" id="pick">Replace</button><button class="linkbtn" type="button" id="forget">Remove</button></div>
     </div>
     ${statusLine}
     <div class="row"><label>Years of experience <input type="number" id="years" min="0" max="50" value="${me.years ?? ""}"></label>
-      <label>Add a skill <input id="addskill" list="techlist" placeholder="e.g. Go"></label></div>
-    <div><h3 class="flabel" style="margin:0 0 8px">Skills found (click × to remove)</h3>
+      <label>Add a skill <input id="addskill" list="techlist" placeholder="For example, Go"></label></div>
+    <div class="dsec"><h3>Skills on your resume</h3><p class="note">Remove any that are wrong, or add ones it missed. Every score updates as you edit.</p>
       <div class="chips">${me.skills.map(k => `<span class="xchip">${esc(k)}<button type="button" data-k="${esc(k)}" aria-label="Remove ${esc(k)}">×</button></span>`).join("")}</div></div>`;
 }
 
 function bars(entries, empty = "Nothing to show yet.") {
   const max = entries[0]?.[1] || 1;
-  return entries.map(([k, n]) => `<li>${esc(k)}<span>${n}</span><i style="--w:${Math.round(100 * n / max)}%"></i></li>`).join("")
+  return entries.map(([k, n]) => `<li>${esc(k)}<span>${n.toLocaleString()}</span><i style="--w:${Math.round(100 * n / max)}%"></i></li>`).join("")
     || `<li class="na">${empty}</li>`;
 }
 const tally = (jobs, pick) => {
@@ -227,27 +300,23 @@ const tally = (jobs, pick) => {
 
 function renderResume() {
   renderMe();
-  $("#mygaps").className = "bars gap";
   $("#mygaps").innerHTML = me ? bars(tally(D.jobs, j => j.missing).slice(0, 10)) : '<li class="na">Add your resume to see this.</li>';
-  const best = me ? [...D.jobs].sort((a, b) => b.score - a.score || b.matched.length - a.matched.length).slice(0, 6) : [];
-  $("#mybest").innerHTML = best.map(j => `<li><button type="button" data-i="${j.i}"><span class="score ${tier(j.score)}">${j.score}%</span>
-      <span><b>${esc(j.title)}</b><small>${esc(j.company)} · ${esc(j.where.join(" / "))}</small></span></button></li>`).join("")
+  const best = me ? [...D.jobs].sort((a, b) => b.score - a.score || b.matched.length - a.matched.length || age(a) - age(b)).slice(0, 6) : [];
+  $("#mybest").innerHTML = best.map(j => `<li><button type="button" data-i="${j.i}">${matchNum(j)}
+      <span class="jtext"><span class="jtitle">${esc(j.title)}</span><span class="jco">${esc(j.company)}, ${esc(j.where.join(" / "))}</span></span></button></li>`).join("")
     || '<li class="na">Add your resume to see this.</li>';
 }
 
-// ---- Insights view ----
+// ---- Insights ----
 function renderInsights() {
-  const scores = D.jobs.map(j => j.score).filter(s => s != null).sort((a, b) => a - b);
-  const tiles = [
-    [D.jobs.length, "jobs found"],
-    [D.jobs.filter(isNew).length, "new in the last 48h"],
-    [me ? D.jobs.filter(j => j.score >= 70).length : "—", "strong fits for you (70%+)"],
-    [scores.length ? scores[Math.floor(scores.length / 2)] + "%" : "—", "your median match"],
-  ];
-  $("#tiles").innerHTML = tiles.map(([v, l]) => `<div class="tile"><b>${v}</b><small>${l}</small></div>`).join("");
-  const card = (title, note, entries, cls = "") => `<section class="card"><h2>${title}</h2><p class="note">${note}</p><ol class="bars ${cls}">${bars(entries)}</ol></section>`;
+  const N = D.jobs.length, fresh = D.jobs.filter(isNew).length;
+  $("#insight-sub").textContent = `From the last scan, ${ago(D.generated_at)}.`;
+  $("#statement").innerHTML = `<b>${plural(N, "role")}</b> on the scope, <b>${fresh.toLocaleString()}</b> of them new in the last two days. `
+    + (me ? `You're a hot match for <b>${D.jobs.filter(j => j.score >= 70).length.toLocaleString()}</b> and a warm match for <b>${D.jobs.filter(j => j.score >= 50 && j.score < 70).length.toLocaleString()}</b>.`
+          : `Add your resume to see how many fit you.`);
+  const card = (title, note, entries, cls = "") => `<section class="panel"><h2>${title}</h2><p class="note">${note}</p><ol class="bars ${cls}">${bars(entries)}</ol></section>`;
   $("#charts").innerHTML = [
-    card("Most-requested skills", "Share of jobs naming each skill.", tally(D.jobs, j => j.skills).slice(0, 12)),
+    card("Most-requested skills", "Number of jobs naming each skill.", tally(D.jobs, j => j.skills).slice(0, 12)),
     me ? card("Skills you're missing most", "Jobs that name a skill your resume doesn't list.", tally(D.jobs, j => j.missing).slice(0, 12), "gap")
        : card("Skills you're missing most", "Add your resume to see this.", []),
     card("Jobs by role", "From the job title, or its skills when the title is generic.", tally(D.jobs, j => j.role)),
@@ -257,21 +326,21 @@ function renderInsights() {
   ].join("");
 }
 
-// ---- Sources view ----
+// ---- Sources ----
 function renderSources() {
   const rules = D.rules || { max_age_days: 30 };
   const steps = [
-    [`Poll ${D.sources.length} sources`, "Every 6 hours a scheduled job reads company career boards (Greenhouse, Ashby, Lever, Workday, SmartRecruiters, Workable) and job boards such as The Muse, Himalayas and HN Who's Hiring."],
-    ["Apply the rules", `Keeps software engineering roles in the US, Canada or remote posted in the last ${rules.max_age_days} days, and tags each with its skills, role, seniority and job type.`],
-    ["Match your resume", "Add your resume and every job gets a match %, the skills you have and the ones you're missing. It all happens in your browser."],
-    ["Pick what you want", "Filter by role, seniority, technology, location or job type. Your resume and filters are remembered on this device."],
+    [`Scan ${D.sources.length} sources`, "Every 6 hours a scheduled job reads company career sites on Greenhouse, Ashby, Lever, Workday, SmartRecruiters and Workable, plus job boards such as The Muse, Himalayas and Hacker News."],
+    ["Keep what fits", `Software engineering roles in the US, Canada or remote, posted in the last ${rules.max_age_days} days. Each is tagged with its skills, role, seniority and job type.`],
+    ["Match your resume", "Add your resume and every job gets a match score, the skills you have and the ones you're missing. This happens in your browser."],
+    ["Narrow it down", "Filter by role, seniority, technology, location or job type, then open the posting on the company's own site."],
   ];
   $("#steps").innerHTML = steps.map(([t, d]) => `<li><b>${esc(t)}</b>${esc(d)}</li>`).join("");
   const ok = D.sources.filter(s => s.ok), bad = D.sources.filter(s => !s.ok), kinds = {};
   ok.forEach(s => kinds[s.kind] = (kinds[s.kind] || 0) + 1);
-  $("#srcsum").textContent = `${ok.length} of ${D.sources.length} read on the last run: `
-    + Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(" · ") + ". Jobs kept / seen per source:";
-  $("#srcok").innerHTML = ok.map(s => `<li><a href="${/^https?:\/\//.test(s.url) ? esc(s.url) : "#"}" target="_blank" rel="noopener">${esc(s.name)}</a><span>${s.kept}/${s.seen}</span></li>`).join("");
+  $("#srcsum").textContent = `${ok.length} of ${D.sources.length} read on the last scan (`
+    + Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(", ") + "). Jobs kept out of jobs seen:";
+  $("#srcok").innerHTML = ok.map(s => `<li><a href="${/^https?:\/\//.test(s.url) ? esc(s.url) : "#"}" target="_blank" rel="noopener">${esc(s.name)}</a><span>${s.kept} of ${s.seen}</span></li>`).join("");
   $("#srcbadwrap").hidden = !bad.length;
   $("#srcbadwrap summary").textContent = `${bad.length} couldn't be read`;
   $("#srcbad").innerHTML = bad.map(s => `<li>${esc(s.name)}<span>${esc(s.error)}</span></li>`).join("");
@@ -283,6 +352,7 @@ const current = () => VIEWS[location.hash.slice(1)] ? location.hash.slice(1) : "
 function route() {
   const v = current();
   Object.keys(VIEWS).forEach(x => { $("#view-" + x).hidden = x !== v; });
+  $("#scope").hidden = v !== "jobs";
   document.querySelectorAll(".tabs a").forEach(a => a.setAttribute("aria-current", a.getAttribute("href") === "#" + v ? "page" : "false"));
   VIEWS[v]();
 }
@@ -295,14 +365,13 @@ function init() {
     return;
   }
   D.jobs.forEach((j, i) => { j.i = i; });
-  $("#updated").textContent = `Updated ${ago(D.generated_at)}`;
+  $("#updated").textContent = `Scanned ${ago(D.generated_at)}`;
   $("#updated").title = new Date(D.generated_at).toLocaleString();
   [...new Set(D.jobs.map(j => j.source))].sort().forEach(s => $("#src").insertAdjacentHTML("beforeend", `<option>${esc(s)}</option>`));
-  tally(D.jobs, j => j.role).forEach(([r, n]) => $("#role").insertAdjacentHTML("beforeend", `<option value="${esc(r)}">${esc(r)} (${n})</option>`));
+  ROLE_ORDER.filter(r => D.jobs.some(j => j.role === r)).forEach(r => $("#role").insertAdjacentHTML("beforeend", `<option>${esc(r)}</option>`));
   LEVELS.filter(l => D.jobs.some(j => j.level === l)).forEach(l => $("#level").insertAdjacentHTML("beforeend", `<option>${l}</option>`));
   $("#techlist").innerHTML = ALL_SKILLS.map(k => `<option value="${esc(k)}"></option>`).join("");
 
-  // Filters
   const press = (group, v) => $(group).querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === v));
   const sync = () => {
     ["q", "role", "level", "type", "src", "sort"].forEach(k => { $("#" + k).value = state[k]; state[k] = $("#" + k).value; });
@@ -310,7 +379,8 @@ function init() {
     $("#fresh").checked = state.fresh;
     press("#where", state.where); press("#mode", state.mode);
   };
-  const set = (k, v) => { state[k] = v; state.limit = 50; renderJobs(); };
+  const set = (k, v) => { state[k] = v; state.limit = 40; renderJobs(); };
+  const toggleRole = r => { state.role = state.role === r ? "" : r; $("#role").value = state.role; set("role", state.role); };
   $("#q").addEventListener("input", e => set("q", e.target.value));
   ["role", "level", "type", "src", "sort"].forEach(k => $("#" + k).addEventListener("change", e => set(k, e.target.value)));
   $("#min").addEventListener("input", e => { $("#minv").textContent = e.target.value + "%"; set("min", +e.target.value); });
@@ -324,24 +394,26 @@ function init() {
   const addTech = () => { const k = findSkill($("#techq").value); if (k) { $("#techq").value = ""; if (!state.techs.includes(k)) set("techs", [...state.techs, k]); } };
   $("#techq").addEventListener("change", addTech);
   $("#techq").addEventListener("keydown", e => { if (e.key === "Enter") addTech(); });
-  $("#reset").addEventListener("click", () => { Object.assign(state, DEFAULTS, { techs: [] }); sync(); set("limit", 50); });
-  $("#filtersbtn").addEventListener("click", e => {
-    const open = $("#rail").classList.toggle("open");
-    e.currentTarget.setAttribute("aria-expanded", open);
-  });
-  $("#more").addEventListener("click", () => { state.limit += 50; renderJobs(); });
+  $("#reset").addEventListener("click", () => { Object.assign(state, DEFAULTS, { techs: [], sort: state.sort }); sync(); set("limit", 40); });
+  $("#filtersbtn").addEventListener("click", e => { e.currentTarget.setAttribute("aria-expanded", $("#filters").classList.toggle("open")); });
+  $("#more").addEventListener("click", () => { state.limit += 40; renderJobs(); });
   $("#list").addEventListener("click", e => { const b = e.target.closest(".jitem"); if (b) openJob(+b.dataset.i); });
-  $("#detail").addEventListener("click", e => { if (e.target.id === "back") { $("#jobs").classList.remove("showing"); $(`.jitem[data-i="${state.sel}"]`)?.focus(); } });
-  document.addEventListener("keydown", e => { if (e.key === "Escape" && $("#jobs").classList.contains("showing")) $("#jobs").classList.remove("showing"); });
+  $("#detail").addEventListener("click", e => { if (e.target.id === "back") { $("#board").classList.remove("showing"); $(`.jitem[data-i="${state.sel}"]`)?.focus(); } });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") $("#board").classList.remove("showing"); });
+  $("#sectors").addEventListener("click", e => { const b = e.target.closest(".sector"); if (b) toggleRole(b.dataset.role); });
+  $("#radar").addEventListener("click", e => {
+    if (e.target.dataset.role) return toggleRole(e.target.dataset.role);
+    if (e.target.classList.contains("blip")) { openJob(+e.target.dataset.i); if (wide()) $("#board").scrollIntoView({ behavior: "smooth", block: "start" }); }
+  });
+  $("#radar").addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.dataset.role) { e.preventDefault(); toggleRole(e.target.dataset.role); } });
 
-  // My resume (re-rendered, so listen on the container)
   $("#file").addEventListener("change", e => { onFile(e.target.files[0]); e.target.value = ""; });
   $("#me").addEventListener("click", e => {
     const id = e.target.id;
     if (id === "pick") $("#file").click();
     if (id === "pastebtn") { pasting = !pasting; renderMe(); }
     if (id === "usepaste") { const t = $("#pastetext").value; t.trim() ? useResume("Pasted resume", t) : (status = "Paste your resume text first.", renderMe()); }
-    if (id === "forget") { me = null; status = ""; store.set("job-radar-resume", null); refresh(); }
+    if (id === "forget") { me = null; status = ""; store.set("wradar-resume", null); refresh(); }
     const k = e.target.closest(".xchip button")?.dataset.k;
     if (k) { me.skills = me.skills.filter(s => s !== k); saveMe(); }
   });
@@ -355,7 +427,7 @@ function init() {
   $("#me").addEventListener("dragover", e => { if (!me) { e.preventDefault(); $("#drop")?.classList.add("over"); } });
   $("#me").addEventListener("dragleave", () => $("#drop")?.classList.remove("over"));
   $("#me").addEventListener("drop", e => { if (!me) { e.preventDefault(); $("#drop")?.classList.remove("over"); onFile(e.dataTransfer.files[0]); } });
-  $("#mybest").addEventListener("click", e => { const b = e.target.closest("button[data-i]"); if (b) { state.sel = +b.dataset.i; $("#jobs").classList.add("showing"); location.hash = "#jobs"; } });
+  $("#mybest").addEventListener("click", e => { const b = e.target.closest("button[data-i]"); if (b) { location.hash = "#jobs"; openJob(+b.dataset.i); } });
 
   window.addEventListener("hashchange", () => { route(); window.scrollTo(0, 0); });
   sync();

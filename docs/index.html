@@ -3,99 +3,113 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Job Radar</title>
-<meta name="description" content="Software engineering jobs across the US, Canada and remote, matched against your own resume.">
+<title>wradar</title>
+<meta name="description" content="Software engineering jobs from 332 company career sites and job boards across the US, Canada and remote, matched against your own resume.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<header class="top">
-  <div class="topin">
-    <a class="brand" href="#jobs" aria-label="Job Radar, jobs">
-      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="5.5" fill="none" stroke="currentColor" stroke-width="2" opacity=".55"/><path d="M12 12 L19 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/></svg>
-      Job Radar
+<header class="bar">
+  <div class="barin">
+    <a class="brand" href="#jobs">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="13" cy="13" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".5"/><path d="M13 13 L21.5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="18" cy="16.5" r="2" fill="var(--signal)"/></svg>
+      <span>wradar</span>
     </a>
     <nav class="tabs" aria-label="Sections">
       <a href="#jobs">Jobs</a><a href="#resume">My resume</a><a href="#insights">Insights</a><a href="#sources">Sources</a>
     </nav>
-    <span class="updated" id="updated"></span>
+    <span class="scanned" id="updated"></span>
   </div>
 </header>
 
+<section class="scope" id="scope" aria-label="Job radar">
+  <div class="scopein">
+    <figure class="radar">
+      <svg id="radar" viewBox="-66 0 592 460" role="img" aria-labelledby="radar-legend"></svg>
+      <figcaption id="radar-legend"></figcaption>
+    </figure>
+    <div class="scopecopy">
+      <h1 id="headline"></h1>
+      <p class="subline" id="subline"></p>
+      <div class="youline" id="youline"></div>
+      <div class="sectors" id="sectors" role="group" aria-label="Filter by role"></div>
+    </div>
+  </div>
+</section>
+
 <main class="wrap">
-  <!-- Jobs: filters | list | detail -->
   <section class="view" id="view-jobs" aria-label="Jobs">
-    <div class="jobs" id="jobs">
-      <aside class="rail" id="rail" aria-label="Filters">
-        <button class="btn ghost filtersbtn" type="button" id="filtersbtn" aria-expanded="false">Filters <span id="nfilters"></span></button>
-        <div class="fbody">
-          <input type="search" id="q" placeholder="Search title, company, skill…" aria-label="Search jobs">
-          <div class="fgroup"><span class="flabel">Location</span>
-            <div class="seg" id="where" role="group" aria-label="Location">
-              <button type="button" data-v="">All</button><button type="button" data-v="US">US</button><button type="button" data-v="Canada">Canada</button><button type="button" data-v="Remote">Remote</button>
-            </div>
+    <div class="filters" id="filters">
+      <button class="btn quiet filtersbtn" type="button" id="filtersbtn" aria-expanded="false">Filters <span id="nfilters"></span></button>
+      <div class="fbody">
+        <div class="frow">
+          <input type="search" id="q" placeholder="Search title, company or skill" aria-label="Search jobs">
+          <div class="seg" id="where" role="group" aria-label="Location">
+            <button type="button" data-v="">Anywhere</button><button type="button" data-v="US">US</button><button type="button" data-v="Canada">Canada</button><button type="button" data-v="Remote">Remote</button>
           </div>
-          <label class="fgroup"><span class="flabel">Role</span><select id="role"><option value="">All roles</option></select></label>
-          <label class="fgroup"><span class="flabel">Seniority</span><select id="level"><option value="">All levels</option></select></label>
-          <label class="fgroup"><span class="flabel">Job type</span><select id="type"><option value="">All job types</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Not specified</option></select></label>
-          <div class="fgroup"><span class="flabel">Technologies</span>
-            <div class="seg small" id="mode" role="group" aria-label="How to combine technologies">
-              <button type="button" data-v="any">Any selected</button><button type="button" data-v="all">All selected</button>
-            </div>
-            <input id="techq" list="techlist" placeholder="Add a technology…" aria-label="Add a technology">
-            <div class="chips" id="techs"></div>
-          </div>
-          <label class="fgroup" id="minlabel"><span class="flabel">Resume match ≥ <b id="minv">0%</b></span><input type="range" id="min" min="0" max="90" step="5" value="0"></label>
-          <label class="fgroup"><span class="flabel">Source</span><select id="src"><option value="">All sources</option></select></label>
-          <label class="check"><input type="checkbox" id="fresh"> New in the last 48 hours</label>
-          <button class="linkbtn" id="reset" type="button">Reset filters</button>
+          <select id="role" aria-label="Role"><option value="">All roles</option></select>
+          <select id="level" aria-label="Seniority"><option value="">All levels</option></select>
+          <select id="type" aria-label="Job type"><option value="">Any job type</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Not specified</option></select>
+          <select id="src" aria-label="Source"><option value="">All sources</option></select>
         </div>
-      </aside>
-
-      <div class="results">
-        <div id="nudge"></div>
-        <div class="resbar"><span id="count" role="status"></span>
-          <label class="sort">Sort <select id="sort"><option value="score">Best match</option><option value="new">Newest</option></select></label></div>
-        <ul class="jlist" id="list"></ul>
-        <button class="btn ghost more" id="more" type="button" hidden>Show more</button>
+        <div class="frow">
+          <span class="flabel">Technologies</span>
+          <div class="seg small" id="mode" role="group" aria-label="How to combine technologies">
+            <button type="button" data-v="any">Any</button><button type="button" data-v="all">All</button>
+          </div>
+          <input id="techq" list="techlist" placeholder="Add a technology" aria-label="Add a technology">
+          <div class="chips" id="techs"></div>
+        </div>
+        <div class="frow">
+          <label class="minctl" id="minlabel">Match at least <input type="range" id="min" min="0" max="90" step="5" value="0"> <b id="minv">0%</b></label>
+          <label class="check"><input type="checkbox" id="fresh"> Only new in the last 48 hours</label>
+          <button class="linkbtn" id="reset" type="button">Clear filters</button>
+        </div>
       </div>
+    </div>
 
+    <div class="board" id="board">
+      <section class="results" aria-label="Job list">
+        <div class="resbar"><span id="count" role="status"></span>
+          <label class="sort">Sort by <select id="sort"><option value="score">Best match</option><option value="new">Newest</option></select></label></div>
+        <ul class="jlist" id="list"></ul>
+        <button class="btn quiet more" id="more" type="button" hidden>Show more jobs</button>
+      </section>
       <article class="detail" id="detail" tabindex="-1" aria-label="Job details"></article>
     </div>
   </section>
 
-  <!-- My resume -->
   <section class="view" id="view-resume" aria-label="My resume" hidden>
-    <div class="pagehead"><h1>My resume</h1><p>Add your resume to score every job. It's read in this browser and never uploaded.</p></div>
-    <div class="grid2">
-      <section class="card me" id="me"></section>
+    <div class="pagehead"><h1>My resume</h1><p>Add your resume and every job gets scored against it. It's read in this browser and never uploaded.</p></div>
+    <div class="split">
+      <section class="panel me" id="me"></section>
       <div class="stack">
-        <section class="card"><h2>Skills to add</h2><p class="note">The skills jobs ask for most that your resume doesn't list.</p><ol class="bars" id="mygaps"></ol></section>
-        <section class="card"><h2>Your best matches</h2><ol class="best" id="mybest"></ol></section>
+        <section class="panel"><h2>Skills to add</h2><p class="note">What jobs ask for most that your resume doesn't list.</p><ol class="bars gap" id="mygaps"></ol></section>
+        <section class="panel"><h2>Your best matches</h2><ol class="best" id="mybest"></ol></section>
       </div>
     </div>
   </section>
 
-  <!-- Insights -->
   <section class="view" id="view-insights" aria-label="Insights" hidden>
-    <div class="pagehead"><h1>Insights</h1><p>Across every job found on the last run.</p></div>
-    <div class="tiles" id="tiles"></div>
-    <div class="grid3" id="charts"></div>
+    <div class="pagehead"><h1>Insights</h1><p id="insight-sub"></p></div>
+    <p class="statement" id="statement"></p>
+    <div class="charts" id="charts"></div>
   </section>
 
-  <!-- Sources -->
   <section class="view" id="view-sources" aria-label="Sources" hidden>
     <div class="pagehead"><h1>How jobs are found</h1><p>No AI runs here. A scheduled job reads public job sources and applies fixed rules.</p></div>
-    <ol class="steps card" id="steps"></ol>
-    <div class="grid2">
-      <section class="card"><h2>Sources</h2><p class="note" id="srcsum"></p><ul class="src" id="srcok"></ul>
+    <ol class="steps" id="steps"></ol>
+    <div class="split">
+      <section class="panel"><h2>Sources</h2><p class="note" id="srcsum"></p><ul class="src" id="srcok"></ul>
         <details class="more" id="srcbadwrap"><summary></summary><ul class="src bad" id="srcbad"></ul></details></section>
-      <section class="card"><h2>Privacy</h2>
-        <p>Your resume never leaves your browser. Only the file name, the skills found in it and your years of experience are remembered, on this device, so the page can score jobs next time. Remove it any time from My resume.</p>
-        <h2>Run your own copy</h2>
-        <p>The code is open source. Fork <a href="https://github.com/sudddy/job-radar" target="_blank" rel="noopener">github.com/sudddy/job-radar</a>, edit <code>config.json</code> to change the companies, locations and rules, and GitHub Actions keeps your copy fresh.</p></section>
+      <div class="stack">
+        <section class="panel"><h2>Privacy</h2>
+          <p>Your resume never leaves your browser. Only the file name, the skills found in it and your years of experience are kept, on this device, so jobs stay scored next time. Remove it any time from My resume.</p></section>
+        <section class="panel"><h2>Run your own copy</h2>
+          <p>The code is open source. Fork <a href="https://github.com/sudddy/wradar" target="_blank" rel="noopener">sudddy/wradar</a>, edit <code>config.json</code> to change companies, locations and rules, and GitHub Actions keeps your copy fresh.</p></section>
+      </div>
     </div>
   </section>
 </main>
