@@ -4,13 +4,18 @@ Finds software engineering jobs in the US, Canada and remote, for every technolo
 
 No AI runs here. A Python script (standard library only) polls public job sources on a schedule and applies fixed rules.
 
-## Viewing the dashboard
+## Using the app
 
-- **On GitHub:** data refreshes every 6 hours via GitHub Actions. Pull the repo and open `docs/index.html` in a browser.
-- **GitHub Pages (optional):** Settings → Pages → Deploy from branch `main`, folder `/docs`. Needs a public repo or a paid GitHub plan. The page holds no personal data; resumes stay in each viewer's browser.
-- **Locally:** `python3 fetch_jobs.py`, then open `docs/index.html`.
+Open **https://sudddy.github.io/job-radar/** (GitHub Pages). It has four sections:
 
-Refresh on demand: Actions tab → **Fetch jobs** → **Run workflow**. Editing `config.json` or `keywords.json` also triggers a refresh.
+- **Jobs:** filters on the left, the job list in the middle, the selected job on the right with its link, your match and the skills you have or are missing.
+- **My resume:** add your resume, fix the skills it found, and see the skills jobs ask for most that you don't list, plus your best matches.
+- **Insights:** most-requested skills and how the jobs break down by role, seniority, location and type.
+- **Sources:** how jobs are found and which of the 332 sources were read on the last run.
+
+Job data refreshes every 6 hours via GitHub Actions. To refresh now: Actions tab → **Fetch jobs** → **Run workflow**. Editing `config.json` or `keywords.json` also triggers a refresh.
+
+To run it on your own machine instead: `python3 fetch_jobs.py`, then open `docs/index.html`.
 
 ## Your resume
 
@@ -43,6 +48,16 @@ Job type comes from the posting's own field where the site has one (Lever, Ashby
 | Job boards: Remotive, RemoteOK, Jobicy, Himalayas, We Work Remotely, Working Nomads, The Muse, HN "Who is hiring", Amazon Jobs | 9 | public APIs / RSS |
 
 LinkedIn, Indeed and Glassdoor aren't polled: they have no public jobs API and their terms forbid scraping.
+
+## Files
+
+| Path | What it is |
+|---|---|
+| `fetch_jobs.py` | Polls the sources, applies the rules, writes `docs/jobs.js` |
+| `config.json` / `keywords.json` | The rules and the skill dictionary |
+| `docs/index.html`, `docs/app.css`, `docs/app.js` | The app (plain HTML, CSS and JavaScript, no build step) |
+| `docs/jobs.js` | Job data from the last run |
+| `.github/workflows/fetch-jobs.yml` | The 6-hourly schedule |
 
 ## Changing the rules
 
