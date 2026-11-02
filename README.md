@@ -1,6 +1,6 @@
 # Job Radar
 
-Finds software engineering jobs in the US, Canada and remote, keeps only the ones that fit the resume, and shows how well each one matches.
+Finds software engineering jobs in the US, Canada and remote, for every technology, and shows how well each one matches the resume.
 
 No AI runs here. A Python script (standard library only) polls public job sources on a schedule and applies fixed rules.
 
@@ -14,11 +14,13 @@ Refresh on demand: Actions tab → **Fetch jobs** → **Run workflow**. Editing 
 
 ## What it shows
 
-- Filters: US / Canada / Remote, Full-time / Part-time / Contract, minimum match, source, new only
+- Filters: role (Backend, Full stack, Frontend, Data, DevOps / SRE…), seniority (Junior, Mid, Senior, Staff+), technologies (pick any or all, e.g. Java, Node.js), US / Canada / Remote, Full-time / Part-time / Contract, minimum resume match, source, new only. Choices are remembered in the browser; Reset filters clears them.
 - Match score: share of the skills a posting names that are also on the resume
 - Matched and missing keywords per job, plus a short fit summary (skills covered, years asked vs. years on the resume, gaps to address)
 - Applicants: shown when a source provides it, otherwise "Not available" (public job APIs don't expose this)
 - The skills most often missing across the listed jobs, and which sources were read on the last run
+
+Role and seniority come from the job title; a title like "Software Engineer, Payments" falls back to its skills. To only collect jobs that fit the resume, set `min_matched_keywords` in `config.json` (0 keeps every technology).
 
 Job type comes from the posting's own field where the site has one (Lever, Ashby, SmartRecruiters, Workable, Workday, Amazon and most feeds). Otherwise it's read from the title or a plain statement in the description; if neither says, it shows "Not specified".
 

@@ -58,6 +58,23 @@ TYPE_BODY = [("Contract", r"\b(contract|contractor|freelance) (role|position|opp
              ("Part-time", r"\bpart[- ]time (role|position|basis|opportunity|job)\b|\bthis is a part[- ]time\b"),
              ("Full-time", r"\bfull[- ]time\b")]
 ROLE = re.compile(r"engineer|developer|swe\b|programmer|technical staff", re.I)
+# Seniority and role family come from the title; a title like "Software Engineer, Payments" falls back to its skills.
+LEVELS = [("Staff+", r"\b(staff|principal|distinguished|architect|fellow)\b"),
+          ("Senior", r"\b(senior|sr\.?|lead|iii|iv)\b"),
+          ("Junior", r"\b(junior|jr\.?|entry|associate|i)\b")]
+FAMILIES = [("Full stack", r"full[- ]?stack"),
+            ("Backend", r"back[- ]?end|server[- ]side|\bapi\b|distributed systems|\bpayments?\b|ledger|integrations?\b"),
+            ("Frontend", r"front[- ]?end|\bui\b|\bweb developer"),
+            ("Mobile", r"\b(ios|android|mobile|react native)\b"),
+            ("ML / AI", r"machine learning|\bml\b|\bai\b|\bllms?\b|deep learning|\bnlp\b"),
+            ("Data", r"\bdata\b|analytics|\betl\b"),
+            ("DevOps / SRE", r"devops|\bsre\b|site reliability|infrastructure|\bplatform\b|\bcloud\b|reliability"),
+            ("Security", r"security"),
+            ("QA / Test", r"\bqa\b|\btest|sdet|quality"),
+            ("Embedded", r"embedded|firmware")]
+BACKEND = {"Java", "Go", "Python", "Kotlin", "Scala", "Rust", "C#", ".NET", "Ruby on Rails", "Node.js", "Spring Boot",
+           "Django", "Kafka", "PostgreSQL", "MySQL", "Redis", "Microservices", "Distributed Systems", "gRPC", "REST APIs"}
+FRONTEND = {"React", "Angular", "Vue.js", "Next.js", "Redux", "HTML/CSS"}
 COUNTRY = {"US": "United States", "USA": "United States", "CA": "Canada", "CAN": "Canada"}
 
 
@@ -353,6 +370,18 @@ def job_type(field, title, body):
     return "Not specified"
 
 
+def level(title):
+    return next((name for name, rx in LEVELS if re.search(rx, title, re.I)), "Mid")
+
+
+def family(title, found):
+    name = next((name for name, rx in FAMILIES if re.search(rx, title, re.I)), None)
+    if name:
+        return name
+    be, fe = len(found & BACKEND) >= 2, len(found & FRONTEND) >= 2
+    return "Full stack" if be and fe else "Backend" if be else "Frontend" if fe else "General"
+
+
 def years_required(body):
     return max((int(m.group(1)) for m in EXPERIENCE.finditer(body) if 0 < int(m.group(1)) <= 15), default=None)
 
@@ -382,11 +411,11 @@ def evaluate(job, r, cutoff):
     matched = [k for k in r["kw"] if k in found and k in r["resume"]]
     if len(matched) < cfg["min_matched_keywords"]:
         return None
-    return dict(title=title, company=job["company"].strip(), where=tags, location=location[:160],
+    return dict(title=title, company=job["company"].strip(), where=tags, location=location[:120],
                 url=job["url"], posted=posted.isoformat() if posted else None, source=job["source"],
-                type=job_type(val("type"), title, body),
+                type=job_type(val("type"), title, body), level=level(title), role=family(title, found),
                 applicants=job.get("applicants"),  # no public board API exposes this; dashboard shows "Not available"
-                score=round(100 * len(matched) / len(found)), matched=matched,
+                score=round(100 * len(matched) / len(found)) if found else 0, matched=matched,
                 missing=[k for k in r["kw"] if k in found and k not in r["resume"]],
                 years_required=years_required(body))
 

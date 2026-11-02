@@ -4,9 +4,9 @@
 
   "locations": ["US", "Canada", "Remote"],
   "max_age_days": 30,
-  "min_matched_keywords": 5,
-  "title_include": "\\b(engineer|developer|swe|programmer|member of technical staff)\\b",
-  "title_exclude": "\\b(intern|internship|co-?op|new grad|graduate|junior|entry|manager|director|head|vp|vice president|principal|distinguished|sales|solutions?|support|customer|field|hardware|electrical|mechanical|firmware|embedded|ios|android|mobile|front[- ]?end|qa|quality|test|sdet|recruit\\w*|designer)\\b",
+  "min_matched_keywords": 0,
+  "title_include": "\\b(engineer|developer|swe|programmer|architect|member of technical staff)\\b",
+  "title_exclude": "\\b(intern|internship|co-?op|new grad|graduate|manager|director|head|vp|vice president|sales|solutions?|support|customer|field|hardware|electrical|mechanical|recruit\\w*|designer)\\b",
 
   "feeds": ["remotive", "remoteok", "jobicy", "himalayas", "weworkremotely", "workingnomads", "themuse", "hackernews", "amazon"],
 

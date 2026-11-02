@@ -67,6 +67,19 @@ h1 span { color: var(--accent); }
 .filters input[type=search], .filters select { font: inherit; color: var(--ink); background: var(--bg);
   border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; min-width: 0; }
 .filters input[type=search] { flex: 1 1 220px; }
+.tech { flex: 1 1 100%; display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.techhead { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.techhead b { font-size: 14px; }
+.techhead input { font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 5px 10px; min-width: 0; flex: 0 1 200px; }
+.seg.small button { font-size: 13px; padding: 4px 9px; }
+.tchip { font: inherit; font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); cursor: pointer; }
+.tchip span { color: var(--muted); font: 500 11px var(--mono); margin-left: 4px; }
+.tchip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.tchip[aria-pressed="true"] span { color: inherit; opacity: .8; }
+.tchip:focus-visible, .seg button:focus-visible, .linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.linkbtn { font: inherit; font-size: 14px; background: none; border: 0; color: var(--accent); cursor: pointer; padding: 4px 2px; text-decoration: underline; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { font: inherit; font-size: 14px; border: 0; background: var(--bg); color: var(--muted); padding: 7px 11px; cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--line); }
@@ -156,14 +169,28 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--muted); ma
     <main>
       <div class="filters" role="search">
         <input type="search" id="q" placeholder="Search title, company, skill…" aria-label="Search jobs">
+        <select id="role" aria-label="Role"><option value="">All roles</option></select>
+        <select id="level" aria-label="Seniority"><option value="">All levels</option></select>
+        <select id="type" aria-label="Job type"><option value="">All job types</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Not specified</option></select>
         <div class="seg" id="where" role="group" aria-label="Location">
           <button aria-pressed="true" data-v="">All</button><button aria-pressed="false" data-v="US">US</button><button aria-pressed="false" data-v="Canada">Canada</button><button aria-pressed="false" data-v="Remote">Remote</button>
         </div>
-        <label>Min match <input type="range" id="min" min="0" max="90" step="5" value="0"> <span id="minv">0%</span></label>
-        <select id="type" aria-label="Job type"><option value="">All job types</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Not specified</option></select>
+        <label>Resume match ≥ <input type="range" id="min" min="0" max="90" step="5" value="0"> <span id="minv">0%</span></label>
         <select id="src" aria-label="Source"><option value="">All sources</option></select>
         <label><input type="checkbox" id="fresh"> New only</label>
         <select id="sort" aria-label="Sort"><option value="score">Best match</option><option value="new">Newest</option></select>
+        <button class="linkbtn" id="reset" type="button">Reset filters</button>
+        <div class="tech">
+          <div class="techhead">
+            <b>Technologies</b>
+            <div class="seg small" id="mode" role="group" aria-label="How to combine technologies">
+              <button aria-pressed="true" data-v="any">Any selected</button><button aria-pressed="false" data-v="all">All selected</button>
+            </div>
+            <input id="techq" list="techlist" placeholder="Add a technology…" aria-label="Add a technology">
+            <datalist id="techlist"></datalist>
+          </div>
+          <div class="chips" id="techs"></div>
+        </div>
       </div>
       <div class="count" id="count"></div>
       <div id="list"></div>
@@ -201,7 +228,13 @@ const ago = iso => { if (!iso) return "—"; const d = (Date.now() - new Date(is
 const isNew = j => Date.now() - new Date(j.first_seen) < 2 * DAY;
 const tier = s => s >= 70 ? "strong" : s >= 50 ? "good" : "low";
 const list = a => a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1];
-const state = { q: "", where: "", type: "", min: 0, src: "", fresh: false, sort: "score", limit: 50 };
+const DEFAULTS = { q: "", role: "", level: "", type: "", where: "", min: 0, src: "", fresh: false, sort: "score", techs: [], mode: "any" };
+const KEY = "job-radar-filters";  // filters are remembered per browser
+const state = { ...DEFAULTS, limit: 50 };
+try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch {}
+const save = () => { try { const { limit, ...keep } = state; localStorage.setItem(KEY, JSON.stringify(keep)); } catch {} };
+const skillsOf = j => [...j.matched, ...j.missing];
+const LEVELS = ["Junior", "Mid", "Senior", "Staff+"];
 
 function why(j) {
   const n = j.matched.length, t = n + j.missing.length, yrs = D.years_experience;
@@ -215,9 +248,18 @@ function why(j) {
   return s;
 }
 
-function filtered() {
+function hasTech(j) {
+  if (!state.techs.length) return true;
+  const have = new Set(skillsOf(j));
+  return state.mode === "all" ? state.techs.every(t => have.has(t)) : state.techs.some(t => have.has(t));
+}
+
+function filtered(withTech = true) {
   const q = state.q.toLowerCase();
   const out = D.jobs.filter(j => j.score >= state.min
+    && (!withTech || hasTech(j))
+    && (!state.role || j.role === state.role)
+    && (!state.level || j.level === state.level)
     && (!state.where || j.where.includes(state.where))
     && (!state.type || j.type === state.type)
     && (!state.src || j.source === state.src)
@@ -232,7 +274,7 @@ function row(j) {
   const applicants = j.applicants == null ? '<span class="na">Not available</span>' : esc(j.applicants);
   return `<details class="job"><summary>
       <div class="score ${tier(j.score)}" aria-label="${j.score}% match">${j.score}%</div>
-      <div class="role"><b>${esc(j.title)}${isNew(j) ? '<span class="new">New</span>' : ""}</b><span>${esc(j.company)} · ${esc(j.where.join(" / "))} · ${esc(j.type)}</span></div>
+      <div class="role"><b>${esc(j.title)}${isNew(j) ? '<span class="new">New</span>' : ""}</b><span>${esc(j.company)} · ${esc(j.where.join(" / "))} · ${esc(j.level)} ${esc(j.role)} · ${esc(j.type)}</span></div>
       <div class="meta"><strong>${j.matched.length}/${j.matched.length + j.missing.length}</strong> keywords</div>
       <div class="meta"><strong>${applicants}</strong> applicants</div>
       <div class="meta"><strong>${ago(j.posted)}</strong> ${esc(j.source)}</div>
@@ -246,9 +288,19 @@ function row(j) {
     </div></details>`;
 }
 
+function renderTechs() {
+  const counts = {};
+  filtered(false).forEach(j => skillsOf(j).forEach(k => counts[k] = (counts[k] || 0) + 1));
+  const shown = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 24);
+  state.techs.forEach(t => shown.includes(t) || shown.unshift(t));
+  $("#techs").innerHTML = shown.map(k => `<button type="button" class="tchip" data-k="${esc(k)}" aria-pressed="${state.techs.includes(k)}">${esc(k)}<span>${counts[k] || 0}</span></button>`).join("");
+}
+
 function render() {
+  save();
+  renderTechs();
   const jobs = filtered();
-  $("#count").textContent = `${jobs.length} of ${D.jobs.length} jobs`;
+  $("#count").textContent = `${jobs.length} of ${D.jobs.length} jobs` + (state.techs.length ? ` · ${state.mode === "all" ? "all of" : "any of"} ${state.techs.join(", ")}` : "");
   $("#list").innerHTML = jobs.slice(0, state.limit).map(row).join("")
     || '<div class="empty">No jobs match these filters.</div>';
   $("#more").hidden = jobs.length <= state.limit;
@@ -270,7 +322,7 @@ function init() {
   const ok = D.sources.filter(s => s.ok), bad = D.sources.filter(s => !s.ok);
   const scores = D.jobs.map(j => j.score).sort((a, b) => a - b);
   const tiles = [
-    [D.jobs.length, "matching jobs"],
+    [D.jobs.length, "jobs found"],
     [D.jobs.filter(isNew).length, "new in last 48h"],
     [D.jobs.filter(j => j.score >= 70).length, "strong fits (70%+)"],
     [scores.length ? scores[Math.floor(scores.length / 2)] + "%" : "—", "median match"],
@@ -278,9 +330,9 @@ function init() {
   const rules = D.rules || { max_age_days: 30, min_matched_keywords: 5 };
   const steps = [
     [`Poll ${D.sources.length} sources`, "Every 6 hours a scheduled job reads company career boards (Greenhouse, Ashby, Lever, Workday, SmartRecruiters, Workable) and job boards such as The Muse, Himalayas and HN Who's Hiring."],
-    ["Apply the rules", `Keeps engineering roles in the US, Canada or remote, posted in the last ${rules.max_age_days} days, that mention at least ${rules.min_matched_keywords} skills from the resume.`],
+    ["Apply the rules", `Keeps software engineering roles in the US, Canada or remote posted in the last ${rules.max_age_days} days${rules.min_matched_keywords ? `, that mention at least ${rules.min_matched_keywords} skills from the resume` : ", for every technology"}. Each one is tagged with its role, seniority and job type.`],
     ["Score against the resume", "Each posting's skills are compared with the resume to get a match %, the matched and missing keywords, and the years of experience it asks for."],
-    ["List them here", "Best matches first. Search, filter by location, job type or source, and open a row for the fit summary and the link to apply."],
+    ["Pick what you want", "Filter by role, seniority, technology, location or job type. Your choices are remembered in this browser. Open a row for the fit summary and the link to apply."],
   ];
   $("#steps").innerHTML = steps.map(([t, d]) => `<li><b>${esc(t)}</b>${esc(d)}</li>`).join("");
   $("#tiles").innerHTML = tiles.map(([v, l]) => `<div class="tile"><b>${v}</b><small>${l}</small></div>`).join("");
@@ -297,19 +349,43 @@ function init() {
   $("#rescount").textContent = `${D.resume_skills.length} skills detected. Edit resume.txt to change them.`;
   $("#resume").innerHTML = D.resume_skills.map(k => `<span class="chip">${esc(k)}</span>`).join("");
 
+  const roles = {};
+  D.jobs.forEach(j => roles[j.role] = (roles[j.role] || 0) + 1);
+  Object.keys(roles).sort((a, b) => roles[b] - roles[a]).forEach(r => $("#role").insertAdjacentHTML("beforeend", `<option value="${esc(r)}">${esc(r)} (${roles[r]})</option>`));
+  LEVELS.filter(l => D.jobs.some(j => j.level === l)).forEach(l => $("#level").insertAdjacentHTML("beforeend", `<option>${l}</option>`));
+  $("#techlist").innerHTML = [...new Set(D.jobs.flatMap(skillsOf))].sort().map(k => `<option value="${esc(k)}"></option>`).join("");
+
+  const press = (group, v) => $(group).querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === v));
+  const sync = () => {  // put the remembered state back into the controls
+    ["q", "role", "level", "type", "src", "sort"].forEach(k => { $("#" + k).value = state[k]; state[k] = $("#" + k).value; });
+    $("#min").value = state.min; $("#minv").textContent = state.min + "%";
+    $("#fresh").checked = state.fresh;
+    press("#where", state.where); press("#mode", state.mode);
+  };
   const set = (k, v) => { state[k] = v; state.limit = 50; render(); };
-  $("#q").addEventListener("input", e => set("q", e.target.value));
+  ["q"].forEach(k => $("#" + k).addEventListener("input", e => set(k, e.target.value)));
+  ["role", "level", "type", "src", "sort"].forEach(k => $("#" + k).addEventListener("change", e => set(k, e.target.value)));
   $("#min").addEventListener("input", e => { $("#minv").textContent = e.target.value + "%"; set("min", +e.target.value); });
-  $("#src").addEventListener("change", e => set("src", e.target.value));
-  $("#type").addEventListener("change", e => set("type", e.target.value));
   $("#fresh").addEventListener("change", e => set("fresh", e.target.checked));
-  $("#sort").addEventListener("change", e => set("sort", e.target.value));
-  $("#where").addEventListener("click", e => {
-    const b = e.target.closest("button"); if (!b) return;
-    $("#where").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
-    set("where", b.dataset.v);
+  $("#where").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { press("#where", b.dataset.v); set("where", b.dataset.v); } });
+  $("#mode").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { press("#mode", b.dataset.v); set("mode", b.dataset.v); } });
+  $("#techs").addEventListener("click", e => {
+    const b = e.target.closest(".tchip"); if (!b) return;
+    const k = b.dataset.k;
+    set("techs", state.techs.includes(k) ? state.techs.filter(t => t !== k) : [...state.techs, k]);
   });
+  const known = [...new Set(D.jobs.flatMap(skillsOf))];
+  const addTech = () => {
+    const v = $("#techq").value.trim().toLowerCase();
+    const k = known.find(x => x.toLowerCase() === v);
+    if (k && !state.techs.includes(k)) set("techs", [...state.techs, k]);
+    if (k) $("#techq").value = "";
+  };
+  $("#techq").addEventListener("change", addTech);
+  $("#techq").addEventListener("keydown", e => { if (e.key === "Enter") addTech(); });
+  $("#reset").addEventListener("click", () => { Object.assign(state, DEFAULTS, { techs: [] }); sync(); set("limit", 50); });
   $("#more").addEventListener("click", () => { state.limit += 50; render(); });
+  sync();
   render();
 }
 init();

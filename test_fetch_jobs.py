@@ -73,6 +73,22 @@ class Types(unittest.TestCase):
         self.assertEqual(f.days_ago("Posted Yesterday"), 1)
 
 
+class Classify(unittest.TestCase):
+    def test_level(self):
+        for title, want in {"Senior Backend Engineer": "Senior", "Staff Software Engineer": "Staff+",
+                            "Software Engineer II": "Mid", "Software Engineer I": "Junior",
+                            "Tech Lead, Payments": "Senior", "AI Engineer": "Mid"}.items():
+            self.assertEqual(f.level(title), want, title)
+
+    def test_family(self):
+        self.assertEqual(f.family("Senior Backend Engineer, Data Platform", set()), "Backend")
+        self.assertEqual(f.family("Software Engineer, Payments", set()), "Backend")
+        self.assertEqual(f.family("Senior Frontend Engineer", set()), "Frontend")
+        self.assertEqual(f.family("Software Engineer", {"Java", "Kafka", "React"}), "Backend")
+        self.assertEqual(f.family("Software Engineer", {"Java", "Kafka", "React", "Redux"}), "Full stack")
+        self.assertEqual(f.family("Software Engineer", set()), "General")
+
+
 class Evaluate(unittest.TestCase):
     def test_keeps_and_scores(self):
         row = f.evaluate(job(), R, CUTOFF)
@@ -82,6 +98,7 @@ class Evaluate(unittest.TestCase):
         self.assertEqual(row["years_required"], 5)
         self.assertIsNone(row["applicants"])
         self.assertEqual(row["type"], "Not specified")
+        self.assertEqual((row["level"], row["role"]), ("Senior", "Backend"))
         self.assertEqual(row["score"], round(100 * len(row["matched"]) / (len(row["matched"]) + 2)))
 
     def test_rules_reject(self):
@@ -89,7 +106,9 @@ class Evaluate(unittest.TestCase):
         self.assertIsNone(f.evaluate(job(title="Account Executive"), R, CUTOFF))
         self.assertIsNone(f.evaluate(job(location="Berlin, Germany"), R, CUTOFF))
         self.assertIsNone(f.evaluate(job(posted=(NOW - timedelta(days=60)).isoformat()), R, CUTOFF))
-        self.assertIsNone(f.evaluate(job(description="Ruby and Rails"), R, CUTOFF))
+        strict = dict(R, cfg=dict(R["cfg"], min_matched_keywords=5))
+        self.assertIsNone(f.evaluate(job(description="Ruby and Rails"), strict, CUTOFF))
+        self.assertIsNotNone(f.evaluate(job(description="Ruby and Rails"), R, CUTOFF))  # default keeps every tech
         self.assertIsNone(f.evaluate(job(url="javascript:alert(1)"), R, CUTOFF))
 
     def test_lazy_fields_only_fetched_when_needed(self):
