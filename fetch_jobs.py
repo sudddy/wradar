@@ -452,7 +452,8 @@ def main():
     jobs = sorted(rows.values(), key=lambda j: (-j["score"], -len(j["matched"]), j["company"]))
     sources = sorted((s for s, _ in results), key=lambda s: (not s["ok"], s["name"].lower()))
     data = dict(generated_at=NOW.isoformat(), candidate=cfg["candidate"], years_experience=cfg["years_experience"],
-                resume_skills=[k for k in r["kw"] if k in r["resume"]], sources=sources, jobs=jobs)
+                resume_skills=[k for k in r["kw"] if k in r["resume"]],
+                rules={k: cfg[k] for k in ("max_age_days", "min_matched_keywords", "locations")}, sources=sources, jobs=jobs)
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(PREFIX + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n")
     ok = sum(s["ok"] for s in sources)

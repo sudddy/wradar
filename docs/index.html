@@ -28,23 +28,33 @@
     --low: #a09d94; --low-bg: #2a2925;
     --gap: #f08a62; --gap-bg: #3d2117;
     --new: #8ea6ff;
+    color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #141412; --panel: #1c1c19; --ink: #ecebe6; --muted: #a09d94; --line: #2e2d29; --soft: #252521;
   --accent: #4fc2a9; --strong: #6fd69a; --strong-bg: #173525; --good: #e8b54d; --good-bg: #3a2e12;
   --low: #a09d94; --low-bg: #2a2925; --gap: #f08a62; --gap-bg: #3d2117; --new: #8ea6ff;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); }
 a { color: var(--accent); }
-.wrap { max-width: 1240px; margin: 0 auto; padding: 28px 16px 64px; }
+.wrap { max-width: 1272px; margin: 0 auto; padding-block: 28px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 
 header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 24px; margin-bottom: 22px; }
 h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; font-weight: 700; }
 h1 span { color: var(--accent); }
 .sub { color: var(--muted); font-size: 14px; }
 
+.how { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin-bottom: 22px; }
+.how summary { cursor: pointer; font-weight: 600; }
+.how summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.steps { list-style: none; margin: 14px 0 4px; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; counter-reset: step; }
+.steps li { counter-increment: step; display: grid; gap: 4px; align-content: start; font-size: 14px; color: var(--muted); }
+.steps li::before { content: counter(step); font: 600 13px/1 var(--mono); color: var(--accent); }
+.steps b { color: var(--ink); font-weight: 600; font-size: 15px; }
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
 .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
 .tile b { display: block; font: 600 26px/1.1 var(--mono); letter-spacing: -0.02em; }
@@ -121,6 +131,7 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--muted); ma
 }
 @media (max-width: 640px) {
   .tiles { grid-template-columns: repeat(2, 1fr); }
+  .steps { grid-template-columns: 1fr; }
   .job summary { grid-template-columns: 56px minmax(0, 1fr); }
   .job summary .meta { grid-column: 2; display: flex; gap: 6px; }
   .job summary .meta strong { display: inline; }
@@ -136,6 +147,8 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--muted); ma
     </div>
     <div class="sub" id="updated"></div>
   </header>
+
+  <details class="how" id="how"><summary>How jobs are found</summary><ol class="steps" id="steps"></ol></details>
 
   <section class="tiles" id="tiles"></section>
 
@@ -262,6 +275,14 @@ function init() {
     [D.jobs.filter(j => j.score >= 70).length, "strong fits (70%+)"],
     [scores.length ? scores[Math.floor(scores.length / 2)] + "%" : "—", "median match"],
   ];
+  const rules = D.rules || { max_age_days: 30, min_matched_keywords: 5 };
+  const steps = [
+    [`Poll ${D.sources.length} sources`, "Every 6 hours a scheduled job reads company career boards (Greenhouse, Ashby, Lever, Workday, SmartRecruiters, Workable) and job boards such as The Muse, Himalayas and HN Who's Hiring."],
+    ["Apply the rules", `Keeps engineering roles in the US, Canada or remote, posted in the last ${rules.max_age_days} days, that mention at least ${rules.min_matched_keywords} skills from the resume.`],
+    ["Score against the resume", "Each posting's skills are compared with the resume to get a match %, the matched and missing keywords, and the years of experience it asks for."],
+    ["List them here", "Best matches first. Search, filter by location, job type or source, and open a row for the fit summary and the link to apply."],
+  ];
+  $("#steps").innerHTML = steps.map(([t, d]) => `<li><b>${esc(t)}</b>${esc(d)}</li>`).join("");
   $("#tiles").innerHTML = tiles.map(([v, l]) => `<div class="tile"><b>${v}</b><small>${l}</small></div>`).join("");
 
   [...new Set(D.jobs.map(j => j.source))].sort().forEach(s => $("#src").insertAdjacentHTML("beforeend", `<option>${esc(s)}</option>`));
