@@ -404,7 +404,9 @@ function filtered(withTech = true) {
 }
 
 function row(j) {
-  const url = /^https?:\/\//.test(j.url) ? j.url : "#";
+  const link = /^https?:\/\//.test(j.url)
+    ? `<a class="btn" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">Open posting ↗</a>`
+    : '<span class="na">No link for this posting</span>';
   const applicants = j.applicants == null ? '<span class="na">Not available</span>' : esc(j.applicants);
   const chips = (a, cls) => a.map(k => `<span class="chip ${cls}">${esc(k)}</span>`).join("") || '<span class="na">None</span>';
   const detail = me
@@ -422,7 +424,7 @@ function row(j) {
     </summary>
     <div class="detail">
       ${detail}
-      <div class="actions"><a class="btn" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open posting ↗</a>
+      <div class="actions">${link}
         <span class="loc">${esc(j.location)}${j.years_required ? ` · asks ${j.years_required}+ yrs` : ""}</span></div>
     </div></details>`;
 }
