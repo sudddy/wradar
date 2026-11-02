@@ -1,0 +1,69 @@
+{
+  "locations": ["US", "Canada", "Remote"],
+  "max_age_days": 30,
+  "title_include": "\\b(engineer|developer|swe|programmer|architect|member of technical staff)\\b",
+  "title_exclude": "\\b(intern|internship|co-?op|new grad|graduate|manager|director|head|vp|vice president|sales|solutions?|support|customer|field|hardware|electrical|mechanical|recruit\\w*|designer)\\b",
+
+  "feeds": ["remotive", "remoteok", "jobicy", "himalayas", "weworkremotely", "workingnomads", "themuse", "hackernews", "amazon"],
+
+  "_boards_help": "Company career boards, grouped by the platform they run on. Use the slug from the careers URL: boards.greenhouse.io/<slug>, jobs.lever.co/<slug>, jobs.ashbyhq.com/<slug>, jobs.smartrecruiters.com/<slug>, apply.workable.com/<slug>, and <tenant>.<wdN>.myworkdayjobs.com/<site> for Workday (written as tenant.wdN/site). Add '|Display Name' when the slug isn't the company name.",
+  "boards": {
+    "greenhouse": [
+      "mercury", "ramp", "gemini", "brex", "affirm", "chime", "coinbase", "stripe", "ripple", "bitgo", "fireblocks",
+      "robinhood", "gusto", "consensys", "carta", "sofi", "lithic", "highnote", "toast", "adyen", "wise", "billcom",
+      "betterment", "current", "payoneer", "alloy", "treasuryprime", "checkr", "jumio", "figure", "blockchain",
+      "aptoslabs", "cloudflare", "strike", "elastic", "vercel", "planetscale", "twilio", "mongodb", "gitlab", "okta",
+      "cockroachlabs", "pagerduty", "fivetran", "launchdarkly", "grafanalabs", "honeycomb", "netlify", "airtable",
+      "figma", "asana", "discord", "dropbox", "reddit", "lyft", "pinterest", "airbnb", "scaleai", "samsara",
+      "anthropic", "databricks", "datadog", "tailscale", "squarespace", "duolingo", "circleci", "jfrog", "newrelic",
+      "sumologic", "fastly", "backblaze", "instacart", "rubrik", "yugabyte", "singlestore", "starburst", "dremio",
+      "sigmacomputing", "mixpanel", "klaviyo", "intercom", "attentive", "braze", "salesloft", "smartsheet",
+      "calendly", "lucidsoftware", "jetbrains", "descope", "pingidentity", "wizinc", "orcasecurity", "chainguard",
+      "abnormalsecurity", "huntress", "expel", "tanium", "netskope", "zscaler", "axonius", "tines", "island",
+      "socket", "endorlabs", "cresta", "togetherai", "labelbox", "snorkelai", "imbue", "xai", "turing", "faire",
+      "calm", "peloton", "doordashusa", "twitch", "roblox", "epicgames", "scopely", "nextdoor", "medium",
+      "riotgames", "kickstarter", "gofundme", "taskrabbit", "motive", "fourkites", "project44", "flexport", "yotpo",
+      "godaddy", "oscar", "opentable", "flatironhealth", "komodohealth", "zocdoc", "forward", "onemedical",
+      "garnerhealth", "suki", "pathai", "hootsuite", "d2l", "unbounce", "ritual", "tenstorrent", "diligent",
+      "later", "appdirect", "cultureamp", "lattice", "justworks", "coreweave", "ada18"
+    ],
+    "lever": [
+      "anchorage|Anchorage Digital", "moonpay|MoonPay", "finix", "nium", "dlocal|dLocal", "wealthfront",
+      "offchainlabs|Offchain Labs", "crypto|Crypto.com", "neon", "outreach", "saviynt", "secureframe",
+      "jumpcloud|JumpCloud", "rover", "olo", "lyrahealth|Lyra Health", "includedhealth|Included Health",
+      "nomihealth|Nomi Health", "gopuff", "veeva|Veeva Systems", "fullscript", "spotify", "ro", "waabi",
+      "achievers", "wattpad", "plooto", "wishpond", "pointclickcare|PointClickCare"
+    ],
+    "ashby": [
+      "circle", "alchemy", "plaid", "paxos", "phantom", "wealthsimple", "unit", "moderntreasury|Modern Treasury",
+      "column", "clearco", "koho|KOHO", "float", "airwallex", "neofinancial|Neo Financial", "nubank", "trulioo",
+      "lightspeedhq|Lightspeed", "expensify", "acorns", "dave", "sardine", "capchase", "middesk", "socure",
+      "persona", "mystenlabs|Mysten Labs", "ledger", "magiceden|Magic Eden", "oplabs|OP Labs", "temporal",
+      "airbyte", "posthog|PostHog", "lightspark", "blockstream", "supabase", "river", "sentry", "materialize",
+      "render", "railway", "linear", "clickhouse|ClickHouse", "modal", "notion", "cohere", "drata", "webflow",
+      "1password|1Password", "zapier", "vanta", "snyk", "openai|OpenAI", "motherduck|MotherDuck", "hex", "redis",
+      "hightouch", "fullstory|FullStory", "influxdata|InfluxData", "amplitude", "miro", "iterable",
+      "clickup|ClickUp", "mural", "workos|WorkOS", "kong", "clerk", "illumio", "perplexity", "semgrep",
+      "character|Character.AI", "synthesia", "elevenlabs|ElevenLabs", "writer", "harvey", "sierra", "decagon",
+      "baseten", "anyscale", "weaviate", "pinecone", "langchain|LangChain", "llamaindex|LlamaIndex", "cerebras",
+      "lambda", "cursor", "replit", "poolside", "magic", "crusoe", "cognition", "factory", "strava", "quora",
+      "substack", "angi", "thumbtack", "gorgias", "patreon", "recharge", "headway", "abridge", "benchling",
+      "sondermind|SonderMind", "nuna", "thinkific", "jobber", "procurify", "klue", "visier", "rewind", "benevity",
+      "hopper", "loopio", "oyster", "mosaic", "sonder"
+    ],
+    "smartrecruiters": [
+      "ServiceNow", "Ubisoft2|Ubisoft", "Freshworks", "Canva", "Experian", "Gong", "BigCommerce"
+    ],
+    "workable": [
+      "nuvei|Nuvei", "borrowell|Borrowell"
+    ],
+    "workday": [
+      "nvidia.wd5/NVIDIAExternalCareerSite|NVIDIA", "salesforce.wd12/External_Career_Site|Salesforce",
+      "adobe.wd5/external_experienced|Adobe", "paypal.wd1/jobs|PayPal", "capitalone.wd12/Capital_One|Capital One",
+      "workday.wd5/Workday|Workday", "mastercard.wd1/CorporateCareers|Mastercard", "intel.wd1/External|Intel",
+      "crowdstrike.wd5/crowdstrikecareers|CrowdStrike", "redhat.wd5/jobs|Red Hat", "td.wd3/TD_Bank_Careers|TD Bank",
+      "bmo.wd3/External|BMO", "broadcom.wd1/External_Career|Broadcom", "manulife.wd3/MFCJH_Jobs|Manulife",
+      "equifax.wd5/External|Equifax"
+    ]
+  }
+}
