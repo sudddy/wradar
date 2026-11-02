@@ -2,7 +2,7 @@
 
 Finds software engineering jobs in the US, Canada and remote, keeps only the ones that fit the resume, and shows how well each one matches.
 
-No AI runs here. A Python script (standard library only) polls public job boards on a schedule and applies fixed rules.
+No AI runs here. A Python script (standard library only) polls public job sources on a schedule and applies fixed rules.
 
 ## Viewing the dashboard
 
@@ -14,27 +14,37 @@ Refresh on demand: Actions tab → **Fetch jobs** → **Run workflow**. Editing 
 
 ## What it shows
 
+- Filters: US / Canada / Remote, Full-time / Part-time / Contract, minimum match, source, new only
 - Match score: share of the skills a posting names that are also on the resume
 - Matched and missing keywords per job, plus a short fit summary (skills covered, years asked vs. years on the resume, gaps to address)
-- Applicants: shown when a source provides it, otherwise "Not available" (public board APIs don't expose this)
-- The skills most often missing across all listed jobs, and which sources were read on the last run
+- Applicants: shown when a source provides it, otherwise "Not available" (public job APIs don't expose this)
+- The skills most often missing across the listed jobs, and which sources were read on the last run
+
+Job type comes from the posting's own field where the site has one (Lever, Ashby, SmartRecruiters, Workable, Workday, Amazon and most feeds). Otherwise it's read from the title or a plain statement in the description; if neither says, it shows "Not specified".
+
+## Sources (332)
+
+| Kind | Count | How it's read |
+|---|---|---|
+| Greenhouse company boards | 154 | public job board API |
+| Ashby company boards | 116 | public posting API |
+| Lever company boards | 29 | public postings API |
+| Workday career sites (NVIDIA, Salesforce, Capital One, TD, BMO…) | 15 | the career site's own JSON search, top 200 "software engineer" results |
+| SmartRecruiters (ServiceNow, Canva, Freshworks…) | 7 | public postings API |
+| Workable | 2 | public widget API |
+| Job boards: Remotive, RemoteOK, Jobicy, Himalayas, We Work Remotely, Working Nomads, The Muse, HN "Who is hiring", Amazon Jobs | 9 | public APIs / RSS |
+
+LinkedIn, Indeed and Glassdoor aren't polled: they have no public jobs API and their terms forbid scraping.
 
 ## Changing the rules
 
 | File | What to change |
 |---|---|
 | `resume.txt` | Replace with another resume (plain text). Skills are detected from it automatically. |
-| `config.json` | Candidate name, years of experience, allowed locations, max job age, minimum matched keywords, title include/exclude patterns, companies and feeds |
+| `config.json` | Candidate name, years of experience, allowed locations, max job age, minimum matched keywords, title include/exclude patterns, boards and feeds |
 | `keywords.json` | The skill dictionary. Add a skill and its aliases; `=Alias` is case-sensitive, `re:` is a raw regex. |
 
-Companies are career-board slugs (the part after `boards.greenhouse.io/`, `jobs.lever.co/` or `jobs.ashbyhq.com/`). The script tries all three, so you only need the slug. The dashboard's Sources panel lists any that couldn't be read.
-
-## Sources
-
-- Company boards on Greenhouse, Lever and Ashby (public posting APIs)
-- Remotive, RemoteOK and Jobicy remote-job feeds (please keep the links back to them)
-
-LinkedIn and Indeed aren't polled: they have no public jobs API and their terms forbid scraping.
+To add a company, find its careers page and put the slug under the matching platform in `config.json` → `boards` (the help text there shows each URL pattern). The dashboard's Sources panel lists any source that couldn't be read on the last run.
 
 ## Tests
 

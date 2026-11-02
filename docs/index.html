@@ -147,6 +147,7 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--muted); ma
           <button aria-pressed="true" data-v="">All</button><button aria-pressed="false" data-v="US">US</button><button aria-pressed="false" data-v="Canada">Canada</button><button aria-pressed="false" data-v="Remote">Remote</button>
         </div>
         <label>Min match <input type="range" id="min" min="0" max="90" step="5" value="0"> <span id="minv">0%</span></label>
+        <select id="type" aria-label="Job type"><option value="">All job types</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Not specified</option></select>
         <select id="src" aria-label="Source"><option value="">All sources</option></select>
         <label><input type="checkbox" id="fresh"> New only</label>
         <select id="sort" aria-label="Sort"><option value="score">Best match</option><option value="new">Newest</option></select>
@@ -187,7 +188,7 @@ const ago = iso => { if (!iso) return "—"; const d = (Date.now() - new Date(is
 const isNew = j => Date.now() - new Date(j.first_seen) < 2 * DAY;
 const tier = s => s >= 70 ? "strong" : s >= 50 ? "good" : "low";
 const list = a => a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1];
-const state = { q: "", where: "", min: 0, src: "", fresh: false, sort: "score", limit: 50 };
+const state = { q: "", where: "", type: "", min: 0, src: "", fresh: false, sort: "score", limit: 50 };
 
 function why(j) {
   const n = j.matched.length, t = n + j.missing.length, yrs = D.years_experience;
@@ -205,6 +206,7 @@ function filtered() {
   const q = state.q.toLowerCase();
   const out = D.jobs.filter(j => j.score >= state.min
     && (!state.where || j.where.includes(state.where))
+    && (!state.type || j.type === state.type)
     && (!state.src || j.source === state.src)
     && (!state.fresh || isNew(j))
     && (!q || [j.title, j.company, j.location, ...j.matched, ...j.missing].join(" ").toLowerCase().includes(q)));
@@ -217,7 +219,7 @@ function row(j) {
   const applicants = j.applicants == null ? '<span class="na">Not available</span>' : esc(j.applicants);
   return `<details class="job"><summary>
       <div class="score ${tier(j.score)}" aria-label="${j.score}% match">${j.score}%</div>
-      <div class="role"><b>${esc(j.title)}${isNew(j) ? '<span class="new">New</span>' : ""}</b><span>${esc(j.company)} · ${esc(j.where.join(" / "))}</span></div>
+      <div class="role"><b>${esc(j.title)}${isNew(j) ? '<span class="new">New</span>' : ""}</b><span>${esc(j.company)} · ${esc(j.where.join(" / "))} · ${esc(j.type)}</span></div>
       <div class="meta"><strong>${j.matched.length}/${j.matched.length + j.missing.length}</strong> keywords</div>
       <div class="meta"><strong>${applicants}</strong> applicants</div>
       <div class="meta"><strong>${ago(j.posted)}</strong> ${esc(j.source)}</div>
@@ -263,8 +265,11 @@ function init() {
   $("#tiles").innerHTML = tiles.map(([v, l]) => `<div class="tile"><b>${v}</b><small>${l}</small></div>`).join("");
 
   [...new Set(D.jobs.map(j => j.source))].sort().forEach(s => $("#src").insertAdjacentHTML("beforeend", `<option>${esc(s)}</option>`));
-  $("#srcsum").textContent = `${ok.length} of ${D.sources.length} sources read on the last run.`;
-  $("#srcok").innerHTML = ok.map(s => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a><span>${s.kept}/${s.seen}</span></li>`).join("");
+  const kinds = {};
+  ok.forEach(s => kinds[s.kind] = (kinds[s.kind] || 0) + 1);
+  $("#srcsum").textContent = `${ok.length} of ${D.sources.length} sources read on the last run: `
+    + Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(" · ") + ". Kept / seen per source:";
+  $("#srcok").innerHTML = ok.map(s => `<li><a href="${/^https?:\/\//.test(s.url) ? esc(s.url) : "#"}" target="_blank" rel="noopener">${esc(s.name)}</a><span>${s.kept}/${s.seen}</span></li>`).join("");
   $("#srcbadwrap").hidden = !bad.length;
   $("#srcbadwrap summary").textContent = `${bad.length} couldn't be read`;
   $("#srcbad").innerHTML = bad.map(s => `<li>${esc(s.name)}<span>${esc(s.error)}</span></li>`).join("");
@@ -275,6 +280,7 @@ function init() {
   $("#q").addEventListener("input", e => set("q", e.target.value));
   $("#min").addEventListener("input", e => { $("#minv").textContent = e.target.value + "%"; set("min", +e.target.value); });
   $("#src").addEventListener("change", e => set("src", e.target.value));
+  $("#type").addEventListener("change", e => set("type", e.target.value));
   $("#fresh").addEventListener("change", e => set("fresh", e.target.checked));
   $("#sort").addEventListener("change", e => set("sort", e.target.value));
   $("#where").addEventListener("click", e => {
