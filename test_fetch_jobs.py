@@ -418,6 +418,13 @@ class Main(unittest.TestCase):
             src, rows = f.run_source(("feed", "fake"), R, CUTOFF, {s.job_key(old): old})
         self.assertEqual((rows, src["skipped"]), ([old], 2))
 
+    def test_a_failed_detail_call_finds_last_scans_row_under_another_spelling(self):
+        down = mock.Mock(side_effect=OSError("detail call failed"))
+        old = row(title="Full-stack Engineer", first_seen=days(3))  # the spelling the last scan kept
+        with mock.patch.dict(f.FEEDS, fake=("Fake", lambda: [job(title="Full Stack Engineer", description=down)], "https://x.test")):
+            src, rows = f.run_source(("feed", "fake"), R, CUTOFF, {s.same_job(old): old})
+        self.assertEqual(rows, [old])
+
     def test_a_lone_surrogate_does_not_stop_the_scan(self):
         data, _, _ = self.scan({}, company="Acme \ud83d")
         self.assertEqual(data["jobs"][0]["company"], "Acme ?")

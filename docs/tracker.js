@@ -37,6 +37,7 @@ function renderCounts() {
   const count = seg => mineRows(tracker, seg, byKey).length.toLocaleString();
   $("#n-jobs").textContent = unmarked(D.jobs);
   $("#n-older").textContent = unmarked(D.older);
+  [2, 3, 7].forEach(n => { $("#n-d" + n).textContent = unmarked(D.jobs.filter(j => within(j, n))); });
   $("#n-mine").textContent = $("#n-all").textContent = count("all");
   $("#n-saved").textContent = count("saved");
   $("#n-applied").textContent = count("applied");

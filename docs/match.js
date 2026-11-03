@@ -347,7 +347,7 @@ function score(p, job, stats) {
   // and a missing skill the title names is the whole "Not on your resume" list when it's the only one.
   const said = held ? held.why.toLowerCase() : "";
   const repeats = g => said.includes(g.toLowerCase().slice(0, -1)) || (held?.why === NO_STACK && g === NO_LIST)
-    || (held?.why === lostWhy && cov.missed.length === 1 && g === missedLine);
+    || (lost && held?.why === lostWhy && cov.missed.length === 1 && g === missedLine);
   const shown = [...new Set([...(held ? [held.why] : []), ...gaps.filter(g => !repeats(g))])];
   const final = Math.min(raw, low[0]);
   return { score: final, tier: TIERS.find(t => final >= t[1])[0], parts, held, fits: fits.slice(0, 4), gaps: shown.slice(0, 3), next: next.slice(0, 3),

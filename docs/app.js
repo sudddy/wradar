@@ -15,8 +15,9 @@ const store = {  // per-browser memory; the app works the same without it
 const wide = () => matchMedia("(min-width: 821px)").matches;
 const roomy = () => matchMedia("(min-width: 1024px)").matches;  // every quick filter fits on one line
 const LEVELS = ["Junior", "Mid", "Senior", "Staff+"];
+const DAYS = [2, 3, 7, FRESH_DAYS];  // the Posted choices; Over 30 days ago is #older
 const ROLE_ORDER = ["Backend", "Full stack", "Frontend", "Mobile", "Data", "ML / AI", "DevOps / SRE", "Security", "QA / Test", "Embedded", "General"];
-const DEFAULTS = { v: 2, q: "", role: "", level: "", type: "", where: "", work: "", pay: 0, min: 0, src: "", fresh: false, sort: "score", techs: [], mode: "any", hideApplied: false };
+const DEFAULTS = { v: 2, q: "", role: "", level: "", type: "", where: "", work: "", pay: 0, min: 0, src: "", days: FRESH_DAYS, sort: "score", techs: [], mode: "any", hideApplied: false };
 const state = savedFilters(store.get("wradar-filters"), DEFAULTS);
 const PASTED = "Pasted resume";
 const byKey = new Map();
@@ -108,12 +109,12 @@ function scoreJobs() {
 
 // ---- Filtering ----
 const unhidden = a => a.filter(j => statusOf(j) !== "hidden");
-const pool = () => unhidden(page === "older" ? D.older : D.jobs).filter(j => !state.hideApplied || statusOf(j) !== "applied");
+const pool = () => unhidden(page === "older" ? D.older : D.jobs.filter(j => state.days >= FRESH_DAYS || within(j, state.days))).filter(j => !state.hideApplied || statusOf(j) !== "applied");
 const newest = (a, b) => age(a) - age(b);
 const byMatch = (a, b) => b.score - a.score || b.fit.tie - a.fit.tie || newest(a, b);
 
-function listed({ tech, jobs = pool(), view = page } = {}) {
-  const got = knownOnly(jobs.filter(j => matches(j, state, view, { tech })), state.pay, state.work);
+function listed({ tech, jobs = pool() } = {}) {
+  const got = knownOnly(jobs.filter(j => matches(j, state, { tech })), state.pay, state.work);
   got.kept.sort(me && state.sort === "score" ? byMatch : newest);
   return got;
 }
@@ -137,8 +138,7 @@ function renderSteps() {
 const press = (group, v) => $(group).querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === v));
 
 function activeFilters() {
-  const more = ["type", "src", "pay"].filter(k => state[k]).length + (state.fresh && page !== "older" ? 1 : 0)
-    + (state.min && me ? 1 : 0) + (state.techs.length ? 1 : 0);
+  const more = ["type", "src", "pay"].filter(k => state[k]).length + (state.min && me ? 1 : 0) + (state.techs.length ? 1 : 0);
   return more + (roomy() ? 0 : ["where", "role", "level", "work"].filter(k => state[k]).length);
 }
 
@@ -155,7 +155,7 @@ function renderFilters() {
   $("#nfilters").textContent = n ? `(${n})` : "";
   $("#minlabel").classList.toggle("off", !me);
   $("#min").disabled = !me;
-  $("#fresh").disabled = page === "older";
+  press("#ages", page === "older" ? "older" : String(state.days));
   $("#sort").value = me ? state.sort : "new";  // with no resume the list is newest first, whatever was picked
   $("#sort").disabled = !me;
   renderTechs();
@@ -273,9 +273,9 @@ function renderInsights() {
 function renderSources() {
   const steps = [
     [`Scan ${D.sources.length} sources`, "Every 6 hours a scheduled job reads company career sites on Greenhouse, Ashby, Lever, Workday, SmartRecruiters and Workable, plus job boards such as The Muse, Himalayas and Hacker News."],
-    ["Keep what fits", `Software engineering roles in the US, Canada or remote, posted in the last ${D.rules.max_age_days} days. Anything past ${FRESH_DAYS} days moves to Older. Each is tagged with its skills, role, seniority and job type, plus pay and work mode when stated.`],
+    ["Keep what fits", `Software engineering roles in the US, Canada or remote, posted in the last ${D.rules.max_age_days} days. Anything past ${FRESH_DAYS} days moves to Over ${FRESH_DAYS} days ago. Each is tagged with its skills, role, seniority and job type, plus pay and work mode when stated.`],
     ["Match your resume", "Add your resume and every job gets a score out of 100 for role, seniority, years, must-have skills, other skills and degree, with skills from your latest job counting most. This happens in your browser."],
-    ["Narrow it down", "Filter by role, seniority, technology, location, pay, work mode or job type, then open the posting on the company's own site. Applications keeps what you save or apply to."],
+    ["Narrow it down", "Filter by how recently it was posted, role, seniority, technology, location, pay, work mode or job type, then open the posting on the company's own site. Applications keeps what you save or apply to."],
   ];
   $("#steps").innerHTML = steps.map(([t, d]) => `<li><b>${esc(t)}</b>${esc(d)}</li>`).join("");
   const ok = D.sources.filter(s => s.ok), bad = D.sources.filter(s => !s.ok), kinds = {};
@@ -305,7 +305,6 @@ function route() {
   $("#board").classList.toggle("showing", !!key);  // on a phone the hash owns the detail, so system Back closes it
   const covered = !!key && !wide();  // the phone detail covers the page, so what's behind it leaves the tab order
   document.querySelectorAll(".top, .foot, .boardhead, #nores, #filters, #olderwarn, .results").forEach(el => { el.inert = covered; });
-  document.querySelectorAll(".ages a").forEach(a => a.setAttribute("aria-current", a.getAttribute("href") === "#" + view ? "page" : "false"));
   if (VIEWS[view]) { renderCounts(); VIEWS[view](); } else renderBoard();  // the board renders its own counts
   if (moved) window.scrollTo(0, nav[view]?.y || 0);
   if (key) $("#list .jitem[aria-current=true]")?.scrollIntoView({ block: "nearest" });
@@ -340,7 +339,7 @@ function init() {
     ["q", "role", "level", "type", "src", "sort", "work"].forEach(k => { $("#" + k).value = state[k]; state[k] = $("#" + k).value; });
     $("#pay").value = state.pay; state.pay = +$("#pay").value;
     $("#min").value = state.min; $("#minv").textContent = state.min;
-    $("#fresh").checked = state.fresh;
+    if (!DAYS.includes(state.days)) state.days = FRESH_DAYS;  // a choice saved by an older version
     $("#hideapplied").checked = state.hideApplied;
     press("#where", state.where); press("#mode", state.mode);
   };
@@ -354,7 +353,12 @@ function init() {
   ["role", "level", "type", "src", "sort", "work"].forEach(k => $("#" + k).addEventListener("change", e => set(k, e.target.value)));
   $("#pay").addEventListener("change", e => set("pay", +e.target.value));
   $("#min").addEventListener("input", e => { $("#minv").textContent = e.target.value; set("min", +e.target.value); });
-  $("#fresh").addEventListener("change", e => set("fresh", e.target.checked));
+  $("#ages").addEventListener("click", e => {  // Over 30 days ago is its own page, with its warning
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.v === "older") return void (location.hash = "#older");
+    state.days = +b.dataset.v; nav.jobs.limit = 40;
+    page === "jobs" ? changed() : (location.hash = "#jobs");
+  });
   $("#hideapplied").addEventListener("change", e => set("hideApplied", e.target.checked));
   $("#where").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { press("#where", b.dataset.v); set("where", b.dataset.v); } });
   $("#mode").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { press("#mode", b.dataset.v); set("mode", b.dataset.v); } });

@@ -217,6 +217,12 @@ test("a posting with only nice-to-haves says it has no clear requirements list, 
   assert.ok(!r.gaps.includes("It names no stack, so check the posting yourself."), JSON.stringify(r.gaps));
 });
 
+test("a missing must-have is still listed when nothing holds the score down", () => {
+  const r = on({ ...full, skills: ["Java", "Kafka", "AWS", "PostgreSQL"] }, job());
+  assert.equal(r.held, null, JSON.stringify(r.held));
+  assert.ok(r.gaps.includes("Not on your resume: Kubernetes."), JSON.stringify(r.gaps));
+});
+
 test("a missing skill the title names isn't said again as the Not on your resume list", () => {
   const r = on({ ...full, skills: ["Java", "Kafka", "AWS", "PostgreSQL"] }, job({ title: "Senior Kubernetes Engineer" }));
   assert.equal(r.held.why, "The title names Kubernetes, which is not on your resume.");
