@@ -1,0 +1,33 @@
+Ivan Kovalenko
+Raleigh, NC | ivan.kovalenko@example.com | 919-555-0164
+
+Summary
+
+iOS engineer with 4 years of experience shipping consumer mobile apps in Swift. Most of my work has been on the iPhone app itself: screens, offline storage, performance and getting releases through the App Store.
+
+Experience
+
+iOS Engineer
+Pinecrest Fitness, Raleigh, NC
+10/2024 - Present
+- Lead the Swift code for a workout app with 1.2 million monthly users.
+- Moved the main screens from UIKit to SwiftUI and reduced crash rate by 40%.
+- Built offline workout sync on Core Data with background refresh.
+- Added XCTest coverage and snapshot tests to the release pipeline.
+
+Junior iOS Developer
+Harbor Lane Travel, Durham, NC
+08/2022 - 09/2024
+- Built booking and itinerary features for the iPhone app in Swift and UIKit.
+- Integrated REST APIs, push notifications and Apple Pay.
+- Maintained older Objective-C views and helped retire them.
+- Shipped a release every two weeks through App Store Connect.
+
+Skills
+
+Swift, SwiftUI, UIKit, Combine, Core Data, Objective-C, Xcode, XCTest, REST APIs, Firebase, Git
+
+Education
+
+B.S. Computer Science
+Tar River State University, 2022

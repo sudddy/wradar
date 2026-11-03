@@ -1,0 +1,40 @@
+DANIEL OKAFOR
+Toronto, ON | daniel.okafor@example.com | 416-555-0142 | github.com/dokafor-example
+
+PROFESSIONAL SUMMARY
+Senior backend engineer with 9+ years of experience building payment and ledger systems in Java and Kafka for fintech companies. Comfortable owning a service from design review to on-call.
+
+TECHNICAL SKILLS
+Languages: Java, Kotlin, SQL, Python
+Frameworks: Spring Boot, Hibernate, JUnit, Mockito
+Messaging: Kafka, RabbitMQ
+Data: PostgreSQL, Redis, Cassandra
+Cloud: AWS, Docker, Kubernetes, Terraform
+Practices: Microservices, Event-Driven Architecture, Idempotency, CI/CD
+
+PROFESSIONAL EXPERIENCE
+
+Senior Software Engineer
+Harborline Payments, Toronto, ON
+Mar 2021 – Present
+• Lead design of a double-entry ledger in Java 17 and Spring Boot that posts 40 million payments a day.
+• Run a Kafka platform of 60 topics with exactly-once consumers and idempotent retries.
+• Moved card settlement to event-driven microservices on Kubernetes and AWS, with PostgreSQL and Redis behind them.
+• Mentor four engineers and chair the weekly design review.
+
+Software Engineer II — Sentry Harbor Bank    Jun 2019 – Feb 2021
+• Built REST APIs in Java and Spring Boot for wire transfers and PCI scoped card vaults.
+• Replaced nightly batch jobs with Kafka streams, cutting reconciliation time from six hours to twenty minutes.
+• Wrote integration tests with JUnit and Mockito and added Terraform for the staging stack.
+
+Software Engineer, Kestrel Card Services
+Sep. 2017 to May 2019
+• Maintained a Java fraud rules engine on MySQL and fixed query performance problems.
+• Added Hibernate mappings and unit tests for the chargeback workflow.
+
+EDUCATION
+M.S., Computer Science, Lakeshore University, 2017
+B.Eng., Software Engineering, Lakeshore University, 2015
+
+CERTIFICATIONS
+AWS Certified Solutions Architect – Associate (2022)

@@ -1,0 +1,33 @@
+Nora Haddad
+Minneapolis, MN | nora.haddad@example.com | 612-555-0138
+
+Summary
+
+Data engineer with 6 years of experience building batch pipelines and warehouse models for logistics and retail analytics teams. I like clear data models, boring reliable schedules and tests that catch bad data before a dashboard does.
+
+Experience
+
+Senior Data Engineer
+Lakeshore Freight Analytics, Minneapolis, MN
+March 2023 - Present
+- Run about 300 Airflow DAGs that load carrier and shipment data into Snowflake.
+- Rewrote the core Spark jobs in PySpark and cut the nightly run from 7 hours to 90 minutes.
+- Introduced dbt for the warehouse layer and added tests across 180 models.
+- Work with analysts on a shared metrics layer and mentor two junior engineers.
+
+Data Engineer
+Cobalt Grocers, St. Paul, MN
+August 2020 - February 2023
+- Wrote Python ETL jobs that pulled point-of-sale data from 400 stores into S3.
+- Moved reporting off an on-premise SQL Server and onto Snowflake.
+- Built Spark jobs on AWS EMR for weekly demand forecasting inputs.
+- Set up data quality checks and alerts for the finance reporting tables.
+
+Skills
+
+Python, SQL, Spark, PySpark, Airflow, Snowflake, dbt, AWS, S3, EMR, Docker, Git
+
+Education
+
+B.S. Statistics
+North Prairie University, 2020

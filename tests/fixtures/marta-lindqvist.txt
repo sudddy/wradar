@@ -1,0 +1,40 @@
+MARTA LINDQVIST
+Staff Machine Learning Engineer
+Seattle, WA  /  marta.lindqvist@example.com
+
+S U M M A R Y
+
+Machine learning engineer with 12+ years of experience taking ranking and language models from research to production.
+
+E X P E R I E N C E
+
+Aurora Retail Intelligence — Seattle, WA
+
+Staff Machine Learning Engineer, 2021 – Present
+- Set the technical direction for search ranking and LLM features across three teams.
+- Built a RAG service on PyTorch with embeddings stored in a vector database, serving 2,000 requests a second.
+- Run training on Kubernetes and Spark, with feature pipelines in Airflow and BigQuery.
+
+Senior Machine Learning Engineer, 2018 – 2021
+- Moved demand forecasting from TensorFlow notebooks to Python services on GCP.
+- Introduced Docker based training and CI/CD for model releases.
+- Mentored six engineers.
+
+Cedar Health Analytics — Seattle, WA
+
+Data Scientist, 2014 – 2018
+- Trained readmission risk models in Python and TensorFlow.
+- Wrote SQL and Spark pipelines for claims data in Redshift.
+
+S K I L L S
+
+PyTorch, TensorFlow, Python, Machine Learning, LLMs, RAG, Embeddings, Spark, Airflow, BigQuery, GCP, Kubernetes, Docker, SQL, C++
+
+E D U C A T I O N
+
+Ph.D., Computer Science (Machine Learning), Cascade University, Fall 2009 - Spring 2014
+B.S., Mathematics, Cascade University, 2009
+
+P U B L I C A T I O N S
+
+Learning to rank with sparse feedback. Proceedings of a retail data workshop, 2019.

@@ -1,0 +1,37 @@
+Elena Marsh
+Chicago, IL / elena.marsh@example.com
+
+summary
+Full-stack engineer who moved into software after seven years teaching high school chemistry. 11 years of professional experience, the last 4 in tech, building Python and TypeScript products.
+
+skills
+Python, TypeScript, JavaScript, Django, FastAPI, React, Next.js, PostgreSQL, Redis, Docker, AWS, GraphQL, Pytest, Jest, Git
+
+experience
+
+Full Stack Engineer at Brightwell Benefits
+2024-06 to present
+- Own the enrollment flow across a Django and FastAPI backend and a React and TypeScript frontend.
+- Designed GraphQL schemas and PostgreSQL migrations for plan data.
+- Added Pytest and Jest suites and a GitHub Actions pipeline.
+
+Software Developer at Tallgrass Logistics
+2022-10 to 2024-05
+- Built shipment tracking pages in React and Next.js against Python REST APIs.
+- Containerized services with Docker and deployed them on AWS.
+
+previous career
+
+Chemistry Teacher at Lincoln Park Preparatory
+2015-08 to 2022-06
+- Taught chemistry to 150 students a year and mentored new teachers.
+- Ran the lab safety program and the science fair.
+
+Laboratory Assistant at Westlake Community College
+2014-01 to 2015-06
+- Prepared reagents and kept inventory for the chemistry department.
+
+education
+Full Stack Web Development Certificate, Prairie Code Academy, 2022
+M.Ed., Secondary Education, Westlake University, 2015
+B.A., Chemistry, Westlake University, 2013

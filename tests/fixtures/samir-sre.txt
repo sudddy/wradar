@@ -1,0 +1,39 @@
+Samir Qureshi
+Pittsburgh, PA | samir.qureshi@example.com | 412-555-0119
+
+Summary
+
+Staff platform and site reliability engineer with 11 years of experience running production infrastructure for payments and logistics companies. I set direction for how teams deploy, observe and recover their services, and I still write the Go and Terraform myself.
+
+Experience
+
+Staff Platform Engineer
+Quillstone Payments, Pittsburgh, PA
+January 2021 - Present
+- Set technical direction for the internal platform used by 45 service teams.
+- Run multi-region Kubernetes on AWS and moved all infrastructure to Terraform modules.
+- Wrote Go controllers that automate failover and certificate renewal.
+- Built the observability stack on Prometheus, Grafana and OpenTelemetry and defined SLOs with each team.
+- Chair the incident review and mentor four senior engineers.
+
+Senior Site Reliability Engineer
+Bluefin Freightways, Pittsburgh, PA
+March 2018 - December 2020
+- Migrated 120 services from virtual machines to Kubernetes on AWS.
+- Cut paging volume by half with better alerts and runbooks.
+- Wrote Terraform for networking, IAM and databases across 30 accounts.
+
+Systems Engineer
+Ardent Hosting Group, Cleveland, OH
+June 2015 - February 2018
+- Ran Linux server fleets and automated provisioning with Python and Bash.
+- Took part in a weekly on-call rotation for customer hosting.
+
+Skills
+
+Kubernetes, Terraform, Go, AWS, Prometheus, Grafana, OpenTelemetry, Datadog, Helm, Docker, Linux, Python, Bash
+
+Education
+
+M.S. Computer Science
+Lake Erie Institute of Technology, 2015
