@@ -19,11 +19,11 @@ Scan now button ──POST──▶ worker/scan.js (Cloudflare Worker, holds the
 
 - `fetch_jobs.py`: standard library only. One adapter per source type returns raw jobs; `evaluate()` applies the rules cheapest-first (title → age → location → description) and tags skills, role, level and job type. Adapters may return functions for `location` / `type` / `description` so detail pages are fetched only for jobs that pass the cheap rules (SmartRecruiters, Workday).
 - `extract.py`: standard library only. Reads a posting's structure, once per job. `rich_text()` keeps block tags as line breaks and `split_sections()` finds the required and preferred text; `tier_skills()`, `years_min()`, `salary()`, `work_mode()` and `degree()` fill the row fields from that.
-- `scan_state.py`: what one scan keeps from the last: `first_seen`, Workday dates, and the rows of slow sources between slots. `merge()` keeps one row per company+title.
-- `docs/app.js`: no framework, no build. Compiles `keywords` into regexes the same way Python does, reads uploaded resumes (PDF.js / Mammoth from cdnjs, loaded on demand), wires the page, and renders the hash-routed views: `#jobs`, `#older`, `#mine`, `#resume`, `#insights`, `#sources`. `#jobs/<key>` links one job. The step bar in the top bar is the navigation (`renderSteps()`): 1 Your resume `#resume`, 2 Matching jobs `#jobs` / `#older` (a Last 30 days | Older switch), 3 Applications `#mine`. A bare address with no saved resume opens `#resume`, the welcome. Insights and How it works (`#sources`) are footer links.
+- `scan_state.py`: what one scan keeps from the last: `first_seen`, Workday dates, and the rows of slow sources between slots. `merge()` keeps one row per job, matching company and title by `same_job()`: spacing, punctuation and a legal suffix ("Samsara Inc.") don't count, so a role repeated per city or listed by two sources is one row. The row kept is the one the last scan had, else the company's own board's, so its link and tracker key hold still.
+- `docs/app.js`: no framework, no build. Compiles `keywords` into regexes the same way Python does, reads uploaded resumes (PDF.js / Mammoth from cdnjs, loaded on demand), wires the page, and renders the hash-routed views: `#jobs`, `#older`, `#mine`, `#resume`, `#insights`, `#sources`. `#jobs/<key>` links one job. The step bar in the top bar is the navigation (`renderSteps()`): 1 Your resume `#resume`, 2 Matching jobs `#jobs` / `#older` (the Posted filter: the last 2, 3, 7 or 30 days, or Over 30 days ago, which is `#older`), 3 Applications `#mine`. A bare address with no saved resume opens `#resume`, the welcome. Insights and How it works (`#sources`) are footer links.
 - `docs/match.js`: `window.wmatch`. `score(profile, job, stats)` gives a number out of 100 from Role 20, Seniority 15, Years 15, Top must-haves 36, Everything else 10, Degree 4. Parts a posting doesn't state drop out, and caps keep bad fits low. Hot is 75+, Warm 65-74, Cool under 65. It's a ranking, so the app shows a plain number, never `%`. The fit text never mentions scores, caps or weights, and never says "you lack".
 - `docs/resume.js`: `window.wresume`. `parseResume()` splits the text into sections, reads job dates, counts years from tech jobs only, and builds each skill's evidence. `pdfLines()` rebuilds lines from PDF.js text positions.
-- `docs/board.js`: the list, detail and moving between jobs, shared by Matching jobs (Last 30 days and Older) and Applications. Its first half never touches the page, so `tests/board.test.js` can load it; `tests/page.test.js` loads the whole page on a stub DOM.
+- `docs/board.js`: the list, detail and moving between jobs, shared by Matching jobs (`#jobs` and `#older`) and Applications. The detail is a column of cards: the job and its actions, the match, why you fit / gaps / next steps, its skills, and the rest of its facts. Its first half never touches the page, so `tests/board.test.js` can load it; `tests/page.test.js` loads the whole page on a stub DOM.
 - `docs/tracker.js`: Saved, Applied and Hidden, one per job, the Applications view (`#mine`) and the Undo toast.
 - `docs/scan.js`: the Scan now button. It stays hidden until `rules.scan_url` is set, and polls `scan.json` every 30 s after a click. New data arrives by page reload.
 - `worker/scan.js`: Cloudflare Worker. POST only, from `https://sudddy.github.io` only; `Origin` can be spoofed, so the cooldown is the real limit. It reads the latest workflow run: if running it says so, if started under an hour ago it returns the time left (scheduled runs count), otherwise it dispatches the workflow on `main`. It asks GitHub at most once a minute per isolate, and answers running from memory for a minute after a dispatch.
@@ -51,14 +51,14 @@ Scripts are classic and load in order: `jobs.js`, `match.js`, `resume.js`, `boar
 
 ## Commands
 
-- Python tests: `python3 -m unittest` (rules, location parsing, job types, extraction, scan state, and the main source parsers against payload shapes captured from the live APIs)
+- Python tests: `python3 -m unittest` (rules, location parsing, job types, extraction and the main source parsers against payload shapes captured from the live APIs in `test_fetch_jobs.py`; carry-over, dedupe and the slow-source gate in `test_scan_state.py`)
 - JavaScript tests: `node --test tests/*.test.js` (matching, resume reading, the board, keyword compilation, the Worker against a mocked GitHub, and the Scan now button). Keep the glob: Node 22 fails on a bare `tests/`. They read `docs/jobs.js`, so the workflow runs them after the fetch and before the commit: rows that break them are never published, and a change to the data shape can land before its first scan.
 - Local run: `python3 fetch_jobs.py`, then open `docs/index.html` (or `python3 -m http.server -d docs`). With python.org's Python on a Mac, prefix `SSL_CERT_FILE=/etc/ssl/cert.pem`, or every source fails its certificate check.
 - Refresh the live site: Actions → Fetch jobs → Run workflow, or Scan now once `scan_url` is set. Pushing a change to `config.json`, `keywords.json`, `fetch_jobs.py`, `extract.py` or `scan_state.py` also triggers it.
 
 ## Working rules
 
-- Smallest complete change. Reuse what's here before adding anything; no new dependencies for a few lines; no build step for the front end. New parsing or rule logic gets a test in `test_fetch_jobs.py`; new browser logic gets one in `tests/`.
+- Smallest complete change. Reuse what's here before adding anything; no new dependencies for a few lines; no build step for the front end. New parsing or rule logic gets a test in `test_fetch_jobs.py` (scan state in `test_scan_state.py`); new browser logic gets one in `tests/`.
 - Commits are authored as Sudharsan or Claude, nobody else. Use descriptive branch names (`feature/…`, `fix/…`), never random ones. Work on a branch and merge into `main`; `main` is what Pages serves and where the schedule runs.
 - The resume never leaves the browser. `localStorage` key `wradar-resume` holds derived facts only, the keys in `wresume.STORED_KEYS`: `name` (a label such as "PDF resume", never the file name), `skills`, `evidence` (per skill: `strength`, `years`, `recent` in months), `years`, `level`, `role`, `degree`. Never the text, the person's name or employers. `tests/resume.test.js` holds this in place. Keep it that way.
 - `localStorage` key `wradar-tracker` holds `{key: {s, at, title, company, url, where}}`, where `s` is `saved`, `applied` or `hidden`; a hidden entry also holds `was`, the entry it replaced, so showing the job again restores an Applied or Saved mark. The snapshot lets a job that leaves the feed still show. Tracking stays in the browser: no accounts, no database. `wradar-filters` holds the filter choices.
@@ -84,9 +84,8 @@ Best first:
 
 1. Application stages and notes: Applied, Interview, Offer, Rejected, plus a note per job.
 2. Company watchlist: pin companies and see their new jobs first.
-3. "Posted since" date filter.
-4. Shareable filter links: a URL that opens a saved search.
-5. Email or WhatsApp digest of new hot matches. It needs a small server, so it needs a privacy decision first.
+3. Shareable filter links: a URL that opens a saved search.
+4. Email or WhatsApp digest of new hot matches. It needs a small server, so it needs a privacy decision first.
 
 Also: more Workday tenants, and Adzuna / Jooble feeds behind API keys stored as Actions secrets.
 

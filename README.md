@@ -9,12 +9,12 @@ No AI runs here. A Python script (standard library only) polls public job source
 The app is served from **https://sudddy.github.io/wradar/** once GitHub Pages is on (see [Setup](#setup-pages-and-scan-now)). The step bar in the top bar is the navigation, and a first visit with no saved resume opens step 1:
 
 1. **Your resume:** a welcome with a drop box for a file, or paste the text. Once it's read, it shows what was found, which you can fix, plus your best matches and the skills jobs ask for most that you don't list. **Browse jobs without a resume** skips ahead.
-2. **Matching jobs:** the filters, the job list and the selected job, under **Last 30 days** and **Older**. Older holds jobs posted 31 to 90 days ago, with a warning above the list: many are filled or closed, so check a job is still open before you spend time on it. Without a resume the list asks for one.
+2. **Matching jobs:** the filters, the job list and the selected job, shown as cards. **Posted** picks jobs from the last 2, 3, 7 or 30 days, or **Over 30 days ago**: jobs posted 31 to 90 days ago, with a warning above the list, as many are filled or closed, so check a job is still open before you spend time on it. Without a resume the list asks for one.
 3. **Applications:** the jobs you've marked, under All, Saved, Applied and Hidden. A job that leaves the feed stays here, labeled "No longer listed".
 
 The footer links to **Insights** (most-requested skills and how the jobs break down by role, seniority, location and type) and **How it works and privacy** (how jobs are found and which of the 332 sources were read in the 6 hours up to the last scan).
 
-Jobs are kept for 90 days after posting. Past 30 days they move from Last 30 days to Older, and they stop counting in Insights and the hot match count.
+Jobs are kept for 90 days after posting. Past 30 days they move to Over 30 days ago, and they stop counting in Insights and the hot match count.
 
 Job data refreshes every 6 hours via GitHub Actions. To refresh sooner, use **Scan now** in the top bar, or the Actions tab → **Fetch jobs** → **Run workflow**. Editing `config.json`, `keywords.json`, `fetch_jobs.py`, `extract.py` or `scan_state.py` also triggers a refresh.
 
@@ -69,7 +69,7 @@ Only the skills in `keywords.json` are visible to the matcher, so a requirement 
 
 ## What it shows
 
-- Filters: search, location (US, Canada, Remote), role (Backend, Full stack, Frontend, Data, DevOps / SRE…), seniority (Junior, Mid, Senior, Staff+) and work mode, plus **More filters**: minimum pay, job type, source, technologies (pick any or all, e.g. Java, Node.js), minimum match and new in 48 hours. Choices are remembered in the browser; **Clear filters** clears them.
+- Filters, in one panel: search; **Posted** (the last 2, 3, 7 or 30 days, or over 30 days ago); location (US, Canada, Remote), role (Backend, Full stack, Frontend, Data, DevOps / SRE…), seniority (Junior, Mid, Senior, Staff+) and work mode; plus **More filters**: minimum pay, job type, source, technologies (pick any or all, e.g. Java, Node.js) and minimum match. Choices are remembered in the browser; **Clear filters** clears them.
 - Pay and work mode filters leave out jobs that don't state them, and the count says how many. Pay is compared in each job's own currency, top of the range, with hourly pay counted as 2,080 hours a year.
 - Rows: match, title, your mark, company, pay, work mode, place and age. Sort by best match or newest.
 - The selected job: its pay, work mode, place and age, then **Apply on company site**, **Applied**, **Save** and **Hide**, then the score and its parts, why you fit, gaps and next steps, the skills it asks for (must-haves, nice to have, also mentioned) each marked as on or not on your resume, and the rest of its facts. After Apply on company site it asks "Did you apply?"

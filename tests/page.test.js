@@ -118,6 +118,28 @@ test("with a resume the detail marks each required skill as on or not on it", ()
   assert.doesNotMatch(page.$("#detail").innerHTML, /you lack|you're missing/i);
 });
 
+test("Posted keeps the jobs from the chosen days, and Over 30 days ago opens Older", () => {
+  const page = openPage(), pick = v => page.$("#ages").fire("click", { target: { closest: () => ({ dataset: { v } }) } });
+  assert.equal(page.$("#n-d2").textContent, "2");  // rows posted 1, 2, 3 and 4 days ago, and one 41 days ago; "2 days ago" is in the last 2 days
+  pick("2");
+  assert.equal(page.$("#count").textContent, "2 jobs");
+  assert.match(page.$("#list").innerHTML, /Backend Engineer 1/);
+  assert.doesNotMatch(page.$("#list").innerHTML, /Backend Engineer 2/);
+  assert.equal(JSON.parse(page.storage.get("wradar-filters")).days, 2);
+  pick("older");
+  assert.equal(page.hash(), "#older");
+  assert.equal(page.$("#count").textContent, "1 job");
+  pick("7");
+  assert.equal(page.hash(), "#jobs");
+  assert.equal(page.$("#count").textContent, "4 jobs");
+});
+
+test("a saved Posted choice an older version never offered falls back to 30 days", () => {
+  const page = openPage({ storage: new Map([["wradar-filters", JSON.stringify({ v: 2, days: 5, fresh: true })]]) });
+  assert.equal(page.run("state.days"), 30);
+  assert.equal(page.$("#count").textContent, "4 jobs");
+});
+
 test("a resume saved by an older version is asked for again on the jobs", () => {
   const storage = new Map([["wradar-resume", JSON.stringify({ name: "PDF resume", skills: ["Go", "Python"], years: 5 })]]);
   const page = openPage({ storage });

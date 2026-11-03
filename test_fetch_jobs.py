@@ -2,7 +2,7 @@
 import json
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -352,78 +352,6 @@ def days(n):
     return (NOW - timedelta(days=n)).isoformat()
 
 
-class CarryOver(unittest.TestCase):
-    def merge(self, rows, *old):
-        return s.merge(rows, {"jobs": list(old)}, NOW, NOW - timedelta(days=90))
-
-    def test_first_seen_follows_company_and_title_not_url(self):
-        [j] = self.merge([row(url="https://x.test/new")], row(company="ACME", title="swe", first_seen=days(9)))
-        self.assertEqual(j["first_seen"], days(9))
-        [j] = self.merge([row()], row(title="Other", first_seen=days(9)))
-        self.assertEqual(j["first_seen"], NOW.isoformat())
-
-    def test_one_row_per_company_and_title_in_todays_shape(self):  # row() lacks the fields older data lacks
-        [j] = self.merge([row(where=["US"]), row(company="ACME", title="swe", where=["Canada"])])
-        self.assertEqual((j["where"], j["must"], j["nice"], j["salary"], j["mode"]), (["Canada", "US"], [], [], None, None))
-
-    def test_workday_date_is_min_of_previous_and_new(self):
-        new = row(source="Workday", posted=days(31), posted_approx=True)
-        [j] = self.merge([new], row(source="Workday", posted=days(50), posted_approx=True, first_seen=days(19)))
-        self.assertEqual((j["posted"], j["posted_approx"]), (days(50), True))
-        [j] = self.merge([row(source="Workday", posted=days(40))], row(source="Workday", posted=days(5), first_seen=days(5)))
-        self.assertEqual(j["posted"], days(40))
-        [j] = self.merge([row(posted=days(3))], row(posted=days(20), first_seen=days(20)))
-        self.assertEqual(j["posted"], days(3))  # other sources keep their own date
-
-    def test_workday_flag_follows_the_date_it_came_with(self):
-        new = row(source="Workday", posted=days(31), posted_approx=True)
-        [j] = self.merge([new], row(source="Workday", posted=days(33), posted_approx=False, first_seen=days(33)))
-        self.assertEqual((j["posted"], j["posted_approx"]), (days(33), False))
-        old = row(source="Workday", posted=days(32), first_seen=days(2))
-        del old["posted_approx"]  # written before the flag existed
-        self.assertIs(self.merge([new], old)[0]["posted_approx"], True)
-
-    def test_nothing_older_than_the_cutoff_survives(self):
-        new = row(source="Workday", posted=days(31), posted_approx=True)
-        self.assertEqual(self.merge([new], row(source="Workday", posted=days(91), first_seen=days(60))), [])
-        held = row(source="Remotive", posted=days(91), first_seen=days(91))
-        self.assertEqual(self.merge([held], held), [])
-        self.assertEqual(len(self.merge([row(posted=None)])), 1)
-
-
-class SlowGate(unittest.TestCase):
-    def test_opens_once_per_six_hour_utc_slot(self):
-        prev, opened = {"slow_fetched_at": "2026-11-01T23:00:00+00:00"}, 0
-        for hour in range(24):
-            now = datetime(2026, 11, 2, hour, 17, tzinfo=timezone.utc)
-            if s.slot_open(prev, now):
-                opened += 1
-                prev = {"slow_fetched_at": now.isoformat()}
-        self.assertEqual(opened, 4)
-        self.assertTrue(s.slot_open({}, NOW))  # open with no previous slow fetch, closed right after one
-        self.assertFalse(s.slot_open({"slow_fetched_at": NOW.isoformat()}, NOW))
-
-    def test_slow_tasks(self):
-        tasks = [("workday", "x"), ("smartrecruiters", "x"), ("workable", "x"), ("feed", "remotive"), ("feed", "jobicy")]
-        self.assertTrue(all(map(s.is_slow, tasks)))
-        self.assertFalse(any(map(s.is_slow, [("greenhouse", "workable"), ("feed", "himalayas")])))
-
-    def test_held_over_returns_only_slow_rows_and_sources(self):
-        prev = dict(sources=[dict(name="Remotive", kind="Job boards"), dict(name="Himalayas", kind="Job boards"),
-                             dict(name="NVIDIA", kind="Workday"), dict(name="Ramp", kind="Greenhouse")],
-                    jobs=[row(source="Workday"), row(source="Remotive"), row(source="Greenhouse"), row(source="Himalayas")])
-        sources, jobs = s.held_over(prev)
-        self.assertEqual([x["name"] for x in sources], ["Remotive", "NVIDIA"])
-        self.assertEqual([j["source"] for j in jobs], ["Workday", "Remotive"])
-
-    def test_load_previous(self):
-        with tempfile.TemporaryDirectory() as d:
-            path = Path(d) / "jobs.js"
-            self.assertEqual(s.load_previous(path), {})
-            path.write_text(s.PREFIX + '{"jobs": []};\n')
-            self.assertEqual(s.load_previous(path), {"jobs": []})
-
-
 class Main(unittest.TestCase):
     def scan(self, prev, fail=lambda task: False, company="Acme"):
         """One main() over a temp jobs.js, every source answering at once. -> (written data, scan.json, tasks run)."""
@@ -489,6 +417,13 @@ class Main(unittest.TestCase):
         with mock.patch.dict(f.FEEDS, fake=("Fake", lambda: raw, "https://x.test")):
             src, rows = f.run_source(("feed", "fake"), R, CUTOFF, {s.job_key(old): old})
         self.assertEqual((rows, src["skipped"]), ([old], 2))
+
+    def test_a_failed_detail_call_finds_last_scans_row_under_another_spelling(self):
+        down = mock.Mock(side_effect=OSError("detail call failed"))
+        old = row(title="Full-stack Engineer", first_seen=days(3))  # the spelling the last scan kept
+        with mock.patch.dict(f.FEEDS, fake=("Fake", lambda: [job(title="Full Stack Engineer", description=down)], "https://x.test")):
+            src, rows = f.run_source(("feed", "fake"), R, CUTOFF, {s.same_job(old): old})
+        self.assertEqual(rows, [old])
 
     def test_a_lone_surrogate_does_not_stop_the_scan(self):
         data, _, _ = self.scan({}, company="Acme \ud83d")

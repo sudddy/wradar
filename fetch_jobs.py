@@ -20,7 +20,7 @@ from urllib.request import Request, urlopen
 
 from extract import (degree, pick_pay, rich_text, salary, split_sections, structured_pay, tier_skills, work_mode,
                      years_min)
-from scan_state import PREFIX, failed_over, held_over, is_slow, job_key, load_previous, merge, slot_open
+from scan_state import PREFIX, failed_over, held_over, is_slow, job_key, load_previous, merge, same_job, slot_open
 
 ROOT = Path(__file__).parent
 OUT = ROOT / "docs" / "jobs.js"
@@ -456,7 +456,7 @@ def run_source(task, r, cutoff, before):
             row = evaluate(dict(j, source=src["kind"] if kind != "feed" else name), r, cutoff)
         except Exception:  # a lazy detail fetch failed; keep that job's row from the last scan, if it had one
             failed += 1
-            row = before.get(job_key(j))
+            row = before.get(job_key(j)) or before.get(same_job(j))  # the last scan may have kept another spelling
         if row:
             rows.append(row)
     return dict(src, ok=True, seen=len(raw), kept=len(rows), **({"skipped": failed} if failed else {})), rows
@@ -465,7 +465,8 @@ def run_source(task, r, cutoff, before):
 def main():
     r, prev = load_rules(), load_previous(OUT)
     cfg, run_slow = r["cfg"], slot_open(prev, NOW)
-    cutoff, before = NOW - timedelta(days=cfg["max_age_days"]), {job_key(j): j for j in prev.get("jobs", [])}
+    last = prev.get("jobs", [])
+    cutoff, before = NOW - timedelta(days=cfg["max_age_days"]), {**{same_job(j): j for j in last}, **{job_key(j): j for j in last}}
     tasks = [(kind, e) for kind, entries in cfg["boards"].items() for e in entries] + [("feed", f) for f in cfg["feeds"]]
     with ThreadPoolExecutor(12) as ex:
         results = list(ex.map(partial(run_source, r=r, cutoff=cutoff, before=before),
@@ -475,8 +476,8 @@ def main():
 
     ran, failed_rows = failed_over(prev, [s for s, _ in results])
     held_sources, held_rows = ([], []) if run_slow else held_over(prev)
-    jobs = sorted(merge(held_rows + failed_rows + [row for _, kept in results for row in kept], prev, NOW, cutoff),
-                  key=lambda j: j["posted"] or j["first_seen"], reverse=True)
+    jobs = sorted(merge(held_rows + failed_rows + [row for _, kept in results for row in kept], prev, NOW, cutoff,
+                        own={label for label, _, _ in BOARDS.values()}), key=lambda j: j["posted"] or j["first_seen"], reverse=True)
     sources = sorted(ran + held_sources, key=lambda s: (not s["ok"], s["name"].lower()))
     data = dict(generated_at=NOW.isoformat(), slow_fetched_at=NOW.isoformat() if run_slow else prev["slow_fetched_at"],
                 keywords=r["keywords"],  # the dashboard matches uploaded resumes with these

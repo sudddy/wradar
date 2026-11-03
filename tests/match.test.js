@@ -207,7 +207,38 @@ test("a coverage reason states what is true by count", () => {
 test("a posting that names no stack says so, and that part drops out", () => {
   const r = on(full, job({ must: [], skills: [] }));
   assert.equal(r.gaps[0], "It names no stack, so check the posting yourself.");
+  assert.ok(!r.gaps.includes("It has no clear requirements list, so check the posting yourself."));  // the same advice twice
   assert.equal(part(r, "Top must-haves").max, 0);
+});
+
+test("a posting with only nice-to-haves says it has no clear requirements list, not that it names no stack", () => {
+  const r = on(full, job({ must: [], nice: ["AWS", "Kafka"] }));
+  assert.ok(r.gaps.includes("It has no clear requirements list, so check the posting yourself."), JSON.stringify(r.gaps));
+  assert.ok(!r.gaps.includes("It names no stack, so check the posting yourself."), JSON.stringify(r.gaps));
+});
+
+test("a missing must-have is still listed when nothing holds the score down", () => {
+  const r = on({ ...full, skills: ["Java", "Kafka", "AWS", "PostgreSQL"] }, job());
+  assert.equal(r.held, null, JSON.stringify(r.held));
+  assert.ok(r.gaps.includes("Not on your resume: Kubernetes."), JSON.stringify(r.gaps));
+});
+
+test("a missing skill the title names isn't said again as the Not on your resume list", () => {
+  const r = on({ ...full, skills: ["Java", "Kafka", "AWS", "PostgreSQL"] }, job({ title: "Senior Kubernetes Engineer" }));
+  assert.equal(r.held.why, "The title names Kubernetes, which is not on your resume.");
+  assert.ok(!r.gaps.includes("Not on your resume: Kubernetes."), JSON.stringify(r.gaps));
+});
+
+test("the binding reason leads the gaps, and no gap after it says the same again", () => {
+  for (const p of PROFILES) for (const j of rows) {
+    const r = score(p, j, stats);
+    if (!r.held) continue;
+    assert.equal(r.gaps[0], r.held.why, j.title);
+    for (const g of r.gaps.slice(1)) assert.ok(!r.held.why.toLowerCase().includes(g.toLowerCase().slice(0, -1)), `${j.title}: ${g}`);
+  }
+  const stepUp = on({ ...full, level: "Mid", years: 4 }, job({ title: "Backend Engineer", level: "Mid", years_required: 5 }));  // a step up read from the years asked
+  assert.equal(stepUp.held.why, "It's a step up and it asks for 5+ years and you have 4.");
+  assert.equal(stepUp.gaps.filter(g => g.includes("asks for 5+ years")).length, 1, JSON.stringify(stepUp.gaps));
 });
 
 test("what the resume doesn't show is said as the resume's, not the posting's", () => {

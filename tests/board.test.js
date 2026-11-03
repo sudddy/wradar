@@ -10,7 +10,7 @@ const daysAgo = (d, now = NOW) => new Date(now - d * DAY).toISOString();
 const job = (over = {}) => ({ title: "Software Engineer", company: "Acme", where: ["US"], location: "Boston", url: "https://acme.test/1", skills: ["Go"],
   source: "Greenhouse", role: "Backend", level: "Mid", type: "Full-time", score: null, posted: daysAgo(1, Date.now()), first_seen: daysAgo(1, Date.now()),
   salary: { min: 100000, max: 150000, cur: "USD", per: "year" }, mode: "Remote", ...over });
-const FILTERS = { q: "", role: "", level: "", type: "", where: "", min: 0, src: "", fresh: false, techs: [], mode: "any" };
+const FILTERS = { q: "", role: "", level: "", type: "", where: "", min: 0, src: "", techs: [], mode: "any" };
 
 test("key is lowercased company|title", () => {
   assert.equal(board.jobKey({ company: "OpenAI", title: "Staff Engineer, Infra" }), "openai|staff engineer, infra");
@@ -76,24 +76,15 @@ test("with no pay or mode filter, nothing is dropped or counted", () => {
   assert.deepEqual(board.knownOnly(rows, 0, ""), { kept: rows, noPay: 0, noMode: 0 });
 });
 
-test("a saved New in 48 hours filter is ignored on Older", () => {
-  const old = job({ posted: daysAgo(40, Date.now()) }), seenLongAgo = job({ posted: daysAgo(5, Date.now()), first_seen: daysAgo(5, Date.now()) });
-  const f = { ...FILTERS, fresh: true };
-  assert.equal(board.matches(old, f, "older"), true);
-  assert.equal(board.matches(old, f, "jobs"), false);
-  assert.equal(board.matches(seenLongAgo, f, "jobs"), false);
-  assert.equal(board.matches(job(), f, "jobs"), true);
-});
-
 test("matches reads the other saved filters", () => {
-  assert.equal(board.matches(job(), { ...FILTERS, q: "acme" }, "jobs"), true);
-  assert.equal(board.matches(job(), { ...FILTERS, q: "globex" }, "jobs"), false);
-  assert.equal(board.matches(job({ score: 60 }), { ...FILTERS, min: 70 }, "jobs"), false);
-  assert.equal(board.matches(job({ score: null }), { ...FILTERS, min: 70 }, "jobs"), true);  // no resume, so no score to hold it back
-  assert.equal(board.matches(job(), { ...FILTERS, techs: ["Rust"] }, "jobs"), false);
-  assert.equal(board.matches(job(), { ...FILTERS, techs: ["Rust", "Go"], mode: "all" }, "jobs"), false);
-  assert.equal(board.matches(job(), { ...FILTERS, techs: ["Rust", "Go"], mode: "any" }, "jobs"), true);
-  assert.equal(board.matches(job(), { ...FILTERS, techs: ["Rust"] }, "jobs", { tech: false }), true);
+  assert.equal(board.matches(job(), { ...FILTERS, q: "acme" }), true);
+  assert.equal(board.matches(job(), { ...FILTERS, q: "globex" }), false);
+  assert.equal(board.matches(job({ score: 60 }), { ...FILTERS, min: 70 }), false);
+  assert.equal(board.matches(job({ score: null }), { ...FILTERS, min: 70 }), true);  // no resume, so no score to hold it back
+  assert.equal(board.matches(job(), { ...FILTERS, techs: ["Rust"] }), false);
+  assert.equal(board.matches(job(), { ...FILTERS, techs: ["Rust", "Go"], mode: "all" }), false);
+  assert.equal(board.matches(job(), { ...FILTERS, techs: ["Rust", "Go"], mode: "any" }), true);
+  assert.equal(board.matches(job(), { ...FILTERS, techs: ["Rust"] }, { tech: false }), true);
 });
 
 test("a saved minimum match resets once, and Any/All survives", () => {
