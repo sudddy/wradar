@@ -11,6 +11,7 @@ const TOP_N = 5, TOP_WEIGHT = [3, 2.5, 2, 1.5, 1], TITLE_WEIGHT = 4;
 const UNSTATED = { name: "Mid", soft: true, unstated: true };
 const GRAD = /\b(?:new grad|university grad|graduate|early career|emerging talent|intern(?:ship)?|apprentice)\b/i;
 const NO_STACK = "It names no stack, so check the posting yourself.";
+const NO_LIST = "It has no clear requirements list, so check the posting yourself.";
 
 // Same-kind must skills are one requirement met by any member: 68-96% of such pairs share an "or / such as" clause.
 const KINDS = {
@@ -313,8 +314,8 @@ function score(p, job, stats) {
   else if (cov.value < .7 || cov.missed.length >= 2) cap(74, thin);
   if (!n && !(role >= .5)) cap(54, NO_STACK);
   if (!plan.split) {  // a skill mentioned anywhere is weaker evidence than one in the requirements
-    gaps.push("It has no clear requirements list, so check the posting yourself.");
-    cap(85, "It has no clear requirements list, so check the posting yourself.");
+    gaps.push(NO_LIST);
+    cap(85, NO_LIST);
   }
 
   // 5. Everything else.
@@ -341,9 +342,12 @@ function score(p, job, stats) {
   const exact = max ? 100 * parts.reduce((s, x) => s + x.got, 0) / max : 0, raw = Math.round(exact);
   const low = caps.reduce((a, x) => (x[0] < a[0] ? x : a), [101, ""]);
   const held = raw > low[0] ? { at: low[0], why: low[1] } : null;
-  if (held) gaps.unshift(held.why);
+  // The binding reason comes first, and no gap after it says the same again ("names no stack" already says to check the posting).
+  const said = held ? held.why.toLowerCase() : "";
+  const repeats = g => said.includes(g.toLowerCase().slice(0, -1)) || (held?.why === NO_STACK && g === NO_LIST);
+  const shown = [...new Set([...(held ? [held.why] : []), ...gaps.filter(g => !repeats(g))])];
   const final = Math.min(raw, low[0]);
-  return { score: final, tier: TIERS.find(t => final >= t[1])[0], parts, held, fits: fits.slice(0, 4), gaps: [...new Set(gaps)].slice(0, 3), next: next.slice(0, 3),
+  return { score: final, tier: TIERS.find(t => final >= t[1])[0], parts, held, fits: fits.slice(0, 4), gaps: shown.slice(0, 3), next: next.slice(0, 3),
     tie: exact };
 }
 

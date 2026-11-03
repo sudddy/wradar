@@ -475,8 +475,8 @@ def main():
 
     ran, failed_rows = failed_over(prev, [s for s, _ in results])
     held_sources, held_rows = ([], []) if run_slow else held_over(prev)
-    jobs = sorted(merge(held_rows + failed_rows + [row for _, kept in results for row in kept], prev, NOW, cutoff),
-                  key=lambda j: j["posted"] or j["first_seen"], reverse=True)
+    jobs = sorted(merge(held_rows + failed_rows + [row for _, kept in results for row in kept], prev, NOW, cutoff,
+                        own={label for label, _, _ in BOARDS.values()}), key=lambda j: j["posted"] or j["first_seen"], reverse=True)
     sources = sorted(ran + held_sources, key=lambda s: (not s["ok"], s["name"].lower()))
     data = dict(generated_at=NOW.isoformat(), slow_fetched_at=NOW.isoformat() if run_slow else prev["slow_fetched_at"],
                 keywords=r["keywords"],  # the dashboard matches uploaded resumes with these

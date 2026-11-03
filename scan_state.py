@@ -3,12 +3,14 @@
 A job is lowercased company|title, because a role's URL can change from one scan to the next.
 """
 import json
+import re
 from datetime import datetime
 
 PREFIX = "window.JOB_DATA = "
 SLOW = {"remotive", "workable", "workday", "smartrecruiters", "jobicy"}  # strict limits, or a detail call per job
 SLOT_SECONDS = 6 * 3600
 NEWER = dict(must=[], nice=[], salary=None, mode=None, degree=None, posted_approx=False)  # fields a row from older data lacks
+LEGAL = {"inc", "llc", "ltd", "limited", "corp", "corporation", "co", "gmbh", "ag", "ab", "plc", "sa", "bv", "srl", "pty", "oy"}
 
 
 def load_previous(path):
@@ -20,6 +22,15 @@ def load_previous(path):
 
 def job_key(j):
     return f"{j['company'].strip()}|{j['title'].strip()}".lower()  # evaluate() strips both
+
+
+def same_job(j):
+    """job_key read loosely, for one job listed twice: spacing, punctuation and a legal suffix ("Samsara Inc.") don't count."""
+    words = lambda text: re.findall(r"[^\W_]+|[+#]+", text.lower())  # keeps C++ and C# apart
+    company = words(j["company"])
+    while len(company) > 1 and company[-1] in LEGAL:
+        company.pop()
+    return " ".join(company) + "|" + " ".join(words(j["title"]))
 
 
 def slot(t):
@@ -68,13 +79,16 @@ def carry(row, before, now):
     return row
 
 
-def merge(rows, prev, now, cutoff):
-    """One row per company+title, as boards often repeat a role per city. A carried row can't outlive the cutoff."""
+def merge(rows, prev, now, cutoff, own=()):
+    """One row per job, as boards often repeat a role per city and two sources can list one job written a little differently.
+    The row kept is the one the last scan had, else one from the company's own board (a source in own), so its link and its
+    tracker key hold still. A carried row can't outlive the cutoff."""
     before, out = {job_key(j): j for j in prev.get("jobs", [])}, {}
+    rows = sorted(({**NEWER, **r} for r in rows), key=lambda r: (job_key(r) not in before, r["source"] not in own))  # NEWER: a held or failed source's rows may come from older data
     for row in rows:
-        row, key = {**NEWER, **row}, job_key(row)  # a held or failed source's rows may come from older data
+        key = same_job(row)
         if key in out:
             out[key]["where"] = sorted(set(out[key]["where"]) | set(row["where"]))
         else:
-            out[key] = carry(row, before.get(key), now)
+            out[key] = carry(row, before.get(job_key(row)), now)
     return [j for j in out.values() if datetime.fromisoformat(j["posted"] or j["first_seen"]) >= cutoff]  # app's age
