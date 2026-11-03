@@ -1,5 +1,5 @@
 "use strict";
-// wradar board: Jobs, Older and My jobs share one list and detail pane.
+// wradar board: Matching jobs (Last 30 days and Older) and Applications share one list and detail pane.
 // The first half never touches the page, so tests can load it. The rest reads app.js and tracker.js at call time.
 const DAY = 864e5, FRESH_DAYS = 30, WORK_HOURS_A_YEAR = 2080;
 const BOARDS = ["jobs", "older", "mine"], PAGES = [...BOARDS, "resume", "insights", "sources"];
@@ -40,11 +40,11 @@ function knownOnly(jobs, pay, work) {
 
 const hasTech = (j, f) => !f.techs.length || (f.mode === "all" ? f.techs.every(t => j.skills.includes(t)) : f.techs.some(t => j.skills.includes(t)));
 
-function matches(j, f, view, { tech = true, role = true } = {}) {
+function matches(j, f, view, { tech = true } = {}) {
   const q = f.q.toLowerCase();
   return (j.score == null || j.score >= f.min)
     && (!tech || hasTech(j, f))
-    && (!role || !f.role || j.role === f.role)
+    && (!f.role || j.role === f.role)
     && (!f.level || j.level === f.level)
     && (!f.where || j.where.includes(f.where))
     && (!f.type || j.type === f.type)
@@ -73,8 +73,7 @@ const tab = () => nav[page];
 const announce = text => { $("#live").textContent = text; };
 const postedText = j => (j.posted_approx ? "30+ days ago" : ago(j.posted));
 const rowOf = key => byKey.get(key) || (Object.hasOwn(tracker, key) ? { ...tracker[key], key, delisted: true } : null);  // a link's key may be "constructor"
-const chips = (a, cls = "") => a.map(k => `<span class="chip ${cls}">${esc(k)}</span>`).join("");
-const matchNum = j => (j.score == null ? '<span class="match none">–</span>' : `<span class="match ${tier(j.score)}">${j.score}</span>`);
+const matchNum = j => (j.score == null ? "" : `<span class="match ${tier(j.score)}">${j.score}</span>`);
 
 const rowPlace = j => j.where.filter(w => w !== j.mode).join(" / ");
 const rowWhen = j => (j.delisted ? "No longer listed" : isNew(j) ? "New" : postedText(j));
@@ -87,7 +86,8 @@ function item(j, n, stop) {
     ${matchNum(j)}
     <span class="jtext">
       <span class="jline"><span class="jtitle">${esc(j.title)}</span>${s ? `<span class="tag ${s}">${esc(statusText(j))}</span>` : ""}</span>
-      <span class="jline jfacts"><span class="jco">${esc(j.company)}</span>${pay ? `<span class="jpay">${esc(pay)}</span>` : ""}${facts}<span class="jwhen${isNew(j) ? " fresh" : ""}">${esc(rowWhen(j))}</span></span>
+      <span class="jline"><span class="jco">${esc(j.company)}</span><span class="jwhen${isNew(j) ? " fresh" : ""}">${esc(rowWhen(j))}</span></span>
+      <span class="jline jfacts">${pay ? `<span class="jpay">${esc(pay)}</span>` : ""}${facts}</span>
     </span>
   </button></li>`;
 }
@@ -114,8 +114,13 @@ function countText(total, noPay, noMode) {
 function renderBoard() {
   const t = tab(), mine = page === "mine";
   store.set("wradar-filters", state);
-  $("#filters").hidden = mine;
+  $("#boardtitle").textContent = mine ? "Applications" : me ? "Matching jobs" : "Software jobs";
+  $("#filters").hidden = $("#ages").hidden = mine;
   $("#minebar").hidden = !mine;
+  $("#nores").hidden = (me && !unread()) || mine;  // a resume saved by an older version reads less, so it's asked for again
+  $("#norestext").innerHTML = me
+    ? "<b>Add your resume again for better scores.</b> It was saved before wradar read jobs and projects apart, so matches use less of it."
+    : "<b>Add your resume to rank these jobs by fit.</b> Each job then shows why you fit, what's missing from your resume, and what to do before you apply.";
   $("#olderwarn").hidden = page !== "older";
   $("#sortwrap").hidden = $("#hideappliedwrap").hidden = mine;
   renderCounts();
@@ -124,7 +129,6 @@ function renderBoard() {
   const at = rows.findIndex(j => j.key === t.sel);
   if (parseHash(location.hash).key) t.limit = Math.max(t.limit, at + 1);  // only a link may reach down the list
   else if (at < 0 || at >= t.limit) t.sel = wide() && rows.length ? rows[0].key : null;
-  if (page === "jobs") renderBand(rows);
   if (!mine) renderFilters();
   $("#count").textContent = countText(mine ? rows.length : pool().length, got.noPay, got.noMode);
   renderList();
@@ -142,60 +146,79 @@ function payFact(s) {
 }
 
 function gauge(j) {
-  const c = 2 * Math.PI * 32, v = j.score / 100 * c, t = tier(j.score);
-  return `<div class="gauge" style="color:var(--blip-${t})">
-    <svg width="84" height="84" viewBox="0 0 84 84" aria-hidden="true"><circle class="g-track" cx="42" cy="42" r="32" fill="none" stroke-width="7"/>
-      <circle class="g-val" cx="42" cy="42" r="32" fill="none" stroke-width="7" stroke-linecap="round" stroke-dasharray="${v.toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 42 42)"/>
-      <text x="42" y="49" text-anchor="middle" class="match" fill="currentColor">${j.score}</text></svg>
-    <small>${TIER[t]}</small></div>`;
+  const c = 2 * Math.PI * 30, v = j.score / 100 * c;
+  return `<div class="gauge ${tier(j.score)}">
+    <svg width="76" height="76" viewBox="0 0 76 76" aria-hidden="true"><circle class="g-track" cx="38" cy="38" r="30" fill="none" stroke-width="7"/>
+      <circle class="g-val" cx="38" cy="38" r="30" fill="none" stroke-width="7" stroke-linecap="round" stroke-dasharray="${v.toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 38 38)"/>
+      <text x="38" y="45" text-anchor="middle">${j.score}</text></svg></div>`;
 }
 
 const part = p => `<li${p.max ? "" : ' class="off"'}><b>${esc(p.name)}</b><i style="--w:${p.max ? Math.round(100 * p.got / p.max) : 0}%"></i><span>${esc(p.note)}</span></li>`;
 const advice = (title, lines, cls) => (lines.length ? `<section class="advice ${cls}"><h3>${title}</h3><ul>${lines.map(l => `<li>${esc(l)}</li>`).join("")}</ul></section>` : "");
 
 function reading(j) {
-  if (!j.fit) return '<div class="nudge"><p>Add your resume to see how well you match this job.</p><a class="btn" href="#resume">Add your resume</a></div>';
-  return `<div class="scorebox">${gauge(j)}<ol class="parts">${j.fit.parts.map(part).join("")}</ol></div>
+  if (!j.fit) return '<div class="nudge"><p><b>How well do you fit?</b> Add your resume to see your match for this job, and what to do before you apply.</p><a class="btn" href="#resume">Add your resume</a></div>';
+  return `<section class="fitbox" aria-labelledby="fith">
+      <div class="fithead">${gauge(j)}<div><h3 id="fith">${TIER[tier(j.score)]}, ${j.score}</h3><p class="note">From your role, seniority, years, skills and degree.</p></div></div>
+      <ol class="parts">${j.fit.parts.map(part).join("")}</ol>
+    </section>
     <div class="advicegrid">${advice("Why you fit", j.fit.fits, "fit")}${advice("Gaps", j.fit.gaps, "gaps")}${advice("Next steps", j.fit.next, "next")}</div>`;
 }
 
-function postingFacts(j) {
-  return `<dl class="facts">${fact("Pay", payFact(j.salary))}${fact("Work mode", j.mode ? esc(j.mode) : NOT_LISTED)}${fact("Where", esc(j.where.join(" / ")))}
-      ${fact("Job type", esc(j.type))}${fact("Seniority", esc(j.level))}${fact("Role", esc(j.role))}
-      ${fact("Posted", postedText(j))}${fact("Experience asked", j.years_required ? j.years_required + "+ years" : "Not stated")}
-      ${fact("Applicants", j.applicants == null ? '<span class="na">Not available</span>' : esc(j.applicants))}${fact("Found on", esc(j.source))}</dl>
-    <div class="dsec"><h3>Skills this posting names (${j.skills.length})</h3><div class="chips">${(chips(j.fit ? j.matched : j.skills, j.fit ? "have" : "") + chips(j.missing, "miss")) || '<span class="na">None</span>'}</div></div>
-    <div class="dsec"><h3>Location as posted</h3><p>${esc(j.location || "Not listed")}</p></div>`;
+// Required, preferred and other skills, each marked against the resume when there is one.
+function requirements(j) {
+  const have = k => j.matched.includes(k);
+  const item = k => (j.fit ? `<li class="${have(k) ? "have" : "miss"}">${esc(k)}<span class="sr">, ${have(k) ? "on" : "not on"} your resume</span></li>` : `<li>${esc(k)}</li>`);
+  const group = (title, a) => (a.length ? `<div class="req"><h4>${title}</h4><ul class="reqs">${a.map(item).join("")}</ul></div>` : "");
+  const rest = j.skills.filter(k => !j.must.includes(k) && !j.nice.includes(k));
+  const body = group("Must-haves", j.must) + group("Nice to have", j.nice) + group(j.must.length + j.nice.length ? "Also mentioned" : "Skills named", rest);
+  const legend = j.fit ? '<p class="reqkey" aria-hidden="true"><span class="have">On your resume</span><span class="miss">Not on your resume</span></p>' : "";
+  return `<section class="dsec"><h3>Skills this job asks for</h3>${body ? legend + body : '<p class="na">This posting names none of the skills wradar knows.</p>'}</section>`;
+}
+
+const DEGREE = { bachelor: "Bachelor's", master: "Master's", phd: "PhD" };
+function about(j) {
+  const degree = j.degree ? `${esc(DEGREE[j.degree.level] || j.degree.level)}, ${esc(j.degree.req)}` : "Not stated";
+  return `<section class="dsec"><h3>About this job</h3><dl class="facts">${fact("Pay", payFact(j.salary))}${fact("Work mode", j.mode ? esc(j.mode) : NOT_LISTED)}
+      ${fact("Where", esc(j.where.join(" / ")))}${fact("Location as posted", esc(j.location || "Not listed"))}${fact("Role", esc(j.role))}${fact("Seniority", esc(j.level))}
+      ${fact("Job type", esc(j.type))}${fact("Experience asked", j.years_required ? j.years_required + "+ years" : "Not stated")}${fact("Degree", degree)}
+      ${fact("Posted", postedText(j))}${fact("Found on", esc(j.source))}${fact("Applicants", j.applicants == null ? '<span class="na">Not available</span>' : esc(j.applicants))}</dl></section>`;
+}
+
+function pills(j) {
+  const pay = payLabel(j.salary);
+  return `<ul class="pills">${[pay ? `<li class="pay">${esc(pay)}</li>` : '<li class="na">Pay not listed</li>', j.mode && `<li>${esc(j.mode)}</li>`,
+    rowPlace(j) && `<li>${esc(rowPlace(j))}</li>`, `<li>Posted ${esc(postedText(j))}</li>`].filter(Boolean).join("")}</ul>`;
 }
 
 function actions(j) {
   const link = /^https?:\/\//.test(j.url)
-    ? `<a class="btn" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer" data-do="open">Open posting</a>`
+    ? `<a class="btn" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer" data-do="open"><span class="onwide">Apply on company site</span><span class="onphone">Apply</span><span class="sr"> (opens in a new tab)</span></a>`
     : '<span class="na">No link for this posting</span>';
-  const mark = (s, label) => `<button type="button" class="btn quiet" data-do="${s}" aria-pressed="${statusOf(j) === s}">${label}</button>`;
+  const mark = (s, label) => `<button type="button" class="btn line mark" data-do="${s}" aria-pressed="${statusOf(j) === s}">${label}</button>`;
   const ask = statusOf(j) === "applied" ? "" : `<p class="dask" id="dask" hidden><span>Did you apply?</span>
-    <button type="button" class="btn quiet" data-do="yes">Yes</button><button type="button" class="btn quiet" data-do="no">Not yet</button></p>`;
+    <button type="button" class="btn" data-do="yes">Yes, mark applied</button><button type="button" class="btn line" data-do="no">Not yet</button></p>`;
   return `<div class="dactions">${link}${mark("applied", "Applied")}${mark("saved", "Save")}${mark("hidden", "Hide")}${ask}</div>`;
 }
 
 function dnav(j) {
   const at = j ? rows.findIndex(r => r.key === j.key) : -1;
   const moves = at < 0 ? "" : `<span class="dpos">${at + 1} of ${rows.length.toLocaleString()}</span>
-    <button type="button" class="btn quiet" data-do="prev"${at ? "" : " disabled"}>Previous</button>
-    <button type="button" class="btn quiet" data-do="next"${at + 1 < rows.length ? "" : " disabled"}>Next</button>`;
-  return `<div class="dnav"><button type="button" class="btn quiet" data-do="back">Back</button>${moves}</div>`;
+    <button type="button" class="btn line" data-do="prev"${at ? "" : " disabled"}>Previous</button>
+    <button type="button" class="btn line" data-do="next"${at + 1 < rows.length ? "" : " disabled"}>Next</button>`;
+  return `<div class="dnav"><button type="button" class="btn line back" data-do="back">Back</button>${moves}</div>`;
 }
 
 function detail(j) {
   if (!j) return `${dnav()}<div class="empty">${tab().sel ? "This job is no longer listed." : "Pick a job from the list to see the details."}</div>`;
   const note = text => `<p class="dnote">${text}</p>`;
   return `${dnav(j)}
-    <div class="dtop"><p class="dco">${esc(j.company)}</p><h2 id="dtitle" tabindex="-1">${esc(j.title)}</h2></div>
+    <header class="dhead"><p class="dco">${esc(j.company)}</p><h2 id="dtitle" tabindex="-1">${esc(j.title)}</h2>${j.delisted ? "" : pills(j)}</header>
     ${actions(j)}
     ${rows.some(r => r.key === j.key) ? "" : note("This job isn't in the current list.")}
     ${j.delisted
       ? `${note("This job wasn't in the last scan, so it may be closed.")}<dl class="facts">${fact("Where", esc(j.where.join(" / ")))}</dl>`
-      : `${isOlder(j) ? note(`Posted ${postedText(j)}. Check the job is still open before you spend time on it.`) : ""}${reading(j)}${postingFacts(j)}`}`;
+      : `${isOlder(j) ? note(`Posted ${postedText(j)}. Check the job is still open before you spend time on it.`) : ""}${reading(j)}${requirements(j)}${about(j)}`}`;
 }
 
 // ---- Moving between jobs ----
@@ -212,7 +235,6 @@ function select(key) {
   $("#detail").innerHTML = detail(rowOf(key));
   $("#detail").scrollTop = 0;
   history.replaceState(null, "", hashFor(page, key));
-  if (page === "jobs" && scopeOpen) renderScope(rows);
   const row = $("#list .jitem[aria-current=true]");
   row?.scrollIntoView({ block: "nearest" });
   (wide() || !$("#board").classList.contains("showing") ? row : $("#dtitle"))?.focus({ preventScroll: true });  // on a phone the title shows only in the open detail
