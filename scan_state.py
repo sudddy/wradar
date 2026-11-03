@@ -8,6 +8,7 @@ from datetime import datetime
 PREFIX = "window.JOB_DATA = "
 SLOW = {"remotive", "workable", "workday", "smartrecruiters", "jobicy"}  # strict limits, or a detail call per job
 SLOT_SECONDS = 6 * 3600
+NEWER = dict(must=[], nice=[], salary=None, mode=None, degree=None, posted_approx=False)  # fields a row from older data lacks
 
 
 def load_previous(path):
@@ -71,7 +72,7 @@ def merge(rows, prev, now, cutoff):
     """One row per company+title, as boards often repeat a role per city. A carried row can't outlive the cutoff."""
     before, out = {job_key(j): j for j in prev.get("jobs", [])}, {}
     for row in rows:
-        key = job_key(row)
+        row, key = {**NEWER, **row}, job_key(row)  # a held or failed source's rows may come from older data
         if key in out:
             out[key]["where"] = sorted(set(out[key]["where"]) | set(row["where"]))
         else:

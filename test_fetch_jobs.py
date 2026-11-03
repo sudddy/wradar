@@ -362,9 +362,9 @@ class CarryOver(unittest.TestCase):
         [j] = self.merge([row()], row(title="Other", first_seen=days(9)))
         self.assertEqual(j["first_seen"], NOW.isoformat())
 
-    def test_one_row_per_company_and_title(self):
+    def test_one_row_per_company_and_title_in_todays_shape(self):  # row() lacks the fields older data lacks
         [j] = self.merge([row(where=["US"]), row(company="ACME", title="swe", where=["Canada"])])
-        self.assertEqual(j["where"], ["Canada", "US"])
+        self.assertEqual((j["where"], j["must"], j["nice"], j["salary"], j["mode"]), (["Canada", "US"], [], [], None, None))
 
     def test_workday_date_is_min_of_previous_and_new(self):
         new = row(source="Workday", posted=days(31), posted_approx=True)
