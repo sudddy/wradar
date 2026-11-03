@@ -18,9 +18,12 @@ from urllib.error import HTTPError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
+from extract import (degree, pick_pay, rich_text, salary, split_sections, structured_pay, tier_skills, work_mode,
+                     years_min)
+from scan_state import PREFIX, failed_over, held_over, is_slow, job_key, load_previous, merge, slot_open
+
 ROOT = Path(__file__).parent
 OUT = ROOT / "docs" / "jobs.js"
-PREFIX = "window.JOB_DATA = "
 UA = "wradar/1.0 (+https://github.com/sudddy/wradar)"
 NOW = datetime.now(timezone.utc)
 
@@ -48,8 +51,6 @@ ELSEWHERE = re.compile(
     r"\b(europe|emea|uk|united kingdom|england|germany|france|spain|portugal|netherlands|poland|ireland|india"
     r"|apac|asia|australia|new zealand|latam|latin america|brazil|mexico|argentina|colombia|philippines|singapore"
     r"|japan|africa|israel|london|berlin|paris|amsterdam|lisbon|dublin|bangalore|bengaluru)\b", re.I)
-EXPERIENCE = re.compile(
-    r"(\d{1,2})\s*\+?\s*(?:(?:-|–|to)\s*\d{1,2}\s*\+?\s*)?years?(?:\s+of)?(?:\s+[\w/&-]+){0,5}?\s+experience", re.I)
 # Job type: an explicit field or the title is trusted; the body only counts when it says so plainly.
 TYPE_FIELD = [("Contract", r"contract|freelance|temporary|\btemp\b|fixed[-_ ]?term|short[-_ ]?term|seasonal"),
               ("Part-time", r"part[-_ ]?time"),
@@ -59,18 +60,18 @@ TYPE_BODY = [("Contract", r"\b(contract|contractor|freelance) (role|position|opp
              ("Part-time", r"\bpart[- ]time (role|position|basis|opportunity|job)\b|\bthis is a part[- ]time\b"),
              ("Full-time", r"\bfull[- ]time\b")]
 ROLE = re.compile(r"engineer|developer|swe\b|programmer|technical staff", re.I)
-# Seniority and role family come from the title; a title like "Software Engineer, Payments" falls back to its skills.
-LEVELS = [("Staff+", r"\b(staff|principal|distinguished|architect|fellow)\b"),
+# Seniority and role family come from the title; a title like "Software Engineer" falls back to its skills.
+LEVELS = [("Staff+", r"(?<!technical )\bstaff\b|\b(principal|distinguished|architect|fellow)\b"),
           ("Senior", r"\b(senior|sr\.?|lead|iii|iv)\b"),
           ("Junior", r"\b(junior|jr\.?|entry|associate|i)\b")]
 FAMILIES = [("Full stack", r"full[- ]?stack"),
             ("Backend", r"back[- ]?end|server[- ]side|\bapi\b|distributed systems|\bpayments?\b|ledger|integrations?\b"),
             ("Frontend", r"front[- ]?end|\bui\b|\bweb developer"),
             ("Mobile", r"\b(ios|android|mobile|react native)\b"),
+            ("Security", r"security"),
             ("ML / AI", r"machine learning|\bml\b|\bai\b|\bllms?\b|deep learning|\bnlp\b"),
             ("Data", r"\bdata\b|analytics|\betl\b"),
             ("DevOps / SRE", r"devops|\bsre\b|site reliability|infrastructure|\bplatform\b|\bcloud\b|reliability"),
-            ("Security", r"security"),
             ("QA / Test", r"\bqa\b|\btest|sdet|quality"),
             ("Embedded", r"embedded|firmware")]
 BACKEND = {"Java", "Go", "Python", "Kotlin", "Scala", "Rust", "C#", ".NET", "Ruby on Rails", "Node.js", "Spring Boot",
@@ -147,28 +148,33 @@ def greenhouse(slug, name):
 def lever(slug, name):
     out = []
     for j in get_json(f"https://api.lever.co/v0/postings/{slug}?mode=json"):
-        c = j.get("categories") or {}
-        lists = " ".join(f"{x.get('text', '')} {x.get('content', '')}" for x in j.get("lists") or [])
+        c, pay = j.get("categories") or {}, j.get("salaryRange") or {}
+        lists = "".join(f"<p>{x.get('text', '')}</p><ul>{x.get('content', '')}</ul>" for x in j.get("lists") or [])
         out.append(dict(title=j["text"], company=name, url=j["hostedUrl"], posted=j.get("createdAt"),
-                        type=c.get("commitment"),
+                        type=c.get("commitment"), mode=j.get("workplaceType"),
+                        salary=structured_pay(pay.get("min"), pay.get("max"), pay.get("currency"), pay.get("interval")),
                         location=join(c.get("location"), *(c.get("allLocations") or []), j.get("workplaceType"),
                                       COUNTRY.get(j.get("country"))),
-                        description=join(j.get("descriptionPlain"), lists, j.get("additionalPlain"))))
+                        description=j.get("description", "") + lists + j.get("additional", "")))
     return out
 
 
 def ashby(slug, name):
     out = []
-    for j in get_json(f"https://api.ashbyhq.com/posting-api/job-board/{slug}")["jobs"]:
+    for j in get_json(f"https://api.ashbyhq.com/posting-api/job-board/{slug}?includeCompensation=true")["jobs"]:
         if j.get("isListed") is False:
             continue
         addr = (j.get("address") or {}).get("postalAddress") or {}
         remote = j.get("workplaceType") == "Remote" or (j.get("isRemote") and not j.get("workplaceType"))
+        location = join(j.get("location"), *(s.get("location") for s in j.get("secondaryLocations") or []),
+                        addr.get("addressCountry"), "Remote" if remote else "")
+        pays = [structured_pay(c.get("minValue"), c.get("maxValue"), c.get("currencyCode"), c.get("interval"))
+                for t in (j.get("compensation") or {}).get("compensationTiers") or []  # one per region, any currency
+                for c in t.get("components") or [] if c.get("compensationType") == "Salary"]
         out.append(dict(title=j["title"], company=name, url=j["jobUrl"], posted=j.get("publishedAt"),
-                        type=j.get("employmentType"),
-                        location=join(j.get("location"), *(s.get("location") for s in j.get("secondaryLocations") or []),
-                                      addr.get("addressCountry"), "Remote" if remote else ""),
-                        description=j.get("descriptionPlain") or j.get("descriptionHtml", "")))
+                        type=j.get("employmentType"), mode=j.get("workplaceType"), location=location,
+                        salary=pick_pay([p for p in pays if p], where(location)),
+                        description=j.get("descriptionHtml") or j.get("descriptionPlain", "")))
     return out
 
 
@@ -180,10 +186,12 @@ def smartrecruiters(slug, name):
             loc = p.get("location") or {}
             out.append(dict(title=p["name"], company=name, url=f"https://jobs.smartrecruiters.com/{slug}/{p['id']}",
                             posted=p.get("releasedDate"), type=(p.get("typeOfEmployment") or {}).get("label"),
+                            mode="Hybrid" if loc.get("hybrid") else "Remote" if loc.get("remote") else None,
                             location=join(loc.get("fullLocation"), COUNTRY.get(str(loc.get("country")).upper()),
                                           "Remote" if loc.get("remote") and not loc.get("hybrid") else ""),
-                            description=lambda pid=p["id"]: " ".join(
-                                s.get("text", "") for s in get_json(f"{api}/{pid}")["jobAd"]["sections"].values())))
+                            description=lambda pid=p["id"]: "".join(
+                                f"<p>{s.get('title', '')}</p>{s.get('text', '')}"
+                                for s in get_json(f"{api}/{pid}")["jobAd"]["sections"].values())))
         offset += 100
         if offset >= min(page["totalFound"], 1000):
             return out
@@ -210,10 +218,13 @@ def workday(spec, name, query="software engineer", limit=200):
             break
         total = page.get("total") or total  # only the first page reports it
         for p in page.get("jobPostings", []):
+            if "title" not in p:  # Workday's own board lists the odd posting with no title
+                continue
             info = cache(lambda path=p["externalPath"]: get_json(api + path)["jobPostingInfo"])
             loc = p.get("locationsText", "")
             out.append(dict(title=p["title"], company=name, url=f"{base}/{site}{p['externalPath']}",
                             posted=NOW - timedelta(days=days_ago(p.get("postedOn", ""))),
+                            posted_approx="+" in p.get("postedOn", ""),
                             location=(lambda i=info: join(i().get("location"), *(i().get("additionalLocations") or []),
                                                           (i().get("country") or {}).get("descriptor")))
                             if re.fullmatch(r"\d+ Locations", loc) else loc,
@@ -317,7 +328,9 @@ def amazon():
     return [dict(title=j["title"], company="Amazon", url="https://www.amazon.jobs" + j["job_path"],
                  posted=j.get("posted_date"), type=j.get("job_schedule_type"),
                  location=join(j.get("normalized_location"), COUNTRY.get(j.get("country_code"))),
-                 description=join(j.get("description"), j.get("basic_qualifications"), j.get("preferred_qualifications")))
+                 description="<br>".join(v or "" for v in (
+                     j.get("description"), "BASIC QUALIFICATIONS", j.get("basic_qualifications"),
+                     "PREFERRED QUALIFICATIONS", j.get("preferred_qualifications"))))
             for offset in (0, 100, 200) for j in get_json(url + str(offset))["jobs"]]
 
 
@@ -383,10 +396,6 @@ def family(title, found):
     return "Full stack" if be and fe else "Backend" if be else "Frontend" if fe else "General"
 
 
-def years_required(body):
-    return max((int(m.group(1)) for m in EXPERIENCE.finditer(body) if 0 < int(m.group(1)) <= 15), default=None)
-
-
 def load_rules(root=ROOT):
     cfg = json.loads((root / "config.json").read_text())
     keywords = {k: v for k, v in json.loads((root / "keywords.json").read_text()).items() if not k.startswith("_")}
@@ -407,20 +416,24 @@ def evaluate(job, r, cutoff):
     tags = [t for t in where(location) if t in cfg["locations"]]
     if not tags:
         return None
-    body = text(val("description"))
-    found = skills(r["kw"], f"{title}\n{body}")
+    body = rich_text(val("description"))
+    sec, found = split_sections(body), skills(r["kw"], f"{title}\n{body}")
+    names = [k for k in r["kw"] if k in found]
+    must, nice = tier_skills(names, title, sec, r["kw"])
     return dict(title=title, company=job["company"].strip(), where=tags, location=location[:120],
                 url=job["url"], posted=posted.isoformat() if posted else None, source=job["source"],
                 type=job_type(val("type"), title, body), level=level(title), role=family(title, found),
                 applicants=job.get("applicants"),  # no public board API exposes this; dashboard shows "Not available"
-                skills=[k for k in r["kw"] if k in found], years_required=years_required(body))
+                skills=names, must=must, nice=nice, years_required=years_min(sec),
+                salary=job.get("salary") or salary(body, tags), mode=work_mode(job.get("mode"), title, location, body),
+                degree=degree(sec), posted_approx=bool(job.get("posted_approx")))
 
 
 def describe(e):
     return f"HTTP {e.code}" if isinstance(e, HTTPError) else type(e).__name__
 
 
-def run_source(task, r, cutoff):
+def run_source(task, r, cutoff, before):
     kind, entry = task
     if kind == "feed":
         name, fn, url = FEEDS[entry]
@@ -441,45 +454,39 @@ def run_source(task, r, cutoff):
     for j in raw:
         try:
             row = evaluate(dict(j, source=src["kind"] if kind != "feed" else name), r, cutoff)
-        except Exception:  # a lazy detail fetch failed; skip that job only
+        except Exception:  # a lazy detail fetch failed; keep that job's row from the last scan, if it had one
             failed += 1
-            continue
+            row = before.get(job_key(j))
         if row:
             rows.append(row)
     return dict(src, ok=True, seen=len(raw), kept=len(rows), **({"skipped": failed} if failed else {})), rows
 
 
-def previous_first_seen():
-    try:
-        return {j["url"]: j["first_seen"] for j in json.loads(OUT.read_text()[len(PREFIX):].rstrip(";\n"))["jobs"]}
-    except (FileNotFoundError, ValueError, KeyError):
-        return {}
-
-
 def main():
-    r = load_rules()
-    cfg = r["cfg"]
+    r, prev = load_rules(), load_previous(OUT)
+    cfg, run_slow = r["cfg"], slot_open(prev, NOW)
+    cutoff, before = NOW - timedelta(days=cfg["max_age_days"]), {job_key(j): j for j in prev.get("jobs", [])}
     tasks = [(kind, e) for kind, entries in cfg["boards"].items() for e in entries] + [("feed", f) for f in cfg["feeds"]]
     with ThreadPoolExecutor(12) as ex:
-        results = list(ex.map(partial(run_source, r=r, cutoff=NOW - timedelta(days=cfg["max_age_days"])), tasks))
+        results = list(ex.map(partial(run_source, r=r, cutoff=cutoff, before=before),
+                              [t for t in tasks if run_slow or not is_slow(t)]))
     if not any(src["ok"] for src, _ in results):
         sys.exit("Every source failed; keeping the previous data.")  # don't wipe the dashboard on a network outage
 
-    seen, rows = previous_first_seen(), {}
-    for _, kept in results:
-        for row in kept:  # one row per company+title; boards often repeat a role per city
-            key = (row["company"].lower(), row["title"].lower())
-            if key in rows:
-                rows[key]["where"] = sorted(set(rows[key]["where"]) | set(row["where"]))
-            else:
-                rows[key] = dict(row, first_seen=seen.get(row["url"], NOW.isoformat()))
-
-    jobs = sorted(rows.values(), key=lambda j: j["posted"] or j["first_seen"], reverse=True)
-    sources = sorted((s for s, _ in results), key=lambda s: (not s["ok"], s["name"].lower()))
-    data = dict(generated_at=NOW.isoformat(), keywords=r["keywords"],  # the dashboard matches uploaded resumes with these
-                rules={k: cfg[k] for k in ("max_age_days", "locations")}, sources=sources, jobs=jobs)
+    ran, failed_rows = failed_over(prev, [s for s, _ in results])
+    held_sources, held_rows = ([], []) if run_slow else held_over(prev)
+    jobs = sorted(merge(held_rows + failed_rows + [row for _, kept in results for row in kept], prev, NOW, cutoff),
+                  key=lambda j: j["posted"] or j["first_seen"], reverse=True)
+    sources = sorted(ran + held_sources, key=lambda s: (not s["ok"], s["name"].lower()))
+    data = dict(generated_at=NOW.isoformat(), slow_fetched_at=NOW.isoformat() if run_slow else prev["slow_fetched_at"],
+                keywords=r["keywords"],  # the dashboard matches uploaded resumes with these
+                rules=dict({k: cfg[k] for k in ("max_age_days", "locations", "scan_url")}, levels=LEVELS, families=FAMILIES,
+                           backend=sorted(BACKEND), frontend=sorted(FRONTEND)),
+                sources=sources, jobs=jobs)
     OUT.parent.mkdir(exist_ok=True)
-    OUT.write_text(PREFIX + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n")
+    # errors: a lone surrogate from a source can't be encoded, and must not stop the scan; it is written as "?"
+    OUT.write_text(PREFIX + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n", errors="replace")
+    OUT.with_name("scan.json").write_text(json.dumps(dict(generated_at=data["generated_at"], jobs=len(jobs))) + "\n")
     ok = sum(s["ok"] for s in sources)
     print(f"{len(jobs)} jobs kept from {sum(s['seen'] for s in sources)} seen; {ok}/{len(sources)} sources OK")
     for s in sources:
