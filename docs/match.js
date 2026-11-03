@@ -305,14 +305,15 @@ function score(p, job, stats) {
     next.push(m.near ? `Name ${m.near} as your closest match to ${reqLabel(m.req)}.`
       : `If you have used ${reqLabel(m.req)}, add it to your resume.${pct >= 5 ? ` If not, ${pct}% of postings ask for it, so it's worth learning.` : ""}`);
   }
-  const lost = plan.top.find(r => r.titled && r.stack && meet(r, c).credit < .5);
-  if (lost) cap(60, `The title names ${reqLabel(lost)}, which is not on your resume.`);
+  const lost = plan.top.find(r => r.titled && r.stack && meet(r, c).credit < .5), lostWhy = lost && `The title names ${reqLabel(lost)}, which is not on your resume.`;
+  if (lost) cap(60, lostWhy);
+  const stackless = plan.nice.some(k => !NOT_STACK.has(k)) ? NO_LIST : NO_STACK;  // with nice-to-haves named, "no stack" isn't true
   // These caps read the weighted value; the reason says what is true by count.
-  const thin = !n ? NO_STACK : cov.missed.length * 2 > n ? "Most of its top must-haves are not on your resume." : cov.missed.length ? missedLine
+  const thin = !n ? stackless : cov.missed.length * 2 > n ? "Most of its top must-haves are not on your resume." : cov.missed.length ? missedLine
     : listed.length ? listedLine : stale.length ? staleLine : onlyLine;
   if (cov.value < .5) cap(54, thin);
   else if (cov.value < .7 || cov.missed.length >= 2) cap(74, thin);
-  if (!n && !(role >= .5)) cap(54, NO_STACK);
+  if (!n && !(role >= .5)) cap(54, stackless);
   if (!plan.split) {  // a skill mentioned anywhere is weaker evidence than one in the requirements
     gaps.push(NO_LIST);
     cap(85, NO_LIST);
@@ -331,7 +332,7 @@ function score(p, job, stats) {
 
   // Hot needs evidence, not just silence.
   const known = (role != null) + (level != null) + (years != null), stated = (plan.role != null) + (plan.level != null) + (bar != null);
-  if (!cov.confirmed) cap(60, n ? "None of its top must-haves are confirmed by your resume." : NO_STACK);
+  if (!cov.confirmed) cap(60, n ? "None of its top must-haves are confirmed by your resume." : stackless);
   else if (cov.confirmed < 2) cap(65, n > 1 ? "Only one of its top must-haves is confirmed by your resume." : onlyLine);
   else if (cov.confirmed < 3 && cov.missed.length) cap(74, "Fewer than three of its top must-haves are confirmed by your resume.");
   else if (known < 2) cap(74, stated < 2 ? "It says too little about the role or level, so check the posting yourself."
@@ -342,9 +343,11 @@ function score(p, job, stats) {
   const exact = max ? 100 * parts.reduce((s, x) => s + x.got, 0) / max : 0, raw = Math.round(exact);
   const low = caps.reduce((a, x) => (x[0] < a[0] ? x : a), [101, ""]);
   const held = raw > low[0] ? { at: low[0], why: low[1] } : null;
-  // The binding reason comes first, and no gap after it says the same again ("names no stack" already says to check the posting).
+  // The binding reason comes first, and no gap after it says the same again: "names no stack" already says to check the posting,
+  // and a missing skill the title names is the whole "Not on your resume" list when it's the only one.
   const said = held ? held.why.toLowerCase() : "";
-  const repeats = g => said.includes(g.toLowerCase().slice(0, -1)) || (held?.why === NO_STACK && g === NO_LIST);
+  const repeats = g => said.includes(g.toLowerCase().slice(0, -1)) || (held?.why === NO_STACK && g === NO_LIST)
+    || (held?.why === lostWhy && cov.missed.length === 1 && g === missedLine);
   const shown = [...new Set([...(held ? [held.why] : []), ...gaps.filter(g => !repeats(g))])];
   const final = Math.min(raw, low[0]);
   return { score: final, tier: TIERS.find(t => final >= t[1])[0], parts, held, fits: fits.slice(0, 4), gaps: shown.slice(0, 3), next: next.slice(0, 3),

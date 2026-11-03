@@ -51,6 +51,21 @@ class CarryOver(unittest.TestCase):
         [j] = s.merge([board, muse], {"jobs": [dict(muse, first_seen=days(9))]}, NOW, NOW - timedelta(days=90), own={"Greenhouse"})
         self.assertEqual((j["url"], j["first_seen"]), ("https://muse.test/1", days(9)))  # its key, and so any tracker mark, holds still
 
+    def test_sr_and_fullstack_spellings_are_one_job(self):
+        self.assertEqual(len(self.merge([row(title="Sr. Fullstack Engineer"), row(title="Senior Full-Stack Engineer")])), 1)
+
+    def test_when_the_kept_copy_goes_its_sibling_keeps_first_seen_and_title(self):
+        gone = row(title="Full-stack Engineer 4", first_seen=days(20))  # last scan's copy, no longer listed
+        [j] = self.merge([row(title="Full Stack Engineer 4", url="https://x.test/2")], gone)
+        self.assertEqual((j["first_seen"], j["title"], j["url"]), (days(20), "Full-stack Engineer 4", "https://x.test/2"))
+        [j] = self.merge([row(company="Samsara Inc.", source="The Muse")], row(company="Samsara", first_seen=days(20)))
+        self.assertEqual((j["first_seen"], j["company"]), (days(20), "Samsara Inc."))  # another source's name stays its own
+
+    def test_a_copy_past_the_cutoff_lets_a_fresh_one_stand_in(self):
+        old = row(source="Workday", posted=days(95), first_seen=days(95))
+        [j] = self.merge([old, row(company="Acme Inc.", source="The Muse", posted=days(5))], old)
+        self.assertEqual((j["source"], j["posted"]), ("The Muse", days(5)))
+
     def test_different_jobs_stay_apart(self):
         for a, b in [("Engineer I", "Engineer II"), ("C++ Engineer", "C# Engineer"), ("Senior Engineer", "Senior Engineer, Labs")]:
             self.assertEqual(len(self.merge([row(title=a), row(title=b)])), 2, (a, b))
