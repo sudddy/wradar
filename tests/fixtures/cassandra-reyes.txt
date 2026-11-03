@@ -1,0 +1,27 @@
+CASSANDRA REYES
+Denver, CO  |  cassandra.reyes@example.com  |  720-555-0175  |  linkedin.com/in/creyes-example
+
+EXPERIENCE                                               SKILLS
+Site Reliability Engineer                                Kubernetes, Helm, Argo CD, Istio
+Northgate Streaming, Denver, CO                          Terraform, Ansible, Docker, Linux
+Nov '22 - Present                                        AWS, EKS, GCP, Prometheus, Grafana
+- Run 14 Kubernetes clusters on EKS that serve           Go, Python, Bash
+  video to nine million viewers.
+- Moved deploys to Argo CD and Helm, cutting             EDUCATION
+  failed releases by 60%.                                B.S. Information Systems
+- Wrote Go operators for certificate rotation            Front Range State University, 2020
+  and on-call tooling.
+- Built Prometheus and Grafana dashboards with           CERTIFICATIONS
+  SLO alerts in PagerDuty.                               Certified Kubernetes Administrator
+- Led postmortems and incident response for              AWS DevOps Engineer Professional
+  the streaming platform.
+
+Systems Engineer                                         INTERESTS
+Pinecrest Hosting, Boulder, CO                           Climbing, trail running, ceramics
+Nov '20 - Oct '22
+- Managed Linux fleets with Ansible and Terraform
+  across AWS and bare metal.
+- Containerized customer workloads with Docker
+  and wrote Bash and Python automation.
+- Set up Nginx load balancing and Datadog
+  monitoring for 400 hosts.

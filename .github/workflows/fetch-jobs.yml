@@ -5,27 +5,36 @@ on:
     - cron: "17 */6 * * *"   # every 6 hours (Remotive asks for at most 4 calls a day)
   workflow_dispatch:          # "Run workflow" button in the Actions tab
   push:                       # re-fetch right away when the rules change
-    paths: [config.json, keywords.json, fetch_jobs.py]
+    branches: [main]
+    paths: [config.json, keywords.json, fetch_jobs.py, extract.py, scan_state.py]
 
 permissions:
   contents: write
+  pages: write
 
 concurrency: fetch-jobs
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main                # a run that waited in the queue starts from today's main, not the commit that queued it
       - run: python3 -m unittest -q
       - run: python3 fetch_jobs.py
+      - run: node --test tests/*.test.js   # after the fetch: these read the fresh docs/jobs.js. Node 22 refuses a bare directory
       - name: Commit refreshed data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/jobs.js
+          git add docs/jobs.js docs/scan.json
           git diff --cached --quiet && exit 0
           git commit -m "Refresh job data"
           git pull --rebase --autostash
           git push
+      - name: Rebuild Pages            # pushes made with GITHUB_TOKEN do not trigger a build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST repos/${{ github.repository }}/pages/builds

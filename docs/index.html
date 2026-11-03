@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>wradar</title>
-<meta name="description" content="Software engineering jobs from 332 company career sites and job boards across the US, Canada and remote, matched against your own resume.">
+<meta name="description" content="Software engineering jobs from 332 company career sites and job boards across the US, Canada and remote, scored against your own resume in your browser.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
@@ -18,43 +18,56 @@
       <span>wradar</span>
     </a>
     <nav class="tabs" aria-label="Sections">
-      <a href="#jobs">Jobs</a><a href="#resume">My resume</a><a href="#insights">Insights</a><a href="#sources">Sources</a>
+      <a href="#jobs">Jobs <span class="n" id="n-jobs"></span></a><a href="#older">Older <span class="n" id="n-older"></span></a><a href="#mine">My jobs <span class="n" id="n-mine"></span></a><a href="#resume">My resume</a><a href="#insights">Insights</a><a href="#sources">Sources</a>
     </nav>
     <span class="scanned" id="updated"></span>
+    <button class="btn onnavy scanbtn" type="button" id="scan" hidden></button>
   </div>
 </header>
 
 <section class="scope" id="scope" aria-label="Job radar">
   <div class="scopein">
     <figure class="radar">
-      <svg id="radar" viewBox="-66 0 592 460" role="img" aria-labelledby="radar-legend"></svg>
+      <svg id="radar" viewBox="50 50 360 360" role="img" aria-labelledby="radar-legend"></svg>
+      <button class="scopebtn" type="button" id="scopebtn" aria-expanded="false"><span>Expand radar</span></button>
       <figcaption id="radar-legend"></figcaption>
     </figure>
     <div class="scopecopy">
       <h1 id="headline"></h1>
       <p class="subline" id="subline"></p>
-      <div class="youline" id="youline"></div>
       <div class="sectors" id="sectors" role="group" aria-label="Filter by role"></div>
     </div>
+    <div class="youline" id="youline"></div>
   </div>
 </section>
 
 <main class="wrap">
   <section class="view" id="view-jobs" aria-label="Jobs">
     <div class="filters" id="filters">
-      <button class="btn quiet filtersbtn" type="button" id="filtersbtn" aria-expanded="false">Filters <span id="nfilters"></span></button>
-      <div class="fbody">
-        <div class="frow">
-          <input type="search" id="q" placeholder="Search title, company or skill" aria-label="Search jobs">
+      <div class="frow">
+        <input type="search" id="q" placeholder="Search title, company or skill" aria-label="Search jobs">
+        <div class="fquick">
           <div class="seg" id="where" role="group" aria-label="Location">
             <button type="button" data-v="">Anywhere</button><button type="button" data-v="US">US</button><button type="button" data-v="Canada">Canada</button><button type="button" data-v="Remote">Remote</button>
           </div>
           <select id="role" aria-label="Role"><option value="">All roles</option></select>
           <select id="level" aria-label="Seniority"><option value="">All levels</option></select>
-          <select id="type" aria-label="Job type"><option value="">Any job type</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Not specified</option></select>
-          <select id="src" aria-label="Source"><option value="">All sources</option></select>
+          <select id="work" aria-label="Work mode"><option value="">Work mode</option><option>Remote</option><option>Hybrid</option><option>On-site</option></select>
         </div>
-        <div class="frow">
+        <button class="btn quiet filtersbtn" type="button" id="filtersbtn" aria-expanded="false" aria-controls="fmore"><span class="onroomy">More filters</span><span class="ontight">Filters</span> <span id="nfilters"></span></button>
+      </div>
+      <div class="fmore" id="fmore" role="group" aria-label="More filters" hidden>
+        <label class="field">Minimum pay
+          <select id="pay"><option value="0">Any pay</option><option value="60000">60k or more</option><option value="80000">80k or more</option><option value="100000">100k or more</option><option value="120000">120k or more</option><option value="150000">150k or more</option><option value="180000">180k or more</option><option value="200000">200k or more</option><option value="250000">250k or more</option><option value="300000">300k or more</option></select>
+        </label>
+        <label class="field">Job type
+          <select id="type"><option value="">Any job type</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Not specified</option></select>
+        </label>
+        <label class="field">Source
+          <select id="src"><option value="">All sources</option></select>
+        </label>
+        <p class="fhint">Pay is compared in each job's own currency, top of the range, with hourly pay counted as 2,080 hours a year.</p>
+        <div class="ftech">
           <span class="flabel">Technologies</span>
           <div class="seg small" id="mode" role="group" aria-label="How to combine technologies">
             <button type="button" data-v="any">Any</button><button type="button" data-v="all">All</button>
@@ -62,18 +75,29 @@
           <input id="techq" list="techlist" placeholder="Add a technology" aria-label="Add a technology">
           <div class="chips" id="techs"></div>
         </div>
-        <div class="frow">
-          <label class="minctl" id="minlabel">Match at least <input type="range" id="min" min="0" max="90" step="5" value="0"> <b id="minv">0%</b></label>
-          <label class="check"><input type="checkbox" id="fresh"> Only new in the last 48 hours</label>
+        <div class="ffoot">
+          <label class="minctl" id="minlabel">Match at least <input type="range" id="min" min="0" max="90" step="5" value="0"> <b id="minv">0</b></label>
+          <label class="check"><input type="checkbox" id="fresh"> New in 48 hours</label>
           <button class="linkbtn" id="reset" type="button">Clear filters</button>
         </div>
       </div>
     </div>
 
+    <p class="olderwarn" id="olderwarn" role="note" hidden><b>Posted more than 30 days ago.</b> Many of these are filled or closed, so the link may not work or you may never hear back. Check the job is still open before you spend time on it.</p>
+    <div class="minebar" id="minebar" hidden>
+      <div class="seg" id="mineseg" role="group" aria-label="Show">
+        <button type="button" data-v="all">All <span id="n-all"></span></button><button type="button" data-v="saved">Saved <span id="n-saved"></span></button><button type="button" data-v="applied">Applied <span id="n-applied"></span></button><button type="button" data-v="hidden">Hidden</button>
+      </div>
+      <p class="minenote">Kept in this browser only. Clearing site data removes it.</p>
+    </div>
+
     <div class="board" id="board">
       <section class="results" aria-label="Job list">
         <div class="resbar"><span id="count" role="status"></span>
-          <label class="sort">Sort by <select id="sort"><option value="score">Best match</option><option value="new">Newest</option></select></label></div>
+          <div class="resctl">
+            <label class="check" id="hideappliedwrap"><input type="checkbox" id="hideapplied"> Hide applied</label>
+            <label class="sort" id="sortwrap">Sort by <select id="sort"><option value="score">Best match</option><option value="new">Newest</option></select></label>
+          </div></div>
         <ul class="jlist" id="list"></ul>
         <button class="btn quiet more" id="more" type="button" hidden>Show more jobs</button>
       </section>
@@ -106,17 +130,26 @@
         <details class="more" id="srcbadwrap"><summary></summary><ul class="src bad" id="srcbad"></ul></details></section>
       <div class="stack">
         <section class="panel"><h2>Privacy</h2>
-          <p>Your resume never leaves your browser. Only the file name, the skills found in it and your years of experience are kept, on this device, so jobs stay scored next time. Remove it any time from My resume.</p></section>
+          <p>Your resume never leaves your browser. Its text, your name and your employers are never kept. So jobs stay scored next time, this device keeps only a label such as "PDF resume", your skills, how each one shows on your resume (latest job, older work or listed), its years of use and months since you last used it, and your total years, level, role and degree. Skills come from a fixed list, so a company named like one, such as Stripe, can show up as a skill.</p>
+          <p>Your Saved, Applied and Hidden jobs stay on this device too: the mark, when you made it, and the job's title, company, link and location. A hidden job also keeps the mark it had before, so showing it again brings that back. So do your filter choices.</p>
+          <p>None of this is sent anywhere. Remove your resume any time from My resume. Clearing site data removes everything.</p></section>
         <section class="panel"><h2>Run your own copy</h2>
-          <p>The code is open source. Fork <a href="https://github.com/sudddy/wradar" target="_blank" rel="noopener">sudddy/wradar</a>, edit <code>config.json</code> to change companies, locations and rules, and GitHub Actions keeps your copy fresh.</p></section>
+          <p>The code is on GitHub. Fork <a href="https://github.com/sudddy/wradar" target="_blank" rel="noopener">sudddy/wradar</a>, edit <code>config.json</code> to change companies, locations and rules, and GitHub Actions keeps your copy fresh.</p></section>
       </div>
     </div>
   </section>
 </main>
 
+<div class="toast" id="toast" hidden></div>
+<div class="sr" id="live" aria-live="polite"></div>
 <input type="file" id="file" hidden accept=".pdf,.docx,.txt,.md,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
 <datalist id="techlist"></datalist>
 <script src="jobs.js"></script>
+<script src="match.js"></script>
+<script src="resume.js"></script>
+<script src="board.js"></script>
+<script src="tracker.js"></script>
+<script src="scan.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

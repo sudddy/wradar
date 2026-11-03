@@ -1,0 +1,31 @@
+Priya Raman
+Frontend Developer
+Austin, TX · priya.raman@example.com · priyaraman.example.dev
+
+About Me
+I build fast, accessible interfaces and care about the details people notice.
+
+Technical Skills
+Languages    | JavaScript | TypeScript | HTML | CSS
+Frameworks   | React | Redux | Next.js
+Testing      | Jest | Cypress
+Tools        | Git | GitHub Actions | Jira
+
+Work History
+Frontend Developer, Mosaic Home Goods          07/2025 - Present
+- Build the checkout and account pages in React and TypeScript.
+- Write Jest unit tests and Cypress journeys for every release.
+- Reduced the largest page load by 35% with code splitting.
+
+Web Development Intern, Mosaic Home Goods      05/2024 - 08/2024
+- Converted product pages from jQuery to React components.
+- Fixed accessibility issues in HTML and CSS.
+
+Projects
+Trailhead Planner
+- A hiking trip planner built with Next.js and a REST API, tested with Playwright.
+Pocket Budget
+- A small Vue app I wrote to try another framework.
+
+Education
+B.Sc. Computer Science, Hill Country State University, 2025
