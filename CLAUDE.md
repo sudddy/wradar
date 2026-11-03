@@ -20,18 +20,18 @@ Scan now button ──POST──▶ worker/scan.js (Cloudflare Worker, holds the
 - `fetch_jobs.py`: standard library only. One adapter per source type returns raw jobs; `evaluate()` applies the rules cheapest-first (title → age → location → description) and tags skills, role, level and job type. Adapters may return functions for `location` / `type` / `description` so detail pages are fetched only for jobs that pass the cheap rules (SmartRecruiters, Workday).
 - `extract.py`: standard library only. Reads a posting's structure, once per job. `rich_text()` keeps block tags as line breaks and `split_sections()` finds the required and preferred text; `tier_skills()`, `years_min()`, `salary()`, `work_mode()` and `degree()` fill the row fields from that.
 - `scan_state.py`: what one scan keeps from the last: `first_seen`, Workday dates, and the rows of slow sources between slots. `merge()` keeps one row per company+title.
-- `docs/app.js`: no framework, no build. Compiles `keywords` into regexes the same way Python does, reads uploaded resumes (PDF.js / Mammoth from cdnjs, loaded on demand), wires the page, and renders the hash-routed views: `#jobs`, `#older`, `#mine`, `#resume`, `#insights`, `#sources`. `#jobs/<key>` links one job. The radar is an inline SVG built in `renderScope()`, shown on `#jobs` only.
+- `docs/app.js`: no framework, no build. Compiles `keywords` into regexes the same way Python does, reads uploaded resumes (PDF.js / Mammoth from cdnjs, loaded on demand), wires the page, and renders the hash-routed views: `#jobs`, `#older`, `#mine`, `#resume`, `#insights`, `#sources`. `#jobs/<key>` links one job. The step bar in the top bar is the navigation (`renderSteps()`): 1 Your resume `#resume`, 2 Matching jobs `#jobs` / `#older` (a Last 30 days | Older switch), 3 Applications `#mine`. A bare address with no saved resume opens `#resume`, the welcome. Insights and How it works (`#sources`) are footer links.
 - `docs/match.js`: `window.wmatch`. `score(profile, job, stats)` gives a number out of 100 from Role 20, Seniority 15, Years 15, Top must-haves 36, Everything else 10, Degree 4. Parts a posting doesn't state drop out, and caps keep bad fits low. Hot is 75+, Warm 65-74, Cool under 65. It's a ranking, so the app shows a plain number, never `%`. The fit text never mentions scores, caps or weights, and never says "you lack".
 - `docs/resume.js`: `window.wresume`. `parseResume()` splits the text into sections, reads job dates, counts years from tech jobs only, and builds each skill's evidence. `pdfLines()` rebuilds lines from PDF.js text positions.
-- `docs/board.js`: the list, detail and moving between jobs, shared by Jobs, Older and My jobs. Its first half never touches the page, so `tests/board.test.js` can load it; that file also loads the whole page on a stub DOM.
-- `docs/tracker.js`: Saved, Applied and Hidden, one per job, the My jobs tab and the Undo toast.
+- `docs/board.js`: the list, detail and moving between jobs, shared by Matching jobs (Last 30 days and Older) and Applications. Its first half never touches the page, so `tests/board.test.js` can load it; `tests/page.test.js` loads the whole page on a stub DOM.
+- `docs/tracker.js`: Saved, Applied and Hidden, one per job, the Applications view (`#mine`) and the Undo toast.
 - `docs/scan.js`: the Scan now button. It stays hidden until `rules.scan_url` is set, and polls `scan.json` every 30 s after a click. New data arrives by page reload.
 - `worker/scan.js`: Cloudflare Worker. POST only, from `https://sudddy.github.io` only; `Origin` can be spoofed, so the cooldown is the real limit. It reads the latest workflow run: if running it says so, if started under an hour ago it returns the time left (scheduled runs count), otherwise it dispatches the workflow on `main`. It asks GitHub at most once a minute per isolate, and answers running from memory for a minute after a dispatch.
 - `keywords.json`: shared by Python and JavaScript. `=Alias` is case-sensitive, `re:` is a raw regex and must be valid in both languages. `tests/keywords.test.js` compiles every alias and exported rule in JavaScript.
 
 Scripts are classic and load in order: `jobs.js`, `match.js`, `resume.js`, `board.js`, `tracker.js`, `scan.js`, `app.js`, which calls `init()` last. `match.js` and `resume.js` are IIFEs because their names clash with `app.js`.
 
-`init()` splits the rows: `D.all` is everything, `D.jobs` is up to 30 days old (`FRESH_DAYS`), `D.older` is the rest. Insights, the radar and hot counts read `D.jobs`; scoring and job lookup read `D.all`. Older rows are never dropped in the browser; `max_age_days` (90) in `config.json` sets when they leave the data.
+`init()` splits the rows: `D.all` is everything, `D.jobs` is up to 30 days old (`FRESH_DAYS`), `D.older` is the rest. Insights and the hot counts read `D.jobs`; scoring and job lookup read `D.all`. Older rows are never dropped in the browser; `max_age_days` (90) in `config.json` sets when they leave the data.
 
 ### Data contract
 
@@ -75,7 +75,7 @@ Scripts are classic and load in order: `jobs.js`, `match.js`, `resume.js`, `boar
 - Workday dates are relative to the scan, so `carry()` keeps the oldest `posted` it has seen.
 - Slow-source gate: Remotive, Workable, Workday, SmartRecruiters and Jobicy run at most once per 6-hour UTC slot (`slot_open()` against `slow_fetched_at` in `scan_state.py`). A scan in a slot where they already ran carries over their last rows and source entries (`held_over()`), so those rows can be up to 6 hours old. Remotive asks for at most 4 calls a day, Workable rate-limits hard (429s), and Workday and SmartRecruiters make a detail call per job, so Scan now must not bypass this.
 - GitHub's docs say pushes made with `GITHUB_TOKEN` don't trigger a Pages build, so the workflow's last step requests one. That step fails while Pages is off.
-- Board slugs in `config.json` were verified against each platform's API. To add a company, confirm the slug returns jobs first; the app's Sources page lists anything that failed on the last run.
+- Board slugs in `config.json` were verified against each platform's API. To add a company, confirm the slug returns jobs first; the app's How it works page lists anything that failed on the last run.
 - No public API exposes applicant counts, so `applicants` is null and the app shows "Not available".
 
 ## Ideas not built yet

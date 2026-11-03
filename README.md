@@ -6,16 +6,15 @@ No AI runs here. A Python script (standard library only) polls public job source
 
 ## Using the app
 
-The app is served from **https://sudddy.github.io/wradar/** once GitHub Pages is on (see [Setup](#setup-pages-and-scan-now)). It has six sections:
+The app is served from **https://sudddy.github.io/wradar/** once GitHub Pages is on (see [Setup](#setup-pages-and-scan-now)). The step bar in the top bar is the navigation, and a first visit with no saved resume opens step 1:
 
-- **Jobs:** jobs posted in the last 30 days. A strip at the top shows the counts and a radar you can expand (each blip is a job, each wedge a role, closer to the center means a better match, or newer before you add a resume). Below it are the filters, the job list, and the selected job.
-- **Older:** jobs posted 31 to 90 days ago, kept apart, with a warning above the list. Many are filled or closed, so check a job is still open before you spend time on it.
-- **My jobs:** the jobs you've marked, under All, Saved, Applied and Hidden. A job that leaves the feed stays here, labeled "No longer listed".
-- **My resume:** add your resume, see what was read from it, fix it, and see the skills jobs ask for most that you don't list, plus your best matches.
-- **Insights:** most-requested skills and how the jobs break down by role, seniority, location and type.
-- **Sources:** how jobs are found and which of the 332 sources were read in the 6 hours up to the last scan.
+1. **Your resume:** a welcome with a drop box for a file, or paste the text. Once it's read, it shows what was found, which you can fix, plus your best matches and the skills jobs ask for most that you don't list. **Browse jobs without a resume** skips ahead.
+2. **Matching jobs:** the filters, the job list and the selected job, under **Last 30 days** and **Older**. Older holds jobs posted 31 to 90 days ago, with a warning above the list: many are filled or closed, so check a job is still open before you spend time on it. Without a resume the list asks for one.
+3. **Applications:** the jobs you've marked, under All, Saved, Applied and Hidden. A job that leaves the feed stays here, labeled "No longer listed".
 
-Jobs are kept for 90 days after posting. Past 30 days they move from Jobs to Older, and they stop counting in Insights, the radar and the hot match count.
+The footer links to **Insights** (most-requested skills and how the jobs break down by role, seniority, location and type) and **How it works and privacy** (how jobs are found and which of the 332 sources were read in the 6 hours up to the last scan).
+
+Jobs are kept for 90 days after posting. Past 30 days they move from Last 30 days to Older, and they stop counting in Insights and the hot match count.
 
 Job data refreshes every 6 hours via GitHub Actions. To refresh sooner, use **Scan now** in the top bar, or the Actions tab → **Fetch jobs** → **Run workflow**. Editing `config.json`, `keywords.json`, `fetch_jobs.py`, `extract.py` or `scan_state.py` also triggers a refresh.
 
@@ -31,7 +30,7 @@ Remotive, Workable, Workday, SmartRecruiters and Jobicy are read at most once pe
 
 Click **Choose a file** (PDF, Word .docx or text), drop a file on the panel, or paste the text. The app reads it in the browser, with experience, skills, projects and education read separately. It works out your years from tech jobs, your level, role and degree, and whether each skill shows in your latest job, an older job or project, or is only listed.
 
-My resume shows all of that. Add or remove skills and correct your years, and every score updates at once. **Replace** and **Remove** do what they say. Without a resume every filter except Match at least still works; the match numbers just stay empty. A resume saved by an earlier version keeps working, and the app asks you to add it again for better scores.
+Your resume shows all of that. Add or remove skills and correct your years, and every score updates at once. **Replace** and **Remove** do what they say. Without a resume every filter except Match at least still works; the match numbers just stay empty. A resume saved by an earlier version keeps working, and the app asks you to add it again for better scores.
 
 PDF and Word files are read with PDF.js and Mammoth, loaded from cdnjs the first time they're needed, so that step needs an internet connection. Pasting text works offline.
 
@@ -73,9 +72,9 @@ Only the skills in `keywords.json` are visible to the matcher, so a requirement 
 - Filters: search, location (US, Canada, Remote), role (Backend, Full stack, Frontend, Data, DevOps / SRE…), seniority (Junior, Mid, Senior, Staff+) and work mode, plus **More filters**: minimum pay, job type, source, technologies (pick any or all, e.g. Java, Node.js), minimum match and new in 48 hours. Choices are remembered in the browser; **Clear filters** clears them.
 - Pay and work mode filters leave out jobs that don't state them, and the count says how many. Pay is compared in each job's own currency, top of the range, with hourly pay counted as 2,080 hours a year.
 - Rows: match, title, your mark, company, pay, work mode, place and age. Sort by best match or newest.
-- The selected job: **Open posting**, **Applied**, **Save** and **Hide**, the score and its parts, why you fit, gaps, next steps, and the facts led by pay and work mode. After Open posting it asks "Did you apply?"
-- Your marks: Applied rows show the date and stay in the list until you tick **Hide applied**. Hide removes the row, with an Undo. To bring a job back, select it under My jobs → Hidden and press Hide again.
-- Moving around: arrow keys move through the list. On a phone, Previous and Next step through the jobs and Back closes the detail. `#jobs/<key>` links a job.
+- The selected job: its pay, work mode, place and age, then **Apply on company site**, **Applied**, **Save** and **Hide**, then the score and its parts, why you fit, gaps and next steps, the skills it asks for (must-haves, nice to have, also mentioned) each marked as on or not on your resume, and the rest of its facts. After Apply on company site it asks "Did you apply?"
+- Your marks: Applied rows show the date and stay in the list until you tick **Hide applied**. Hide removes the row, with an Undo. To bring a job back, select it under Applications → Hidden and press Hide again.
+- Moving around: arrow keys move through the list, and Previous and Next above the selected job step through it. On a phone the job opens full screen and Back closes it. `#jobs/<key>` links a job.
 - Applicants: shown when a source provides it, otherwise "Not available" (public job APIs don't expose this)
 - The skills most often asked for and, with a resume, the skills to add across the listed jobs, and which sources were read in the 6 hours up to the last scan
 
@@ -123,7 +122,7 @@ LinkedIn, Indeed and Glassdoor aren't polled: they have no public jobs API and t
 | `config.json` | Allowed locations, max job age (90 days), title include/exclude patterns, boards and feeds, and `scan_url` |
 | `keywords.json` | The skill dictionary used for both job postings and resumes. Add a skill and its aliases; `=Alias` is case-sensitive, `re:` is a raw regex (keep it valid in both Python and JavaScript). |
 
-To add a company, find its careers page and put the slug under the matching platform in `config.json` → `boards` (the help text there shows each URL pattern). The app's Sources page lists any source that couldn't be read on the last run.
+To add a company, find its careers page and put the slug under the matching platform in `config.json` → `boards` (the help text there shows each URL pattern). The app's How it works page lists any source that couldn't be read on the last run.
 
 ## Setup: Pages and Scan now
 

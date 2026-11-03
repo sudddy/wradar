@@ -21,7 +21,7 @@ const state = savedFilters(store.get("wradar-filters"), DEFAULTS);
 const PASTED = "Pasted resume";
 const byKey = new Map();
 let me = null;  // wresume.STORED_KEYS only: derived facts, never the resume text, the person's name or employers
-let stats = null, pasting = false, status = "", reads = 0, booted = false, scopeOpen = false;
+let stats = null, pasting = false, status = "", reads = 0, justRead = false;  // justRead: Your resume then points on to the matches
 
 // ---- Resume reading and matching ----
 const rxEscape = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -67,15 +67,19 @@ function useResume(name, text) {
   const profile = { name, ...wresume.parseResume(text, SKILLS, D.rules) };
   if (!profile.skills.length) { status = "No skills were recognized in that resume. Check it's the right file, or paste the text."; return refresh(); }
   me = Object.fromEntries(wresume.STORED_KEYS.map(k => [k, profile[k]]));
-  status = ""; pasting = false; state.sort = "score";
+  status = ""; pasting = false; justRead = true; state.sort = "score";
+  if (!location.hash.slice(1)) history.replaceState(null, "", "#resume");  // read on the welcome: stay to check it, not jump to the jobs
+  nav.jobs.y = nav.older.y = 0;  // the lists now sort by match, so an old scroll spot would land on other jobs
   store.set("wradar-resume", me);
   refresh();
+  announce(`Your resume is in. ${plural(me.skills.length, "skill")} read.`);
+  if (page === "resume") { window.scrollTo(0, 0); $(".readok .btn")?.focus({ preventScroll: true }); }  // the next step, even after a long scroll to Use this text
 }
 
 async function onFile(file) {
   if (!file) return;
   const read = ++reads;  // if another file is picked meanwhile, only the latest one counts
-  status = "Reading your resume…"; renderMe();
+  status = "Reading your resume…"; renderMe(); announce(status);
   try { const text = await readFile(file); if (read === reads) useResume(wresume.resumeLabel(file.name), text); }
   catch (e) { if (read === reads) { status = e.message || "Couldn't read that file. Try a PDF, .docx or .txt, or paste the text."; renderMe(); } }
 }
@@ -108,76 +112,25 @@ const pool = () => unhidden(page === "older" ? D.older : D.jobs).filter(j => !st
 const newest = (a, b) => age(a) - age(b);
 const byMatch = (a, b) => b.score - a.score || b.fit.tie - a.fit.tie || newest(a, b);
 
-function listed({ tech, role, jobs = pool(), view = page } = {}) {
-  const got = knownOnly(jobs.filter(j => matches(j, state, view, { tech, role })), state.pay, state.work);
+function listed({ tech, jobs = pool(), view = page } = {}) {
+  const got = knownOnly(jobs.filter(j => matches(j, state, view, { tech })), state.pay, state.work);
   got.kept.sort(me && state.sort === "score" ? byMatch : newest);
   return got;
 }
 const filtered = opts => listed(opts).kept;
 
-// ---- Radar scope ----
-const jitter = (i, salt) => (((i + 1) * 2654435761 + salt * 40503) >>> 0) % 1000 / 1000;
-function renderScope(jobs) {
-  const C = 230, R = 172, roles = ROLE_ORDER.filter(r => D.jobs.some(j => j.role === r));
-  const span = 2 * Math.PI / roles.length;
-  const pt = (a, r) => [C + r * Math.sin(a), C - r * Math.cos(a)].map(v => v.toFixed(1));  // 0 rad is straight up, clockwise
-  const frac = j => me ? (100 - j.score) / 100 : Math.min(1, age(j) / FRESH_DAYS);
-  const rings = me ? [[.25, "75"], [.5, "50"], [.75, "25"], [1, "0"]] : [[7 / FRESH_DAYS, "1 wk"], [14 / FRESH_DAYS, "2 wk"], [21 / FRESH_DAYS, "3 wk"], [1, `${FRESH_DAYS} d`]];
-  let svg = `<defs><linearGradient id="swg" gradientUnits="userSpaceOnUse" x1="${C}" y1="${C - R}" x2="${pt(-0.7, R)[0]}" y2="${pt(-0.7, R)[1]}">
-      <stop offset="0" stop-color="var(--signal)" stop-opacity=".45"/><stop offset="1" stop-color="var(--signal)" stop-opacity="0"/></linearGradient></defs>`;
-  if (state.role) {
-    const s = roles.indexOf(state.role), [x1, y1] = pt(s * span, R), [x2, y2] = pt((s + 1) * span, R);
-    svg += `<path class="r-wedge on" d="M${C} ${C}L${x1} ${y1}A${R} ${R} 0 0 1 ${x2} ${y2}Z"/>`;
-  }
-  rings.forEach(([f, label], k) => {
-    svg += `<circle class="r-ring${k === rings.length - 1 ? " edge" : ""}" cx="${C}" cy="${C}" r="${(10 + f * (R - 10)).toFixed(1)}"/>`;
-    svg += `<text class="r-ringlabel" x="${C + 5}" y="${(C - 10 - f * (R - 10) + 13).toFixed(1)}">${label}</text>`;
-  });
-  roles.forEach((role, s) => {
-    const [x, y] = pt(s * span, R);
-    svg += `<line class="r-spoke" x1="${C}" y1="${C}" x2="${x}" y2="${y}"/>`;
-    const mid = (s + 0.5) * span, [lx, ly] = pt(mid, R + 20), sin = Math.sin(mid);
-    const anchor = sin > 0.2 ? "start" : sin < -0.2 ? "end" : "middle";
-    svg += `<text class="r-role${state.role === role ? " on" : ""}" x="${lx}" y="${ly}" text-anchor="${anchor}" dominant-baseline="middle" data-role="${esc(role)}" tabindex="0" role="button" aria-pressed="${state.role === role}">${esc(role)}</text>`;
-  });
-  svg += `<g class="r-sweep"><path d="M${C} ${C}L${C} ${C - R}A${R} ${R} 0 0 0 ${pt(-0.7, R).join(" ")}Z" fill="url(#swg)"/><line x1="${C}" y1="${C}" x2="${C}" y2="${C - R}" stroke="var(--signal)" stroke-width="1.5"/></g>`;
-  const shown = jobs.slice(0, 600);
-  shown.forEach(j => {
-    const s = roles.indexOf(j.role), a = (s + 0.1 + 0.8 * jitter(j.i, 1)) * span;
-    const r = 10 + frac(j) * (R - 10) + (jitter(j.i, 2) - 0.5) * 6;
-    const [x, y] = pt(a, Math.max(4, Math.min(R - 2, r)));
-    const cls = (me ? tier(j.score) : "plain") + (statusOf(j) === "applied" ? " hollow" : ""), sel = j.key === nav.jobs.sel;
-    if (sel) svg += `<circle class="r-selring" cx="${x}" cy="${y}" r="9"/>`;
-    svg += `<circle class="blip ${cls}${sel ? " sel" : ""}" cx="${x}" cy="${y}" r="${sel ? 5 : 3.6}" data-i="${j.i}" style="--d:${(a / (2 * Math.PI) * 2).toFixed(2)}s"><title>${esc(j.title)} at ${esc(j.company)}${me ? `, match ${j.score}` : ""}</title></circle>`;
-  });
-  const el = $("#radar");
-  el.innerHTML = svg;
-  if (!booted) { booted = true; el.classList.add("boot"); setTimeout(() => el.classList.remove("boot"), 3000); }
-  $("#radar-legend").textContent = (me ? "Closer to the center means a better match for your resume." : "Closer to the center means newer.")
-    + " Each wedge is a role." + (jobs.length > shown.length ? ` Showing the first ${shown.length} of ${jobs.length.toLocaleString()} jobs.` : "");
-  el.setAttribute("aria-label", `Radar of ${jobs.length} jobs by role`);
-}
+// ---- Step bar: the main navigation, 1 Your resume, 2 Matching jobs, 3 Applications ----
+const STEP_OF = { resume: 1, jobs: 2, older: 2, mine: 3 };
+const hotCount = () => (me ? unhidden(D.jobs).filter(j => tier(j.score) === "hot").length : 0);
 
-function renderBand(jobs) {
-  const N = D.jobs.length, hot = me ? D.jobs.filter(j => tier(j.score) === "hot").length : 0;
-  $("#headline").textContent = `${plural(N, "software role")} on the scope`;
-  $("#subline").textContent = `${D.jobs.filter(isNew).length.toLocaleString()} new in the last two days, from ${D.sources.filter(s => s.ok).length} career sites and job boards across the US, Canada and remote.`;
-  $("#youline").innerHTML = me
-    ? `<span class="tier hot">${plural(hot, "hot match", "hot matches")}</span><a class="btn onnavy${unread() ? " again" : ""}" href="#resume">${unread() ? "Add your resume again for better scores" : "Change resume"}</a>`
-    : `<span class="youhint">See which of these fit you.</span><a class="btn" href="#resume">Add your resume</a>`;
-  const counts = {};
-  filtered({ role: false }).forEach(j => counts[j.role] = (counts[j.role] || 0) + 1);
-  $("#sectors").innerHTML = ROLE_ORDER.filter(r => D.jobs.some(j => j.role === r))
-    .map(r => `<button type="button" class="sector" data-role="${esc(r)}" aria-pressed="${state.role === r}">${esc(r)}<b>${(counts[r] || 0).toLocaleString()}</b></button>`).join("");
-  renderScope(jobs);
-}
-
-function toggleScope() {
-  scopeOpen = !scopeOpen;
-  $("#scope").classList.toggle("open", scopeOpen);
-  $("#radar").setAttribute("viewBox", scopeOpen ? "-66 0 592 460" : "50 50 360 360");
-  $("#scopebtn").setAttribute("aria-expanded", scopeOpen);
-  $("#scopebtn span").textContent = scopeOpen ? "Collapse radar" : "Expand radar";
+function renderSteps() {
+  $("#s1").textContent = me ? `${plural(me.skills.length, "skill")} read` : "Start here";
+  $("#s2").textContent = me ? plural(hotCount(), "hot match", "hot matches") : plural(D.jobs.length, "job");
+  const done = { 1: !!me, 2: !!me && mineRows(tracker, "all", byKey).length > 0 };  // step 2 is done once a matched job is saved or applied to
+  [1, 2, 3].forEach(n => {
+    $("#step-" + n).classList.toggle("done", !!done[n]);
+    $("#step-" + n).setAttribute("aria-current", STEP_OF[page] === n ? "step" : "false");
+  });
 }
 
 // ---- Filter bar ----
@@ -214,7 +167,7 @@ function showMore(on) {
   $("#filtersbtn").setAttribute("aria-expanded", on);
 }
 
-// ---- My resume ----
+// ---- Your resume ----
 const READ_AS = [[3, "Latest job"], [2, "Older job or project"], [1, "Listed only"]];
 const NOT_FOUND = '<span class="na">Not found</span>';
 const xchip = k => `<span class="xchip">${esc(k)}<button type="button" data-k="${esc(k)}" aria-label="Remove ${esc(k)}">×</button></span>`;
@@ -228,28 +181,49 @@ function renderMe() {
   const err = status && !status.startsWith("Reading");
   const statusLine = status ? `<p class="status${err ? " err" : ""}" role="status">${esc(status)}</p>` : "";
   if (!me) {
-    $("#me").innerHTML = `<div class="drop" id="drop">
+    $("#me").innerHTML = `<div class="welcome">
+      <div class="wcopy">
+        <h1>Find software jobs that fit your resume</h1>
+        <p class="lede">wradar ranks ${plural(D.jobs.length, "engineering job")} from ${D.sources.filter(s => s.ok).length} company career sites and job boards by how well they match you, and says what to do next for each one.</p>
+      </div>
+      <div class="drop" id="drop">
+        <svg class="dropicon" width="44" height="44" viewBox="0 0 44 44" aria-hidden="true"><path d="M12 5h14l8 8v24a2 2 0 0 1-2 2H12a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z M26 5v8h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M22 32V20m-5 5 5-5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <h2>Drop your resume here</h2>
-        <p>PDF, Word (.docx) or plain text. wradar reads your jobs, projects and skills, then scores every job against them.</p>
-        <div class="row"><button class="btn" type="button" id="pick">Choose a file</button>
-          <button class="linkbtn" type="button" id="pastebtn">${pasting ? "Hide the text box" : "Paste the text instead"}</button></div>
+        <p>PDF, Word (.docx) or plain text</p>
+        <div class="row"><button class="btn big" type="button" id="pick">Choose a file</button>
+          <button class="btn line big" type="button" id="pastebtn">${pasting ? "Hide the text box" : "Paste the text"}</button></div>
         ${pasting ? `<textarea id="pastetext" aria-label="Resume text" placeholder="Paste your resume text here"></textarea>
-          <button class="btn quiet" type="button" id="usepaste">Use this text</button>` : ""}
+          <button class="btn" type="button" id="usepaste">Use this text</button>` : ""}
         ${statusLine}
-      </div>`;
+        <p class="privacy">Your resume stays in this browser. Only the skills and facts read from it are kept on this device.</p>
+      </div>
+      <div class="whow">
+        <ol class="how">
+          <li><span><b>Add your resume.</b> It's read here, in your browser, and never uploaded.</span></li>
+          <li><span><b>See your matching jobs.</b> Each one shows why you fit and what's missing from your resume.</span></li>
+          <li><span><b>Apply and track.</b> Mark the jobs you save and apply to, and pick up where you left off.</span></li>
+        </ol>
+        <a class="skip" href="#jobs">Browse jobs without a resume</a>
+      </div>
+    </div>`;
     return;
   }
-  const groups = skillGroups().map(([label, a]) => `<div class="skillgroup"><h4>${label} (${a.length})</h4><div class="chips">${a.map(xchip).join("")}</div></div>`).join("");
-  $("#me").innerHTML = `<div class="mehead">
-      <div><h2>${esc(me.name)}</h2><span class="mestats">${plural(me.skills.length, "skill")} found</span></div>
-      <div class="row"><button class="btn quiet" type="button" id="pick">Replace</button><button class="linkbtn" type="button" id="forget">Remove</button></div>
-    </div>
-    ${statusLine}
-    ${unread() ? '<p class="status">Add your resume again for better scores.</p>' : ""}
-    <dl class="facts">${fact("Years", me.years ?? NOT_FOUND)}${fact("Level", esc(wmatch.levelOf(me)) || NOT_FOUND)}${fact("Role", esc(me.role) || NOT_FOUND)}${fact("Degree", esc(me.degree) || NOT_FOUND)}</dl>
-    <div class="row"><label>Years of experience <input type="number" id="years" min="0" max="50" step="0.5" value="${me.years ?? ""}"></label>
-      <label>Add a skill <input id="addskill" list="techlist" placeholder="For example, Go"></label></div>
-    <div class="dsec"><h3>Skills on your resume</h3><p class="note">Remove any that are wrong, or add ones it missed. Every score updates as you edit.</p>${groups}</div>`;
+  const hot = hotCount();
+  const groups = skillGroups().map(([label, a]) => `<div class="skillgroup"><h3>${label} (${a.length})</h3><div class="chips">${a.map(xchip).join("")}</div></div>`).join("");
+  $("#me").innerHTML = `${justRead ? `<div class="readok"><p><b>Your resume is in.</b> ${plural(me.skills.length, "skill")} read from it. Check them below, then see the jobs that fit.</p>
+      <a class="btn big" href="#jobs">${hot ? `See your ${plural(hot, "hot match", "hot matches")}` : "See your matching jobs"}</a></div>` : ""}
+    <div class="pane mepane">
+      <div class="mehead">
+        <div><h1>Your resume</h1><p class="note">${esc(me.name)}, ${plural(me.skills.length, "skill")} read</p></div>
+        <div class="row"><button class="btn line" type="button" id="pick">Replace</button><button class="linkbtn" type="button" id="forget">Remove</button></div>
+      </div>
+      ${statusLine}
+      ${unread() ? '<p class="status">Add your resume again for better scores.</p>' : ""}
+      <dl class="facts">${fact("Years", me.years ?? NOT_FOUND)}${fact("Level", esc(wmatch.levelOf(me)) || NOT_FOUND)}${fact("Role", esc(me.role) || NOT_FOUND)}${fact("Degree", esc(me.degree) || NOT_FOUND)}</dl>
+      <div class="row edits"><label>Years of experience <input type="number" id="years" min="0" max="50" step="0.5" value="${me.years ?? ""}"></label>
+        <label>Add a skill <input id="addskill" list="techlist" placeholder="For example, Go"></label></div>
+      <div class="dsec"><h2>Skills read from your resume</h2><p class="note">Remove any that are wrong, or add ones it missed. Every score updates as you edit.</p>${groups}</div>
+    </div>`;
 }
 
 function bars(entries, empty = "Nothing to show yet.") {
@@ -265,11 +239,14 @@ const tally = (jobs, pick) => {
 
 function renderResume() {
   renderMe();
-  $("#mygaps").innerHTML = me ? bars(tally(D.jobs, j => j.missing).slice(0, 10)) : '<li class="na">Add your resume to see this.</li>';
-  const best = me ? D.jobs.filter(j => !["applied", "hidden"].includes(statusOf(j))).sort(byMatch).slice(0, 6) : [];
+  $("#meside").hidden = !me;  // with no resume, the page is the welcome
+  $("#view-resume").classList.toggle("has", !!me);
+  if (!me) return;
+  $("#mygaps").innerHTML = bars(tally(D.jobs, j => j.missing).slice(0, 10));
+  const best = D.jobs.filter(j => !["applied", "hidden"].includes(statusOf(j))).sort(byMatch).slice(0, 6);
   $("#mybest").innerHTML = best.map(j => `<li><button type="button" data-i="${j.i}">${matchNum(j)}
       <span class="jtext"><span class="jtitle">${esc(j.title)}</span><span class="jco">${esc(j.company)}, ${esc(j.where.join(" / "))}</span></span></button></li>`).join("")
-    || '<li class="na">Add your resume to see this.</li>';
+    || '<li class="na">No jobs to show yet.</li>';
 }
 
 // ---- Insights ----
@@ -277,10 +254,10 @@ function renderInsights() {
   const N = D.jobs.length, fresh = D.jobs.filter(isNew).length;
   const inTier = t => D.jobs.filter(j => tier(j.score) === t).length.toLocaleString();
   $("#insight-sub").textContent = `From the last scan, ${ago(D.generated_at)}.`;
-  $("#statement").innerHTML = `<b>${plural(N, "role")}</b> on the scope, <b>${fresh.toLocaleString()}</b> of them new in the last two days. `
+  $("#statement").innerHTML = `<b>${plural(N, "role")}</b> posted in the last ${FRESH_DAYS} days, <b>${fresh.toLocaleString()}</b> of them new in the last two days. `
     + (me ? `You're a hot match for <b>${inTier("hot")}</b> and a warm match for <b>${inTier("warm")}</b>.`
           : `Add your resume to see how many fit you.`);
-  const card = (title, note, entries, cls = "") => `<section class="panel"><h2>${title}</h2><p class="note">${note}</p><ol class="bars ${cls}">${bars(entries)}</ol></section>`;
+  const card = (title, note, entries, cls = "") => `<section class="pane"><h2>${title}</h2><p class="note">${note}</p><ol class="bars ${cls}">${bars(entries)}</ol></section>`;
   $("#charts").innerHTML = [
     card("Most-requested skills", "Number of jobs naming each skill.", tally(D.jobs, j => j.skills).slice(0, 12)),
     me ? card("Skills to add", "Jobs that name a skill your resume doesn't list.", tally(D.jobs, j => j.missing).slice(0, 12), "gap")
@@ -296,9 +273,9 @@ function renderInsights() {
 function renderSources() {
   const steps = [
     [`Scan ${D.sources.length} sources`, "Every 6 hours a scheduled job reads company career sites on Greenhouse, Ashby, Lever, Workday, SmartRecruiters and Workable, plus job boards such as The Muse, Himalayas and Hacker News."],
-    ["Keep what fits", `Software engineering roles in the US, Canada or remote, posted in the last ${D.rules.max_age_days} days. Anything past ${FRESH_DAYS} days moves to the Older tab. Each is tagged with its skills, role, seniority and job type, plus pay and work mode when stated.`],
+    ["Keep what fits", `Software engineering roles in the US, Canada or remote, posted in the last ${D.rules.max_age_days} days. Anything past ${FRESH_DAYS} days moves to Older. Each is tagged with its skills, role, seniority and job type, plus pay and work mode when stated.`],
     ["Match your resume", "Add your resume and every job gets a score out of 100 for role, seniority, years, must-have skills, other skills and degree, with skills from your latest job counting most. This happens in your browser."],
-    ["Narrow it down", "Filter by role, seniority, technology, location, pay, work mode or job type, then open the posting on the company's own site. My jobs keeps what you save or apply to."],
+    ["Narrow it down", "Filter by role, seniority, technology, location, pay, work mode or job type, then open the posting on the company's own site. Applications keeps what you save or apply to."],
   ];
   $("#steps").innerHTML = steps.map(([t, d]) => `<li><b>${esc(t)}</b>${esc(d)}</li>`).join("");
   const ok = D.sources.filter(s => s.ok), bad = D.sources.filter(s => !s.ok), kinds = {};
@@ -315,17 +292,20 @@ function renderSources() {
 // ---- Routing ----
 const VIEWS = { resume: renderResume, insights: renderInsights, sources: renderSources };
 function route() {
-  const { view, key } = parseHash(location.hash), moved = view !== page;
+  const { view: named, key } = parseHash(location.hash);
+  const view = !location.hash.slice(1) && !me ? "resume" : named, moved = view !== page;  // a first visit starts at step 1
   const closing = !key && $("#board").classList.contains("showing");
   if (moved && nav[page]) nav[page].y = scrollY;
+  if (moved && page === "resume") justRead = false;
   page = view;
   if (key) tab().sel = key;
   else pushed = false;
   $("#view-jobs").hidden = !BOARDS.includes(view);
   Object.keys(VIEWS).forEach(x => { $("#view-" + x).hidden = x !== view; });
-  $("#scope").hidden = view !== "jobs";
   $("#board").classList.toggle("showing", !!key);  // on a phone the hash owns the detail, so system Back closes it
-  document.querySelectorAll(".tabs a").forEach(a => a.setAttribute("aria-current", a.getAttribute("href") === "#" + view ? "page" : "false"));
+  const covered = !!key && !wide();  // the phone detail covers the page, so what's behind it leaves the tab order
+  document.querySelectorAll(".top, .foot, .boardhead, #nores, #filters, #olderwarn, .results").forEach(el => { el.inert = covered; });
+  document.querySelectorAll(".ages a").forEach(a => a.setAttribute("aria-current", a.getAttribute("href") === "#" + view ? "page" : "false"));
   if (VIEWS[view]) { renderCounts(); VIEWS[view](); } else renderBoard();  // the board renders its own counts
   if (moved) window.scrollTo(0, nav[view]?.y || 0);
   if (key) $("#list .jitem[aria-current=true]")?.scrollIntoView({ block: "nearest" });
@@ -337,6 +317,7 @@ function refresh() { scoreJobs(); route(); }
 // ---- Wiring ----
 function init() {
   if (!D) {
+    $("#view-jobs").hidden = false;
     $("#list").innerHTML = '<li class="empty">No job data yet. Run <code>python3 fetch_jobs.py</code>, then reload.</li>';
     return;
   }
@@ -369,7 +350,6 @@ function init() {
     renderBoard();
   };
   const set = (k, v) => { state[k] = v; changed(); };
-  const toggleRole = r => { state.role = state.role === r ? "" : r; $("#role").value = state.role; changed(); };
   $("#q").addEventListener("input", e => set("q", e.target.value));
   ["role", "level", "type", "src", "sort", "work"].forEach(k => $("#" + k).addEventListener("change", e => set(k, e.target.value)));
   $("#pay").addEventListener("change", e => set("pay", +e.target.value));
@@ -401,26 +381,20 @@ function init() {
     if (!$("#fmore").hidden) { showMore(false); $("#filtersbtn").focus(); }
     else if (!closeToast() && parseHash(location.hash).key && !wide()) closeDetail();
   });
-  $("#scopebtn").addEventListener("click", toggleScope);
-  $("#sectors").addEventListener("click", e => { const b = e.target.closest(".sector"); if (b) toggleRole(b.dataset.role); });
-  $("#radar").addEventListener("click", e => {
-    if (e.target.dataset.role) return toggleRole(e.target.dataset.role);
-    if (e.target.classList.contains("blip")) openRow(D.all[+e.target.dataset.i]);
-  });
-  $("#radar").addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.dataset.role) { e.preventDefault(); toggleRole(e.target.dataset.role); } });
 
   $("#file").addEventListener("change", e => { onFile(e.target.files[0]); e.target.value = ""; });
   $("#me").addEventListener("click", e => {
     const id = e.target.id;
     if (id === "pick") $("#file").click();
-    if (id === "pastebtn") { pasting = !pasting; renderMe(); }
-    if (id === "usepaste") { const t = $("#pastetext").value; reads++; t.trim() ? useResume(PASTED, t) : (status = "Paste your resume text first.", renderMe()); }  // reads++: a file still loading no longer counts
-    if (id === "forget") { reads++; me = null; status = ""; store.set("wradar-resume", null); refresh(); }  // reads++ drops a read still going
+    // Each redraw replaces the pane, so focus goes back where the person was working.
+    if (id === "pastebtn") { pasting = !pasting; renderMe(); $(pasting ? "#pastetext" : "#pastebtn")?.focus(); }
+    if (id === "usepaste") { const t = $("#pastetext").value; reads++; t.trim() ? useResume(PASTED, t) : (status = "Paste your resume text first.", renderMe(), $("#pastetext")?.focus()); }  // reads++: a file still loading no longer counts
+    if (id === "forget") { reads++; me = null; status = ""; nav.jobs.y = nav.older.y = 0; store.set("wradar-resume", null); refresh(); $("#pick")?.focus(); }  // reads++ drops a read still going
     const k = e.target.closest(".xchip button")?.dataset.k;
-    if (k) { me.skills = me.skills.filter(s => s !== k); delete me.evidence[k]; saveMe(); }
+    if (k) { me.skills = me.skills.filter(s => s !== k); delete me.evidence[k]; saveMe(); $("#addskill")?.focus(); }
   });
   $("#me").addEventListener("change", e => {
-    if (e.target.id === "years") { me.years = e.target.value === "" ? null : +e.target.value; saveMe(); }  // 0 is a real answer
+    if (e.target.id === "years") { me.years = e.target.value === "" ? null : +e.target.value; saveMe(); $("#years")?.focus(); }  // 0 is a real answer
     if (e.target.id === "addskill") {
       const k = findSkill(e.target.value);
       if (k && !me.skills.includes(k)) { me.skills = ALL_SKILLS.filter(s => s === k || me.skills.includes(s)); saveMe(); $("#addskill")?.focus(); }
@@ -432,7 +406,8 @@ function init() {
   $("#mybest").addEventListener("click", e => { const b = e.target.closest("button[data-i]"); if (b) location.hash = hashFor("jobs", D.all[+b.dataset.i].key); });
 
   window.addEventListener("hashchange", route);
-  window.addEventListener("storage", e => {  // a mark made in another tab; My resume isn't redrawn, so text being typed there stays
+  matchMedia("(min-width: 821px)").addEventListener?.("change", route);  // a phone turned sideways may stop covering the list with the detail
+  window.addEventListener("storage", e => {  // a mark made in another tab; Your resume isn't redrawn, so text being typed there stays
     if (e.key === "wradar-tracker") { loadTracker(); BOARDS.includes(page) ? route() : renderCounts(); }
   });
   sync();

@@ -41,6 +41,7 @@ function renderCounts() {
   $("#n-saved").textContent = count("saved");
   $("#n-applied").textContent = count("applied");
   press("#mineseg", mineSeg);
+  renderSteps();
 }
 
 function setMark(j, s) {
