@@ -9,6 +9,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 from extract import degree, rich_text, salary, split_sections, tier_skills, work_mode, years_min
+from scan_state import LEGAL
 
 try:  # Python's own regex parser, to read the words a re: alias can't match without
     from re import _constants as sre, _parser as sre_parse  # Python 3.11+
@@ -195,6 +196,7 @@ FRONTEND = {"React", "Angular", "Vue.js", "Next.js", "Redux", "HTML/CSS"}
 # regex matches is always in the lowered text, at the same place: every character lowers to exactly one.
 FOLD = str.maketrans({"İ": "i", "ı": "i", "ſ": "s"})
 WORD, CASED_WORD = re.compile(r"[a-z0-9]+"), re.compile(r"[A-Za-z0-9]+")  # as the aliases' lookarounds split words
+BRAND_END = re.compile(rf"(?:[\s,]+(?:{'|'.join(sorted(LEGAL | {'labs', 'technologies', 'computing'}))})\.?)+$", re.I)
 
 
 def pattern(alias):
@@ -268,6 +270,15 @@ def skills(kw, s, needles=None):
                 not keys.isdisjoint(words) and matches_at(rx, s, low, [a for k, a in pairs if k in words])):
             found.add(name)
     return found
+
+
+def unnamed(company, text):
+    """text with the employer's own name blanked out, whole words in any case: Datadog's postings name Datadog, and that
+    isn't a skill asked for. A skill other words name still counts (HRIS at Rippling). "Grafana Labs" also blanks Grafana."""
+    for name in (company, BRAND_END.sub("", company)):
+        if CASED_WORD.search(name):
+            text = re.sub(r"(?<![A-Za-z0-9])" + re.escape(name) + r"(?![A-Za-z0-9])", " ", text, flags=re.I)
+    return text
 
 
 def when(v):
@@ -359,8 +370,7 @@ def evaluate(job, r, cutoff):
     if not tags:
         return None
     body, company = rich_text(val("description")), job["company"].strip()
-    sec, found = split_sections(body), skills(r["kw"], f"{title}\n{body}", r["needles"])
-    found = {k for k in found if not r["kw"][k].search(company)}  # Datadog's postings name Datadog; it isn't a skill asked for
+    sec, found = split_sections(body), skills(r["kw"], unnamed(company, f"{title}\n{body}"), r["needles"])
     names = [k for k in r["kw"] if k in found]
     must, nice = tier_skills(names, title, sec, r["kw"])
     return dict(title=title, company=company, where=tags, location=location[:120],

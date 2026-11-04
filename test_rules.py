@@ -186,6 +186,16 @@ class Evaluate(unittest.TestCase):
         row = rules.evaluate(job(company="Datadog", description="<p>We use Redis.</p><p>Requirements</p><ul><li>Java and "
                                                                 "Datadog</li></ul>"), R, CUTOFF)
         self.assertEqual((row["skills"], row["must"]), (["Java", "Redis"], ["Java"]))
+        kw = {"Datadog": ["datadog"], "HRIS": ["hris", "=Rippling", "bamboohr"], "Work Management Tools": ["=Notion", "asana"],
+              "Grafana": ["grafana"], "Java": ["java"]}  # vendors folded into a skill as aliases
+        r = dict(R, kw=rules.compile_keywords(kw), needles=rules.needles(kw))
+        for company, body, want in (("Datadog", "Java and DATADOG. Datadog's agent.", ["Java"]),
+                                    ("Notion", "Plan in Notion.", []), ("Notion", "Asana or Notion.", ["Work Management Tools"]),
+                                    ("Rippling", "Rippling runs payroll.", []), ("Rippling", "An HRIS such as BambooHR.", ["HRIS"]),
+                                    ("Grafana Labs", "Grafana Labs builds Grafana in Java.", ["Java"]),
+                                    ("", "Java and Datadog.", ["Datadog", "Java"])):
+            row = rules.evaluate(job(title="Analyst", company=company, description=body), r, CUTOFF)
+            self.assertEqual(row["skills"], want, (company, body))
 
     def test_lazy_fields_only_fetched_when_needed(self):
         calls = []
