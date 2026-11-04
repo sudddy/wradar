@@ -440,7 +440,7 @@ function score(p, job, stats) {
   if (cov.missed.length) {
     gaps.push(missedLine);
     const m = cov.missed[0], share = pct(m.req.names[0]);
-    next.push(m.near ? `Name ${m.near} as your closest match to ${reqLabel(m.req)}.`
+    next.push(m.near ? `Name ${m.near} as your closest match to ${reqLabel(m.req)}.` : CREDENTIALS.has(m.req.names[0]) ? `If you hold ${reqLabel(m.req)}, add it to your resume.`
       : `If you have used ${reqLabel(m.req)}, add it to your resume.${share >= 5 ? ` If not, ${share}% of ${among} ask for it, so it's worth learning.` : ""}`);
   }
   const lost = plan.top.find(r => r.titled && r.stack && meet(r, c).credit < .5), lostWhy = lost && `The title names ${reqLabel(lost)}, which is not on your resume.`;

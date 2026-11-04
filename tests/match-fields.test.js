@@ -90,6 +90,7 @@ test("a licence the posting requires is the screen: held, it carries a posting t
   const md = onAll(rn, clinic("Primary Care Physician", ["Medical License"]));
   assert.deepEqual(md.held, { at: 54, why: "Most of its top must-haves are not on your resume." });
   assert.ok(!lines(md).some(l => l.includes("closest match")), JSON.stringify(lines(md)));
+  assert.ok(md.next.includes("If you hold Medical License, add it to your resume."), JSON.stringify(md.next));  // held, not used or learnt
   const ward = onAll(np, clinic("Registered Nurse, Telehealth", ["RN License", "EHR Systems"]));  // an NP holds an RN licence
   assert.equal(part(ward, "Top must-haves").note, "2 of 2: RN License, EHR Systems");
   assert.ok(!ward.gaps.some(g => g.includes("RN License")), JSON.stringify(ward.gaps));
