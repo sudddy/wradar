@@ -264,8 +264,13 @@ function renderResume() {
   renderMe();
   $("#meside").hidden = !me;  // with no resume, the page is the welcome
   $("#view-resume").classList.toggle("has", !!me);
+  renderSide();
+}
+
+// Skills to add reads one field, so a marketer isn't told to learn what engineering jobs ask for.
+function renderSide() {
   if (!me) return;
-  const f = shownField();  // Skills to add reads one field, so a marketer isn't told to learn what engineering jobs ask for
+  const f = shownField();
   $("#mygapsnote").textContent = `What jobs${f ? ` in ${f}` : ""} ask for most that your resume doesn't list.`;
   $("#mygaps").innerHTML = bars(gaps(inField(D.jobs, f)).slice(0, 10));
   const best = topN(D.jobs.filter(j => !["applied", "hidden"].includes(statusOf(j))), 6, byMatch);
@@ -347,11 +352,9 @@ function init() {
     $("#list").innerHTML = '<li class="empty">No job data yet. Run <code>python3 fetch_jobs.py</code>, then reload.</li>';
     return;
   }
-  D.all = D.jobs;
-  D.all.forEach((j, i) => { j.i = i; j.key = jobKey(j); j.must ||= []; j.nice ||= []; j.field = fieldOf(j.role); byKey.set(j.key, j); });
-  const { fresh, older } = splitAge(D.all);
-  D.jobs = fresh;
-  D.older = older;
+  const rows = D.jobs;
+  Object.assign(D, { all: [], jobs: [], older: [] });
+  addRows(rows);
   loadResume();
   loadTracker();
   $("#updated").textContent = `Scanned ${agoShort(D.generated_at)}`;
@@ -445,5 +448,6 @@ function init() {
   });
   sync();
   refresh();
+  requestAnimationFrame(() => requestAnimationFrame(loadOlder));  // the second frame comes after the first paint
 }
 init();

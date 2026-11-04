@@ -3,7 +3,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const board = require("../docs/board.js");
-const { DAY, read, pageData, openPage, withResume } = require("./page-stub.js");
+const { DAY, daysAgo, read, row, pageData, openPage, withResume } = require("./page-stub.js");
 const RESUME = read("tests/fixtures/priya-raman.txt");
 
 const undoButton = page => page.$("#toast").querySelector("button");
@@ -307,13 +307,13 @@ test("search and the years box wait for a pause in typing, and the last value co
 });
 
 test("PDF and Word readers load from cdnjs only with an integrity hash", async () => {
-  const page = openPage();
+  const page = openPage(), readers = () => page.scripts.filter(s => !s.src.startsWith("older.js"));
   page.run(`readFile({ name: "cv.pdf", arrayBuffer: async () => new ArrayBuffer(0) }).catch(() => {})`);
-  page.scripts[0].onload();
+  readers()[0].onload();
   await new Promise(setImmediate);
   page.run(`readFile({ name: "cv.docx", arrayBuffer: async () => new ArrayBuffer(0) }).catch(() => {})`);
-  assert.deepEqual(page.scripts.map(s => s.src.split("/").pop()), ["pdf.min.js", "pdf.worker.min.js", "mammoth.browser.min.js"]);
-  for (const s of page.scripts) {
+  assert.deepEqual(readers().map(s => s.src.split("/").pop()), ["pdf.min.js", "pdf.worker.min.js", "mammoth.browser.min.js"]);
+  for (const s of readers()) {
     assert.match(s.src, /^https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\//);
     assert.match(s.integrity, /^sha512-[A-Za-z0-9+/]{86}==$/, s.src);
     assert.equal(s.crossOrigin, "anonymous");
@@ -339,4 +339,52 @@ test("Sources doesn't claim every source was read on the last scan", () => {
   const page = openPage();
   page.go("#sources");
   assert.equal(page.$("#srcsum").textContent, "1 of 1 read in the 6 hours up to the last scan (Greenhouse 1). Jobs kept out of jobs seen:");
+});
+
+// ---- older.js ----
+const older = (...jobs) => ({ generated_at: "x", jobs });
+
+test("older.js loads after the first paint as a script tag for this scan, and its rows join Older once each", () => {
+  const page = withResume(openPage({ older: "wait" }));
+  const tag = page.scripts.find(s => s.src.startsWith("older.js"));
+  assert.equal(tag.src, "older.js?v=" + encodeURIComponent(page.run("D.generated_at")));
+  assert.equal(page.$("#n-older").textContent, "1");
+  page.older(older(row(40, { title: "Backend Engineer 40" }), row(50), row(51)));  // row 40 is in jobs.js already
+  assert.equal(page.$("#n-older").textContent, "3");
+  assert.equal(page.run("D.all.length"), 7);
+  assert.equal(page.run("D.all.every(j => j.fit && j.field === 'Engineering')"), true);  // scored against stats that know the new rows
+  page.go("#older");
+  assert.equal(page.$("#count").textContent, "3 jobs");
+});
+
+test("a link to a job not in jobs.js waits for older.js before it says the job is gone", () => {
+  const key = "co50|backend engineer 50";
+  const found = openPage({ at: board.hashFor("jobs", key), older: "wait" });
+  assert.match(found.$("#detail").innerHTML, /Loading this job…/);
+  found.older(older(row(50)));
+  assert.match(found.$("#detail").innerHTML, /<h2 id="dtitle" tabindex="-1">Backend Engineer 50<\/h2>/);
+  const gone = openPage({ at: board.hashFor("jobs", "nobody|nothing"), older: "wait" });
+  gone.older(null);  // no older.js at all, as with data from before it
+  assert.match(gone.$("#detail").innerHTML, /This job is no longer listed\./);
+});
+
+test("an Applications row waits for older.js before it says No longer listed", () => {
+  const mark = { s: "saved", at: daysAgo(0), title: "Backend Engineer 50", company: "Co50", url: "https://co.test/50", where: ["US"] };
+  const storage = () => new Map([["wradar-tracker", JSON.stringify({ "co50|backend engineer 50": mark })]]);
+  const page = openPage({ storage: storage(), at: "#mine", older: "wait" });
+  assert.match(page.$("#list").innerHTML, /Backend Engineer 50/);
+  assert.doesNotMatch(page.$("#list").innerHTML + page.$("#detail").innerHTML, /No longer listed|may be closed/);
+  page.older(older(row(50)));
+  assert.match(page.$("#list").innerHTML, /51 days ago/);
+  const gone = openPage({ storage: storage(), at: "#mine", older: "wait" });
+  gone.older(older());
+  assert.match(gone.$("#list").innerHTML, /No longer listed/);
+});
+
+test("older rows that arrive on Your resume leave the text being pasted alone", () => {
+  const page = openPage({ at: "#resume", older: "wait" });
+  page.$("#me").innerHTML = "text being pasted";
+  page.older(older(row(50)));
+  assert.equal(page.$("#me").innerHTML, "text being pasted");
+  assert.equal(page.$("#n-older").textContent, "2");
 });

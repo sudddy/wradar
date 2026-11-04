@@ -82,6 +82,46 @@ const hashFor = (view, key) => `#${view}/${encodeURIComponent(key)}`;
 
 if (typeof module !== "undefined") module.exports = { jobKey, age, within, isNew, splitAge, annualPay, payLabel, knownOnly, matches, topN, savedFilters, parseHash, hashFor };
 
+// ---- Loading: jobs.js at init, then older.js, the rows past 30 days, after the first paint ----
+let olderIn = false;  // until older.js has loaded or failed, a job not found may be in it
+
+// One row per key: an older.js from another scan may repeat a row of jobs.js.
+function addRows(rows) {
+  const added = rows.filter(j => !byKey.has(jobKey(j)));
+  added.forEach(j => {
+    Object.assign(j, { i: D.all.length, key: jobKey(j), field: fieldOf(j.role) });
+    j.must ||= []; j.nice ||= [];
+    byKey.set(j.key, j);
+    D.all.push(j);
+  });
+  const { fresh, older } = splitAge(added);
+  D.jobs = D.jobs.concat(fresh);
+  D.older = D.older.concat(older);
+  return added.length;
+}
+
+// A script tag, unlike fetch, also works from a file:// copy. ?v= asks for the older.js of this scan, not a cached one.
+// Data from before older.js has none, so a failed load just means no older rows.
+function loadOlder() {
+  document.head.append(Object.assign(document.createElement("script"), { src: "older.js?v=" + encodeURIComponent(D.generated_at),
+    onload: () => joinOlder(window.JOB_OLDER?.jobs || []), onerror: () => joinOlder([]) }));
+}
+
+// The match stats count every row, so they are built again and every job scored again.
+// Your resume keeps its own pane, which may hold text being pasted.
+function joinOlder(rows) {
+  olderIn = true;
+  if (addRows(rows)) { stats = null; scoreJobs(); }
+  if (BOARDS.includes(page)) {
+    const held = $("#list").contains(document.activeElement);
+    renderBoard();
+    if (held) focusBoard();
+  } else {
+    renderCounts();
+    page === "resume" ? renderSide() : VIEWS[page]();
+  }
+}
+
 // ---- Rows ----
 const nav = Object.fromEntries(BOARDS.map(v => [v, { sel: null, limit: 40, y: 0 }]));  // each tab keeps its own place
 let page = "jobs", rows = [], pushed = false;
@@ -92,7 +132,7 @@ const rowOf = key => byKey.get(key) || (Object.hasOwn(tracker, key) ? { ...track
 const matchNum = j => (j.score == null ? "" : `<span class="match ${tier(j.score)}">${j.score}</span>`);
 
 const rowPlace = j => j.where.filter(w => w !== j.mode).join(" / ");
-const rowWhen = j => (j.delisted ? "No longer listed" : isNew(j) ? "New" : postedText(j));
+const rowWhen = j => (j.delisted ? (olderIn ? "No longer listed" : "") : isNew(j) ? "New" : postedText(j));  // it may still be in older.js
 const rowLabel = j => [`${j.title} at ${j.company}`, j.score != null && `match ${j.score}, ${tier(j.score)}`, payLabel(j.salary), j.mode, rowPlace(j), rowWhen(j), statusText(j)].filter(Boolean).join(", ");
 
 function item(j, n, stop) {
@@ -227,8 +267,10 @@ function dnav(j) {
   return `<div class="dnav"><button type="button" class="btn line back" data-do="back">Back</button>${moves}</div>`;
 }
 
+const LOOKING = "Loading this job…";  // until older.js is in, a job not found may be in it
+
 function detail(j) {
-  if (!j) return `${dnav()}<div class="card empty">${tab().sel ? "This job is no longer listed." : "Pick a job from the list to see the details."}</div>`;
+  if (!j) return `${dnav()}<div class="card empty">${!tab().sel ? "Pick a job from the list to see the details." : olderIn ? "This job is no longer listed." : LOOKING}</div>`;
   const note = text => `<p class="dnote">${text}</p>`;
   // One card per question: what and where, how well you fit, what to say, what it asks for, the rest.
   return `${dnav(j)}
@@ -236,7 +278,7 @@ function detail(j) {
       <header class="dhead"><p class="dco">${esc(j.company)}</p><h2 id="dtitle" tabindex="-1">${esc(j.title)}</h2>${j.delisted ? "" : pills(j)}</header>
       ${actions(j)}
       ${rows.some(r => r.key === j.key) ? "" : note("This job isn't in the current list.")}
-      ${j.delisted ? note("This job wasn't in the last scan, so it may be closed.") : isOlder(j) ? note(`Posted ${postedText(j)}. Check the job is still open before you spend time on it.`) : ""}
+      ${j.delisted ? note(olderIn ? "This job wasn't in the last scan, so it may be closed." : LOOKING) : isOlder(j) ? note(`Posted ${postedText(j)}. Check the job is still open before you spend time on it.`) : ""}
     </section>
     ${j.delisted ? `<section class="card"><dl class="facts">${fact("Where", esc(j.where.join(" / ")))}</dl></section>` : `${reading(j)}${requirements(j)}${about(j)}`}`;
 }
