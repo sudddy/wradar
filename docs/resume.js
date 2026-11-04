@@ -346,10 +346,11 @@ function parseResume(text, skills, rules, now = new Date()) {
   const ev = evidence([...jobs, ...projects], listed, today);
   const names = skills.map(([n]) => n).filter(k => ev[k]);
 
-  // Years are years in the field of the latest job, so a teacher turned engineer counts the engineering years. A latest job
-  // with no known field takes the field with the most months; with no field known at all, every job counts. A job whose
-  // title names no field joins the counted one when a skill it names, other than a soft one, is in that field's jobs too:
-  // a "Web Development Intern" who wrote React before a Frontend job. A "Laboratory Assistant" shares none.
+  // Years are years in the field of the latest job, so a teacher turned engineer counts the engineering years. Of jobs held
+  // until the same month, the field with the most months counts: an engineer who also teaches or consults stays an engineer.
+  // A latest job with no known field takes the field with the most months; with no field known at all, every job counts. A
+  // job whose title names no field joins the counted one when a skill it names, other than a soft one, is in that field's
+  // jobs too: a "Web Development Intern" who wrote React before a Frontend job. A "Laboratory Assistant" shares none.
   const span = list => merged(list.map(b => [b.start, b.end]));
   const worked = jobs.filter(b => b.work && b.end != null), byField = {};
   for (const b of worked) {
@@ -357,8 +358,10 @@ function parseResume(text, skills, rules, now = new Date()) {
     b.field = f && f !== "Other" ? YEARS_FIELD[f] || f : null;
     if (b.field) (byField[b.field] ||= []).push(b);
   }
-  const cur = [...worked].sort((a, b) => b.end - a.end || b.start - a.start)[0];
-  const field = cur?.field || Object.keys(byField).sort((a, b) => span(byField[b]) - span(byField[a]))[0];
+  const fields = Object.keys(byField).sort((a, b) => span(byField[b]) - span(byField[a])), last = Math.max(...worked.map(b => b.end));
+  const field = fields.find(f => byField[f].some(b => b.end === last)) || fields[0];
+  // The latest job in that field names the title, so a club officer or a side business ("Co-Founder") doesn't.
+  const cur = [...field ? byField[field] : worked].sort((a, b) => b.end - a.end || b.start - a.start)[0];
   const ownSkills = new Set(field ? byField[field].flatMap(b => b.found) : []);
   const joins = b => !b.field && b.found.some(k => !SOFT.has(k) && ownSkills.has(k));
   const counted = field ? [...byField[field], ...worked.filter(joins)] : worked, months = span(counted);

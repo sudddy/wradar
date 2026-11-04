@@ -164,6 +164,14 @@ test("years come from the latest job's field, else the field with the most month
   assert.equal(resume(unknown, job("Laboratory Assistant", "Jan 2020 - Dec 2023", "Kept inventory.")).years, 6.5, "no field known: every job");
 });
 
+test("a side job held alongside the main one doesn't move the career", () => {
+  const swe = job("Senior Software Engineer", "Jun 2019 - Present", "Built Java services on AWS with Kafka.");
+  for (const side of ["Co-Founder, Weekend Apps", "Adjunct Instructor", "Independent Consultant"])
+    assert.deepEqual(["years", "role", "level"].map(k => resume(job(side, "Jan 2024 - Present", "Built an app in React Native."), swe)[k]), [7.5, "Backend", "Senior"], side);
+  const club = resume(job("Officer, Robotics Club", "Sep 2024 - Present", "Ran the budget."), job("Software Engineering Intern", "Jun 2026 - Aug 2026", "Built Java services with Kafka."));
+  assert.deepEqual([club.role, club.level], ["Backend", "Junior"]);
+});
+
 test("data and research years count with engineering years", () => {
   const p = resume(job("Machine Learning Engineer", "Jan 2022 - Present", "Built Python services."), job("Data Scientist", "Jan 2018 - Dec 2021", "Trained models in Python."));
   assert.equal(p.years, 8.5);
