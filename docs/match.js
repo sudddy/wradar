@@ -11,6 +11,7 @@ const MAX = { Role: 20, Seniority: 15, Years: 15, "Top must-haves": 36, "Everyth
 const TIERS = [["Hot", 75], ["Warm", 65], ["Cool", 0]];
 const TOP_N = 5, TOP_WEIGHT = [3, 2.5, 2, 1.5, 1], TITLE_WEIGHT = 4;
 const UNSTATED = { name: "Mid", soft: true, unstated: true };
+const SOLO = { name: "Senior", soft: false, solo: true };  // from a manager's level, a title with no level word is an individual job
 const INTERN = /\bintern(?:ship)?s?\b/i;
 const GRAD = /\b(?:new grad|university grad|graduate|early career|emerging talent|apprentice)\b/i;
 const NO_STACK = "It names none of the skills wradar knows, so check the posting yourself.";
@@ -52,6 +53,7 @@ const KINDS = {
   "device management tool": ["Jamf", "Microsoft Intune", "MDM"],
   "automation tool": ["Workato", "Zapier", "Workflow Automation"],
   "advisory background": ["Investment Banking", "Management Consulting", "Private Equity / VC"],
+  "clinical licence": ["RN License", "Nurse Practitioner License", "Physician Assistant License", "Medical License", "Pharmacist License", "Social Work License"],
 };
 const KIND_OF = Object.fromEntries(Object.entries(KINDS).flatMap(([kind, names]) => names.map(n => [n, kind])));
 // Practices and office tools say little in any posting. Industry and domain words are background in an engineering posting,
@@ -62,10 +64,12 @@ const PRACTICE = new Set(["Agile", "Mentoring", "Cross-functional", "Technical L
 const DOMAIN = new Set(["SaaS", "B2B", "Payments", "Fintech", "Banking", "Billing", "Fraud / Risk", "Ledgers", "KYC / AML", "Go-to-Market", "E-commerce",
   "Healthcare", "Telehealth", "Insurance", "Public Sector", "Restaurant & Hospitality", "Retail Operations", "Point of Sale", "Fleet & Telematics", "Payroll",
   "DEI Programs", "Troubleshooting", "Data Analysis", "Project Management", "Program Management", "Recruiting", "Customer Success", "Business Operations",
-  "Strategic Planning"]);
+  "Strategic Planning", "Account Reconciliation", "Demand & Supply Planning"]);
 const isSoft = (k, eng) => PRACTICE.has(k) || eng && DOMAIN.has(k);
-// A licence or certificate is held or not: listed under Certifications, it proves as much as a job bullet does.
-const CREDENTIALS = new Set(["CPA", "CFA", "PMP", "HR Certification", "FINRA Licenses", "Law Degree & Bar", "Clinical Licensure", "Insurance License"]);
+// A licence or certificate is held or not: listed, it proves as much as a job bullet does, and none stands in for another (an RN is no
+// near match for a physician job). A field screens on one it asks for a quarter as often as the field asking most; CPA elsewhere is cost per acquisition.
+const CREDENTIALS = new Set(["CPA", "CFA", "PMP", "HR Certification", "FINRA Licenses", "Law Degree & Bar", "Insurance License", "RN License",
+  "Nurse Practitioner License", "Physician Assistant License", "Medical License", "Pharmacist License", "Social Work License", "Case Manager Certification"]);
 
 // Having the first skill shows the second, even if the resume never names it.
 const IMPLIES = {
@@ -87,7 +91,7 @@ const IMPLIES = {
   "Zuora / Chargebee": ["Billing"], Coupa: ["Procurement"], "SAP Ariba": ["Procurement"], Zip: ["Procurement"],
   "Customer Success Platforms": ["Customer Success"], PMP: ["Project Management"], "Lean Six Sigma": ["Process Improvement"], CPA: ["GAAP"],
   "Revenue Recognition": ["GAAP"], "FINRA Licenses": ["Financial Services Regulation"], Okta: ["SAML / SSO"], Shopify: ["E-commerce"],
-  MEDDICC: ["Sales Methodology"],
+  MEDDICC: ["Sales Methodology"], "Nurse Practitioner License": ["RN License"],
 };
 
 const pair = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -157,16 +161,20 @@ function readLevel(job) {
   return y == null ? null : { name: y < 2 ? "Junior" : y < 5 ? "Mid" : "Senior", soft: true };
 }
 
-// A title with no family word says nothing about the family, so the skills cast the vote among the families of its field.
-// Too few or too even a vote stays unknown, or keeps the family fetch_jobs.py guessed from skills, as read from skills.
-function readRole(job, pool, ctx, sw) {
+// The family a title names, or undefined when the title names none and the skills have to vote.
+function titleRole(job, sw) {
   if (job.role === "Other") return null;
   if (sw && OFF_TRACK.test(job.title)) return { name: "Specialist", read: false };
   if (sw && /\bsecurity\b/i.test(job.title)) return { name: "Security", read: false };  // FAMILIES tries backend and frontend words first
   if (sw && SYSTEMS_TITLE.test(job.title) && (job.role === "General" || job.role === "Backend")) return { name: "DevOps / SRE", read: false };
   if (job.role !== "General" && (!FAMILY_WORDS[job.role] || FAMILY_WORDS[job.role].test(job.title))) return { name: job.role, read: false };
-  const votes = {}, field = ctx.fieldOf(job.role);
-  for (const k of pool) for (const [fam, x] of Object.entries(ctx.lift[k] || {})) if (x > 1 && ctx.fieldOf(fam) === field) votes[fam] = (votes[fam] || 0) + Math.log2(x);
+}
+
+// A title with no family word says nothing about the family, so the skills cast the vote among the families of its field.
+// Too few or too even a vote stays unknown, or keeps the family fetch_jobs.py guessed from skills, as read from skills.
+function voteRole(job, pool, ctx) {
+  const votes = {}, by = ctx.votes[ctx.fieldOf(job.role)] || {};
+  for (const k of pool) for (const [fam, w] of by[k] || []) votes[fam] = (votes[fam] || 0) + w;
   const [a, b] = Object.entries(votes).sort((x, y) => y[1] - x[1]);
   if (a && pool.length >= 3 && a[1] >= 1.5 && a[1] >= 1.5 * (b ? b[1] : 0)) return { name: a[0], read: true };
   return job.role === "General" ? null : { name: job.role, read: true };
@@ -179,31 +187,48 @@ function orJoined(title, names) {
   return gaps.every(g => /^\s*(?:,|\/|,?\s*or)\s*$/i.test(g)) && gaps.some(g => /\/|\bor\b/i.test(g));
 }
 
-function planJob(job, ctx) {
+// What a posting says by itself: everything but the role vote and the skill ranks, which read the stats. Read once per row and
+// field, and kept across buildStats calls, so the older.js join reads only its own rows. Rows are never edited in place.
+const READ = new WeakMap();
+function readJob(job, field) {
+  const had = READ.get(job);
+  if (had?.field === field) return had;
   const others = job.skills.filter(k => !job.must.includes(k) && !job.nice.includes(k));
   const split = job.must.length > 0;
   const pool = split ? job.must : others;
-  const field = ctx.fieldOf(job.role), eng = field === "Engineering", sw = eng && job.role !== "Hardware";  // Hardware names its specialty itself
-  const role = readRole(job, pool, ctx, sw);
-  const core = role && ctx.core[role.name] || ctx.fieldCore[field] || ctx.core[""];
-  const groups = new Map(), soft = [], kinds = {};
-  const named = new Set(pool.filter(k => inTitle(k, job.title)));
+  const eng = field === "Engineering", sw = eng && job.role !== "Hardware";  // Hardware names its specialty itself
+  const soft = [], reqs = [], kinds = {};
+  const named = new Set(pool.filter(k => inTitle(k, job.title))), also = new Set(pool.flatMap(k => (CREDENTIALS.has(k) && IMPLIES[k]) || []));
   for (const k of named) if (KIND_OF[k]) (kinds[KIND_OF[k]] ||= []).push(k);
   const anyOf = new Set(Object.values(kinds).filter(a => a.length > 1 && orJoined(job.title, a)).flat());
   for (const k of pool) {
     const titled = named.has(k), notStack = isSoft(k, eng);
-    if (notStack && !titled) { soft.push(k); continue; }
-    const key = anyOf.has(k) ? `title ${KIND_OF[k]}` : titled || !KIND_OF[k] ? k : KIND_OF[k];
-    const g = groups.get(key) || { key, kind: KIND_OF[k] || null, names: [], titled: false, rank: 0, stack: !notStack };
+    if (notStack && !titled) soft.push(k);
+    else reqs.push({ k, titled, stack: !notStack, key: anyOf.has(k) ? `title ${KIND_OF[k]}` : titled || !KIND_OF[k] || also.has(k) ? k : KIND_OF[k] });  // an NP posting's RN licence is asked too
+  }
+  const read = { field, split, pool, reqs, soft, role: titleRole(job, sw), level: readLevel(job), nice: job.nice, plain: split ? others : [],
+    sideTrack: sw && SIDE_TRACK.test(job.title), sideTopic: sw && SIDE_TOPIC.test(job.title),
+    stackless: job.nice.some(k => !isSoft(k, eng)) ? NO_LIST : NO_STACK };  // with nice-to-haves named, "names none" isn't true
+  READ.set(job, read);
+  return read;
+}
+
+function planJob(job, ctx) {
+  const field = ctx.fieldOf(job.role), share = ctx.shareOf(job.role), r = readJob(job, field);
+  const role = r.role !== undefined ? r.role : voteRole(job, r.pool, ctx);
+  const core = role && ctx.core[role.name] || ctx.fieldCore[field] || ctx.core[""];
+  const groups = new Map();
+  for (const { k, key, titled, stack } of r.reqs) {
+    const g = groups.get(key) || { key, kind: KIND_OF[k] || null, names: [], titled: false, gate: false, rank: 0, stack };
     g.names.push(k);
     g.titled ||= titled;
+    g.gate ||= CREDENTIALS.has(k) && 4 * (ctx.df[share]?.[k] || 0) / ctx.n[share] >= ctx.most[k];
     g.rank = Math.max(g.rank, core[k] || 0);
     groups.set(key, g);
   }
-  const reqs = [...groups.values()].sort((a, b) => b.titled - a.titled || b.rank - a.rank);
-  return { split, role, level: readLevel(job), top: reqs.slice(0, TOP_N), more: reqs.slice(TOP_N), soft, nice: job.nice, plain: split ? others : [],
-    share: ctx.shareOf(job.role), sideTrack: sw && SIDE_TRACK.test(job.title), sideTopic: sw && SIDE_TOPIC.test(job.title),
-    stackless: job.nice.some(k => !isSoft(k, eng)) ? NO_LIST : NO_STACK };  // with nice-to-haves named, "names none" isn't true
+  const reqs = [...groups.values()].sort((a, b) => b.titled - a.titled || b.gate - a.gate || b.rank - a.rank);
+  return { split: r.split, role, level: r.level, top: reqs.slice(0, TOP_N), more: reqs.slice(TOP_N), soft: r.soft, nice: r.nice, plain: r.plain,
+    share, sideTrack: r.sideTrack, sideTopic: r.sideTopic, stackless: r.stackless };
 }
 
 // rules.fields maps each role to its field. Old data has none: every role is Engineering then, and shares are of every posting.
@@ -217,7 +242,7 @@ function buildStats(jobs, rules) {
     for (const k of j.must.length ? j.must : j.skills) ((count[j.role] ||= {})[k] = (count[j.role][k] || 0) + 1);
   }
   // Lift is read within a field, so sales postings don't change what Java says about Backend.
-  const total = {}, inField = {}, lift = {}, core = { "": {} }, fieldCore = {};
+  const total = {}, inField = {}, votes = {}, core = { "": {} }, fieldCore = {};
   const named = Object.entries(count).filter(([f]) => f !== "General" && f !== "Other");
   const N = named.reduce((s, [f]) => s + byRole[f], 0);
   for (const [f, c] of named) {
@@ -233,20 +258,22 @@ function buildStats(jobs, rules) {
     core[f] = {};
     for (const [k, n] of Object.entries(c)) {
       const share = n / byRole[f], x = share / (F.total[k] / F.n);
-      (lift[k] ||= {})[f] = x;
+      if (x > 1) (((votes[fieldOf(f)] ||= {})[k] ||= []).push([f, Math.log2(x)]));  // what k says for family f, by field
       core[f][k] = share * Math.log2(1 + x);
     }
   }
   for (const [k, n] of Object.entries(total)) core[""][k] = n / N;
   for (const [name, F] of Object.entries(inField)) fieldCore[name] = Object.fromEntries(Object.entries(F.total).map(([k, n]) => [k, n / F.n]));
   const ask = Object.fromEntries(Object.entries(asked).map(([l, a]) => [l, a.sort((x, y) => x - y)[a.length >> 1]]));
-  const df = {}, n = {};
+  const df = {}, n = {}, most = {}, toEng = {};
   for (const j of jobs) for (const key of new Set(["", shareOf(j.role)])) {
     n[key] = (n[key] || 0) + 1;
     for (const k of j.must) ((df[key] ||= {})[k] = (df[key][k] || 0) + 1);
   }
-  const stats = { ask, df, n, plans: new Map(), credits: new WeakMap() };
-  for (const j of jobs) stats.plans.set(j, planJob(j, { lift, core, fieldCore, fieldOf, shareOf }));
+  for (const f in df) for (const k in df[f]) if (CREDENTIALS.has(k)) most[k] = Math.max(most[k] || 0, df[f][k] / n[f]);
+  for (const k in ROLE_NEAR) for (const [x, y] of [k.split("|"), k.split("|").reverse()]) if (fieldOf(y) === "Engineering" && fieldOf(x) !== "Engineering") toEng[x] = Math.max(toEng[x] || 0, ROLE_NEAR[k]);
+  const stats = { ask, df, n, shareOf, toEng, plans: new Map(), credits: new WeakMap() };
+  for (const j of jobs) stats.plans.set(j, planJob(j, { votes, core, fieldCore, fieldOf, shareOf, df, n, most }));
   return stats;
 }
 
@@ -279,32 +306,33 @@ function meet(req, c) {
   let best = 0, name = null;
   for (const k of req.names) if ((c.skill[k] || 0) > best) { best = c.skill[k]; name = k; }
   if (best) return { credit: best, name, near: null };
-  const near = req.kind && c.kind[req.kind];
+  const near = req.kind && !CREDENTIALS.has(c.kind[req.kind]) && c.kind[req.kind];
   return { credit: near ? (req.kind === "language" ? .2 : .35) : 0, name: null, near: near || null };
 }
 
 const reqLabel = r => (r.names.length > 1 ? r.names.slice(0, 3).join(" or ") : r.names[0]);
 
 // The step on the ladder, times the track: managing people is a change of track, easier with people managed on the resume.
+// From Intern, Junior is the job after graduating, so that step needs no years.
 function levelFit(mine, job, years, stats, people) {
   const d = RANK[job] - RANK[mine];
-  const step = !d ? 1 : d === 1 ? (years != null && years >= (stats.ask[job] ?? 99) ? .8 : .5)
+  const step = !d ? 1 : d === 1 ? (mine === "Intern" || years != null && years >= (stats.ask[job] ?? 99) ? .8 : .5)
     : d === -1 ? (RANK[mine] >= 4 ? .8 : .65) : d === 2 ? .1 : d === -2 ? .3 : 0;
   return step * (BOSS.has(job) === BOSS.has(mine) ? 1 : BOSS.has(job) ? (people ? .85 : .6) : .85);
 }
 
 function coverage(plan, c) {
-  let sum = 0, weight = 0, confirmed = 0;
+  let sum = 0, weight = 0, confirmed = 0, gates = 0;
   const met = [], missed = [], weak = [];
   plan.top.forEach((r, i) => {
-    const w = r.titled ? TITLE_WEIGHT : TOP_WEIGHT[i], m = meet(r, c);
+    const w = r.titled || r.gate ? TITLE_WEIGHT : TOP_WEIGHT[i], m = meet(r, c);
     sum += w * m.credit;
     weight += w;
-    if (m.credit >= .5) { confirmed++; m.credit < .7 ? weak.push(c.via[m.name] || m.name) : met.push(m.name); }  // a weak implied skill is weak for the one the resume names
+    if (m.credit >= .5) { confirmed++; gates += r.gate; m.credit < .7 ? weak.push(c.via[m.name] || m.name) : met.push(m.name); }  // a weak implied skill is weak for the one the resume names
     else missed.push({ req: r, near: m.near });
   });
   const pad = (TOP_N - plan.top.length) * 1.25;  // each empty slot pulls toward .5: few named skills prove little either way
-  return { value: (sum + pad * .5) / (weight + pad), confirmed, met, weak, missed };
+  return { value: (sum + pad * .5) / (weight + pad), confirmed, gates, met, weak, missed };
 }
 
 function everythingElse(plan, c) {
@@ -329,32 +357,41 @@ function score(p, job, stats) {
   const cap = (at, why) => caps.push([at, why]);
   const pct = k => Math.round(100 * (stats.df[plan.share]?.[k] || 0) / stats.n[plan.share]), among = postings(plan.share);
 
-  // 1. Title: same family?
-  const track = p.role === "General" || p.role === "Other" ? null : p.role;  // a resume read as General or Other says nothing about its family
-  const own = plan.role && !plan.role.read && plan.role.name === track;
+  // 1. Title: same family? A General or Other resume says nothing of its family, nor a General job of its own, but fields still differ:
+  // "Software Engineer" is no match for an analyst. A General resume is as near as its nearest engineering family, yet too unknown for Hot.
+  const track = p.role === "General" || p.role === "Other" ? null : p.role, field = stats.shareOf(p.role);
+  const cross = field && plan.share && field !== plan.share && (!track || !plan.role);
+  const yours = track || (cross ? field : null), theirs = plan.role ? plan.role.name : cross ? plan.share : null, read = plan.role?.read;
+  const own = plan.role && !read && theirs === track;
   const side = plan.sideTrack || !own && plan.sideTopic;
-  const family = plan.role && track ? (plan.role.read ? .85 : 1) * roleFit(track, plan.role.name) : null;
+  const family = yours && theirs ? (read ? .85 : 1) * (cross && !track ? stats.toEng[theirs] ?? .15 : roleFit(yours, theirs)) : null;
   const role = side ? Math.min(family ?? 1, .45) : family;
-  add("Role", role, role != null ? (side ? "Different track" : `${p.role} to ${plan.role.name}${plan.role.read ? " (read from skills)" : ""}`)
+  add("Role", role, role != null ? (side ? "Different track" : `${yours} to ${theirs}${read ? " (read from skills)" : ""}`)
     : !plan.role ? "Title names no family" : "No role found on your resume");
   const offTrack = side ? "This is a different track: customer-facing, or a specialty your resume doesn't show."
-    : plan.role && `${plan.role.read ? "Its skills read like" : "This is"} ${plan.role.name === "Specialist" ? "a specialist" : `${article(plan.role.name)} ${plan.role.name}`} role${plan.role.read ? "," : ""} and your track is ${p.role}.`;
-  if (role != null && role >= .85) fits.push(`Your ${p.role} background fits this role.`);
-  else if (role != null && role >= .5) next.push(`Describe your ${p.role} work in ${plan.role.name} terms in your opening lines.`);
+    : theirs && `${read ? "Its skills read like" : "This is"} ${theirs === "Specialist" ? "a specialist" : `${article(theirs)} ${theirs}`} role${read ? "," : ""} and your track is ${yours}.`;
+  if (role != null && role >= .85) fits.push(`Your ${yours} background fits this role.`);
+  else if (role != null && role >= .5) next.push(`Describe your ${yours} work in ${theirs} terms in your opening lines.`);
   else if (role != null) gaps.push(offTrack);
   if (role != null && role < .3) cap(50, offTrack);
   else if (role != null && role < .5) cap(65, offTrack);
 
-  // 2. Seniority, both directions, and the track. A level guessed from the years bar counts half.
-  const mine = levelOf(p), lv = plan.level || (RANK[mine] <= 1 ? UNSTATED : null);
-  const people = p.evidence?.["People Management"]?.strength >= 2;
+  // 2. Seniority, both directions, and the track. A level guessed from the years bar counts half, but not from a manager's level:
+  // a title with no level word names no team, so it is an individual job whatever years it asks. An intern's next job is Junior.
+  const mine = levelOf(p), lv = plan.level || (RANK[mine] <= 1 ? UNSTATED : BOSS.has(mine) ? SOLO : null);
+  const people = p.evidence?.["People Management"]?.strength >= 2, soft = lv?.soft && !BOSS.has(mine);
+  const graduating = mine === "Intern" && lv?.name === "Junior", early = !lv?.unstated && RANK[mine] <= 1 && RANK[lv?.name] <= 1;
   let level = lv && mine ? levelFit(mine, lv.name, p.years, stats, people) : null;
-  if (level != null && lv.soft) level = 1 - (1 - level) / 2;
-  add("Seniority", level, level != null ? `${mine} to ${lv.name}${lv.soft ? " (read from years)" : ""}` : !lv ? "Level not stated" : "No level found on your resume");
+  if (level != null && soft) level = 1 - (1 - level) / 2;
+  add("Seniority", level, level != null ? `${mine} to ${lv.solo ? "an individual role" : lv.name}${lv.soft ? " (read from years)" : ""}`
+    : !lv ? "Level not stated" : "No level found on your resume");
   if (level != null) {
     const d = RANK[lv.name] - RANK[mine], turn = BOSS.has(lv.name) !== BOSS.has(mine);
+    const solo = lv.solo && `It names no team or level, so it reads as an individual role below your ${mine} experience.`;
     if (lv.unstated) cap(69, "It states no level, and most postings like this ask for 2 or more years.");
+    else if (solo) gaps.push(solo);
     else if (!d && !turn) fits.push(`The level matches your ${mine} experience.`);
+    else if (graduating) next.push("Say when you graduate, so they know when you can start.");
     else if (d === 1) next.push(`This is a step up: show ${lv.name} scope, such as what you led and decided.`);
     else if (d === -1) next.push("This sits below your level: say why it suits you, so you don't read as a flight risk.");
     else if (d) gaps.push(`${lv.name} is ${plural(Math.abs(d), "level")} ${d > 0 ? "above" : "below"} your ${mine} experience.`);
@@ -363,23 +400,24 @@ function score(p, job, stats) {
       cap(74, NO_TEAM);
     } else if (BOSS.has(lv.name)) next.push("Open with the team you led, its size and what it delivered.");
     if (turn && BOSS.has(mine)) next.push("Lead with work you did yourself.");
-    if (d === 1 && !lv.soft) cap(74, `This is a step up from your ${mine} experience.`);
-    if (d === -1 && !lv.soft) cap(85, `This sits one level below your ${mine} experience.`);
-    if (Math.abs(d) >= 2) cap(lv.soft ? 74 : d > 0 ? 45 : 60, `${lv.name} is ${plural(Math.abs(d), "level")} ${d > 0 ? "above" : "below"} your ${mine} experience.`);
+    if (solo) cap(d < -1 ? 60 : 85, solo);  // as a title that names Senior would be
+    if (d === 1 && !soft && !graduating) cap(74, `This is a step up from your ${mine} experience.`);
+    if (d === -1 && !soft && !lv.solo) cap(85, `This sits one level below your ${mine} experience.`);
+    if (Math.abs(d) >= 2 && !lv.solo) cap(soft ? 74 : d > 0 ? 45 : 60, `${lv.name} is ${plural(Math.abs(d), "level")} ${d > 0 ? "above" : "below"} your ${mine} experience.`);
   }
   if (lv?.grad && p.years >= 3) cap(49, "This is an early-career program, and your experience is past it.");
 
-  // 3. Years, as a ratio: one year short means more at 3 than at 10.
+  // 3. Years, as a ratio: one year short means more at 3 than at 10. Early in a career a year's gap is internships and projects.
   const bar = job.years_required, ratio = bar != null && p.years != null ? p.years / bar : null;
   const years = ratio == null ? null : ratio >= 1 ? 1 : Math.max(0, (ratio - .4) / .6);
   add("Years", years, ratio != null ? `${p.years} against ${bar}+` : bar == null ? "No years stated" : "No years found on your resume");
   if (ratio != null && ratio >= 1) fits.push(`You have ${plural(p.years, "year")}; it asks for ${bar}+.`);
   else if (ratio != null) {
-    const short = +(bar - p.years).toFixed(1), why = `It asks for ${bar}+ years and you have ${p.years}.`;
+    const short = +(bar - p.years).toFixed(1), why = `It asks for ${bar}+ years and you have ${p.years}.`, near = ratio >= .8 || early && short <= 1;
     gaps.push(why);
-    next.push(`You are ${plural(short, "year")} short: ${ratio >= .8 ? "apply anyway and open with your biggest result, with its numbers" : "go in through a referral if you can"}.`);
-    if (ratio < .5) cap(50, why);
-    if (lv && mine && RANK[lv.name] > RANK[mine]) cap(74, `It's a step up and ${why.toLowerCase()}`);
+    next.push(`You are ${plural(short, "year")} short: ${near ? "apply anyway and open with your biggest result, with its numbers" : "go in through a referral if you can"}.`);
+    if (ratio < .5 && !near) cap(50, why);
+    if (lv && mine && RANK[lv.name] > RANK[mine] && !graduating) cap(74, `It's a step up and ${why.toLowerCase()}`);
   }
 
   // 4. Top must-haves, then the whole list by information.
@@ -402,7 +440,7 @@ function score(p, job, stats) {
   if (cov.missed.length) {
     gaps.push(missedLine);
     const m = cov.missed[0], share = pct(m.req.names[0]);
-    next.push(m.near ? `Name ${m.near} as your closest match to ${reqLabel(m.req)}.`
+    next.push(m.near ? `Name ${m.near} as your closest match to ${reqLabel(m.req)}.` : CREDENTIALS.has(m.req.names[0]) ? `If you hold ${reqLabel(m.req)}, add it to your resume.`
       : `If you have used ${reqLabel(m.req)}, add it to your resume.${share >= 5 ? ` If not, ${share}% of ${among} ask for it, so it's worth learning.` : ""}`);
   }
   const lost = plan.top.find(r => r.titled && r.stack && meet(r, c).credit < .5), lostWhy = lost && `The title names ${reqLabel(lost)}, which is not on your resume.`;
@@ -430,14 +468,15 @@ function score(p, job, stats) {
   add("Degree", degree, !job.degree ? "No degree stated" : !p.degree ? "No degree found on your resume" : `${wanted} ${job.degree.req}`);
   if (degree === 0) gaps.push(`It lists ${article(wanted)} ${wanted} as required.`);
 
-  // Hot needs evidence, not just silence.
+  // Hot needs evidence, not just silence. A licence the posting requires, held, proves the profession as well as a second skill would.
   const known = (role != null) + (level != null) + (years != null), stated = (plan.role != null) + (plan.level != null) + (bar != null);
+  const proof = cov.confirmed + cov.gates;
   if (!cov.confirmed) cap(60, n ? "None of its top must-haves are confirmed by your resume." : stackless);
-  else if (cov.confirmed < 2) cap(65, n > 1 ? "Only one of its top must-haves is confirmed by your resume." : onlyLine);
-  else if (cov.confirmed < 3 && cov.missed.length) cap(74, "Fewer than three of its top must-haves are confirmed by your resume.");
+  else if (proof < 2) cap(65, n > 1 ? "Only one of its top must-haves is confirmed by your resume." : onlyLine);
+  else if (proof < 3 && cov.missed.length) cap(74, "Fewer than three of its top must-haves are confirmed by your resume.");
   else if (known < 2) cap(74, stated < 2 ? "It says too little about the role or level, so check the posting yourself."
     : "Your resume shows too little about your role or level, so check the posting yourself.");
-  if (role == null && cov.missed.length) cap(74, !plan.role ? "Its title names no family, so check the posting yourself." : "Your resume shows no role family, so check the posting yourself.");
+  if (cross && !track || role == null && cov.missed.length) cap(74, !plan.role ? "Its title names no family, so check the posting yourself." : "Your resume shows no role family, so check the posting yourself.");
 
   const max = parts.reduce((s, x) => s + x.max, 0);
   const exact = max ? 100 * parts.reduce((s, x) => s + x.got, 0) / max : 0, raw = Math.round(exact);
