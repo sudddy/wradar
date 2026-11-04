@@ -1,4 +1,5 @@
 """Self-checks for the rules: keywords, locations, job types, level, family and evaluate(). Run: python3 -m unittest"""
+import re
 import unittest
 from datetime import timedelta
 
@@ -18,6 +19,17 @@ class Keywords(unittest.TestCase):
                                   ("payment tracking via SWIFT GPI", "SWIFT", True),
                                   ("payment tracking via SWIFT GPI", "Swift", False)):
             self.assertEqual(name in rules.skills(R["kw"], text), found, (text, name))
+
+    def test_the_prefilter_never_skips_a_match(self):
+        letter = re.compile("[a-z]", re.I)  # every character re.I reads as an ASCII letter folds to that letter
+        for c in (chr(n) for n in range(128, 0x110000) if letter.fullmatch(chr(n))):
+            folded = c.translate(rules.FOLD).lower()
+            self.assertTrue(len(folded) == 1 and folded.isascii() and re.fullmatch(folded, c, re.I), hex(ord(c)))
+        odd = str.maketrans({"s": "ſ", "i": "ı", "k": "K", "I": "İ"})
+        for name, aliases in R["keywords"].items():
+            said = " and ".join(a.lstrip("=").removeprefix("re:") for a in aliases)
+            for text in (said, said.upper(), said.swapcase(), said.translate(odd), f"x{said}x", f"ſ{said}ı", f"K{said}İ"):
+                self.assertEqual(rules.skills(R["kw"], text, R["needles"]), rules.skills(R["kw"], text), (name, text))
 
 
 class Locations(unittest.TestCase):

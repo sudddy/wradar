@@ -62,26 +62,61 @@ FAMILIES = [("Full stack", r"full[- ]?stack"),
 BACKEND = {"Java", "Go", "Python", "Kotlin", "Scala", "Rust", "C#", ".NET", "Ruby on Rails", "Node.js", "Spring Boot",
            "Django", "Kafka", "PostgreSQL", "MySQL", "Redis", "Microservices", "Distributed Systems", "gRPC", "REST APIs"}
 FRONTEND = {"React", "Angular", "Vue.js", "Next.js", "Redux", "HTML/CSS"}
+# The only letters re.I matches to an ASCII letter that lower() doesn't turn into it. With them folded, a plain alias the
+# regex matches is always in the lowered text, at the same place: every character lowers to exactly one.
+FOLD = str.maketrans({"İ": "i", "ı": "i", "ſ": "s"})
+WORD, CASED_WORD = re.compile(r"[a-z0-9]+"), re.compile(r"[A-Za-z0-9]+")  # as the aliases' lookarounds split words
+
+
+def pattern(alias):
+    if alias.startswith("re:"):
+        return alias[3:]
+    p = r"(?<![A-Za-z0-9])" + re.escape(alias.lstrip("=")) + r"(?![A-Za-z0-9+#])"
+    return p if alias.startswith("=") else f"(?i:{p})"
 
 
 def compile_keywords(d):
+    return {name: re.compile("|".join(map(pattern, aliases))) for name, aliases in d.items() if not name.startswith("_")}
+
+
+def needles(d):
+    """Skill -> (keys, [(key, plain alias lowercased)], regex of its other aliases or None), for skills(). A plain alias's
+    key is its longest run of letters and digits, which is a whole word of any text the alias matches."""
     out = {}
     for name, aliases in d.items():
-        if name.startswith("_"):
-            continue
-        pats = []
-        for a in aliases:
-            if a.startswith("re:"):
-                pats.append(a[3:])
-            else:
-                p = r"(?<![A-Za-z0-9])" + re.escape(a.lstrip("=")) + r"(?![A-Za-z0-9+#])"
-                pats.append(p if a.startswith("=") else f"(?i:{p})")
-        out[name] = re.compile("|".join(pats))
+        if not name.startswith("_"):
+            plain = [a for a in aliases if not a.startswith("re:") and a.isascii() and WORD.search(a.lower())]
+            rest = [a for a in aliases if a not in plain]
+            pairs = [(max(WORD.findall(a), key=len), a) for a in (p.lstrip("=").lower() for p in plain)]
+            out[name] = frozenset(k for k, _ in pairs), pairs, re.compile("|".join(map(pattern, rest))) if rest else None
     return out
 
 
-def skills(kw, s):
-    return {name for name, rx in kw.items() if rx.search(s)}
+def matches_at(rx, s, low, plain):
+    """True when rx matches s where one of the plain aliases appears in low: those are the only places one can match."""
+    for a in plain:
+        i = low.find(a)
+        while i >= 0:
+            if rx.match(s, i):  # lookbehinds still see the text before i
+                return True
+            i = low.find(a, i + 1)
+    return False
+
+
+def skills(kw, s, needles=None):
+    """Skills named in s. With needles, a skill's regex runs only where a plain alias whose key is a word of s appears,
+    and its re: aliases search the whole text: the same result as searching everything, many times faster."""
+    if not needles:
+        return {name for name, rx in kw.items() if rx.search(s)}
+    low = s.translate(FOLD).lower()
+    words = set(WORD.findall(low)) | {w.lower() for w in CASED_WORD.findall(s)}  # case-blind aliases, then =Cased ones
+    found = set()
+    for name, rx in kw.items():
+        keys, pairs, rest = needles[name]
+        if (rest and rest.search(s)) or (not keys.isdisjoint(words)
+                                         and matches_at(rx, s, low, [a for k, a in pairs if k in words])):
+            found.add(name)
+    return found
 
 
 def when(v):
@@ -138,7 +173,7 @@ def family(title, found):
 def load_rules(root=ROOT):
     cfg = json.loads((root / "config.json").read_text())
     keywords = {k: v for k, v in json.loads((root / "keywords.json").read_text()).items() if not k.startswith("_")}
-    return dict(cfg=cfg, keywords=keywords, kw=compile_keywords(keywords),
+    return dict(cfg=cfg, keywords=keywords, kw=compile_keywords(keywords), needles=needles(keywords),
                 include=re.compile(cfg["title_include"], re.I), exclude=re.compile(cfg["title_exclude"], re.I))
 
 
@@ -156,7 +191,7 @@ def evaluate(job, r, cutoff):
     if not tags:
         return None
     body = rich_text(val("description"))
-    sec, found = split_sections(body), skills(r["kw"], f"{title}\n{body}")
+    sec, found = split_sections(body), skills(r["kw"], f"{title}\n{body}", r["needles"])
     names = [k for k in r["kw"] if k in found]
     must, nice = tier_skills(names, title, sec, r["kw"])
     return dict(title=title, company=job["company"].strip(), where=tags, location=location[:120],
