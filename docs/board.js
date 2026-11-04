@@ -41,13 +41,14 @@ function knownOnly(jobs, pay, work) {
 }
 
 const hasTech = (j, f) => !f.techs.length || (f.mode === "all" ? f.techs.every(t => j.skills.includes(t)) : f.techs.some(t => j.skills.includes(t)));
-const searchText = j => (j.text ??= [j.title, j.company, j.location, ...j.skills].join(" ").toLowerCase());
+const searchText = j => (j.text ??= [j.title, j.company, j.location, j.role, j.field, ...j.skills].join(" ").toLowerCase());
+const hasRole = (j, role) => !role || (role.startsWith("field:") ? j.field === role.slice(6) : j.role === role);  // "field:Sales" is every Sales family
 
 function matches(j, f, { tech = true } = {}) {
   const q = f.q.toLowerCase();
   return (j.score == null || j.score >= f.min)
     && (!tech || hasTech(j, f))
-    && (!f.role || j.role === f.role)
+    && hasRole(j, f.role)
     && (!f.level || j.level === f.level)
     && (!f.where || j.where.includes(f.where))
     && (!f.type || j.type === f.type)
@@ -130,7 +131,7 @@ function countText(total, noPay, noMode) {
 function renderBoard() {
   const t = tab(), mine = page === "mine", shown = t.sel;
   store.set("wradar-filters", state);
-  $("#boardtitle").textContent = mine ? "Applications" : me ? "Matching jobs" : "Software jobs";
+  $("#boardtitle").textContent = mine ? "Applications" : me ? "Matching jobs" : "All jobs";
   $("#filters").hidden = mine;
   $("#minebar").hidden = !mine;
   $("#nores").hidden = (me && !unread()) || mine;  // a resume saved by an older version reads less, so it's asked for again

@@ -15,10 +15,13 @@ const store = {  // per-browser memory; the app works the same without it
 };
 const wide = () => matchMedia("(min-width: 821px)").matches;
 const roomy = () => matchMedia("(min-width: 1024px)").matches;  // every quick filter fits on one line
-const LEVELS = ["Junior", "Mid", "Senior", "Staff+"];
+const LADDER = D?.rules?.ladder || ["Junior", "Mid", "Senior", "Staff+"];  // data from before the ladder has these four
 const DAYS = [2, 3, 7, FRESH_DAYS];  // the Posted choices; Over 30 days ago is #older
-const ROLE_ORDER = ["Backend", "Full stack", "Frontend", "Mobile", "Data", "ML / AI", "DevOps / SRE", "Security", "QA / Test", "Embedded", "General"];
-const DEFAULTS = { v: 2, q: "", role: "", level: "", type: "", where: "", work: "", pay: 0, min: 0, src: "", days: FRESH_DAYS, sort: "score", techs: [], mode: "any", hideApplied: false };
+const FIELDS = ["Engineering", "Data & research", "Product", "Design", "Sales", "Customer", "Marketing", "People", "Finance", "Legal & compliance",
+  "Operations", "IT & security", "Healthcare", "Education", "Other"];
+const fieldOf = role => (D.rules.fields ? D.rules.fields[role] || "Other" : "Engineering");  // data from before fields is all engineering
+// autoRole: Role was set from the first resume read, so a Role cleared after that stays cleared.
+const DEFAULTS = { v: 2, q: "", role: "", level: "", type: "", where: "", work: "", pay: 0, min: 0, src: "", days: FRESH_DAYS, sort: "score", techs: [], mode: "any", hideApplied: false, autoRole: false };
 const state = savedFilters(store.get("wradar-filters"), DEFAULTS);
 const PASTED = "Pasted resume";
 const byKey = new Map();
@@ -69,7 +72,12 @@ function useResume(name, text) {
   const profile = { name, ...wresume.parseResume(text, SKILLS, D.rules) };
   if (!profile.skills.length) { status = "No skills were recognized in that resume. Check it's the right file, or paste the text."; return refresh(); }
   me = Object.fromEntries(wresume.STORED_KEYS.map(k => [k, profile[k]]));
+  if (!state.autoRole && myField()) {  // once, and only into an empty Role; it stays on show and can be cleared
+    state.autoRole = true;
+    if (!state.role) $("#role").value = state.role = "field:" + myField();
+  }
   status = ""; pasting = false; justRead = true; state.sort = "score";
+  store.set("wradar-filters", state);  // Your resume doesn't save the filters, and a reload must keep Role and the flag
   if (!location.hash.slice(1)) history.replaceState(null, "", "#resume");  // read on the welcome: stay to check it, not jump to the jobs
   nav.jobs.y = nav.older.y = 0;  // the lists now sort by match, so an old scroll spot would land on other jobs
   store.set("wradar-resume", me);
@@ -98,11 +106,27 @@ const saveMe = () => { store.set("wradar-resume", me); refresh(); };
 const unread = () => me && !Object.keys(me.evidence).length;  // saved before wradar read jobs and projects apart
 
 function scoreJobs() {
-  if (me) stats ||= wmatch.buildStats(D.all);
+  if (me) stats ||= wmatch.buildStats(D.all, D.rules);
   D.all.forEach(j => {
     j.fit = me ? wmatch.score(me, j, stats) : null;
     j.score = j.fit ? j.fit.score : null;
   });
+}
+
+// ---- Fields: Skills to add and Insights read the chosen field, else the person's own ----
+const myField = () => { const f = me?.role ? fieldOf(me.role) : null; return f === "Other" ? null : f; };  // Other: no role found
+const chosenField = () => (state.role.startsWith("field:") ? state.role.slice(6) : state.role ? fieldOf(state.role) : null);
+const shownField = () => chosenField() || myField();
+const inField = (jobs, f) => (f ? jobs.filter(j => j.field === f) : jobs);
+const gaps = jobs => { const mine = new Set(me.skills); return tally(jobs, j => j.skills.filter(k => !mine.has(k))); };
+
+function roleOptions() {
+  const fams = {};
+  D.all.forEach(j => (fams[j.field] ||= new Set()).add(j.role));
+  const opts = f => [...fams[f]].sort((a, b) => (a === "General") - (b === "General") || a.localeCompare(b))  // General: no family named
+    .map(r => `<option>${esc(r)}</option>`).join("");
+  return FIELDS.filter(f => fams[f]).map(f => (f === "Other" ? opts(f)  // one role, named like its field
+    : `<optgroup label="${esc(f)}"><option value="field:${esc(f)}">All ${esc(f)}</option>${opts(f)}</optgroup>`)).join("");
 }
 
 // ---- Filtering ----
@@ -182,8 +206,8 @@ function renderMe() {
   if (!me) {
     $("#me").innerHTML = `<div class="welcome">
       <div class="wcopy">
-        <h1>Find software jobs that fit your resume</h1>
-        <p class="lede">wradar ranks ${plural(D.jobs.length, "engineering job")} from ${D.sources.filter(s => s.ok).length} company career sites and job boards by how well they match you, and says what to do next for each one.</p>
+        <h1>Find jobs that fit your resume</h1>
+        <p class="lede">wradar ranks ${plural(D.jobs.length, "job")} from ${D.sources.filter(s => s.ok).length} company career sites and job boards by how well they match you, and says what to do next for each one.</p>
       </div>
       <div class="drop" id="drop">
         <svg class="dropicon" width="44" height="44" viewBox="0 0 44 44" aria-hidden="true"><path d="M12 5h14l8 8v24a2 2 0 0 1-2 2H12a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z M26 5v8h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M22 32V20m-5 5 5-5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -220,7 +244,7 @@ function renderMe() {
       ${unread() ? '<p class="status">Add your resume again for better scores.</p>' : ""}
       <dl class="facts">${fact("Years", me.years ?? NOT_FOUND)}${fact("Level", esc(wmatch.levelOf(me)) || NOT_FOUND)}${fact("Role", esc(me.role) || NOT_FOUND)}${fact("Degree", esc(me.degree) || NOT_FOUND)}</dl>
       <div class="row edits"><label>Years of experience <input type="number" id="years" min="0" max="50" step="0.5" value="${me.years ?? ""}"></label>
-        <label>Add a skill <input id="addskill" list="techlist" placeholder="For example, Go"></label></div>
+        <label>Add a skill <input id="addskill" list="techlist" placeholder="For example, Excel"></label></div>
       <div class="dsec"><h2>Skills read from your resume</h2><p class="note">Remove any that are wrong, or add ones it missed. Every score updates as you edit.</p>${groups}</div>
     </div>`;
 }
@@ -235,14 +259,15 @@ const tally = (jobs, pick) => {
   jobs.forEach(j => [].concat(pick(j)).forEach(k => t[k] = (t[k] || 0) + 1));
   return Object.entries(t).sort((a, b) => b[1] - a[1]);
 };
-const gaps = jobs => { const mine = new Set(me.skills); return tally(jobs, j => j.skills.filter(k => !mine.has(k))); };
 
 function renderResume() {
   renderMe();
   $("#meside").hidden = !me;  // with no resume, the page is the welcome
   $("#view-resume").classList.toggle("has", !!me);
   if (!me) return;
-  $("#mygaps").innerHTML = bars(gaps(D.jobs).slice(0, 10));
+  const f = shownField();  // Skills to add reads one field, so a marketer isn't told to learn what engineering jobs ask for
+  $("#mygapsnote").textContent = `What jobs${f ? ` in ${f}` : ""} ask for most that your resume doesn't list.`;
+  $("#mygaps").innerHTML = bars(gaps(inField(D.jobs, f)).slice(0, 10));
   const best = topN(D.jobs.filter(j => !["applied", "hidden"].includes(statusOf(j))), 6, byMatch);
   $("#mybest").innerHTML = best.map(j => `<li><button type="button" data-i="${j.i}">${matchNum(j)}
       <span class="jtext"><span class="jtitle">${esc(j.title)}</span><span class="jco">${esc(j.company)}, ${esc(j.where.join(" / "))}</span></span></button></li>`).join("")
@@ -257,13 +282,15 @@ function renderInsights() {
   $("#statement").innerHTML = `<b>${plural(N, "role")}</b> posted in the last ${FRESH_DAYS} days, <b>${fresh.toLocaleString()}</b> of them new in the last two days. `
     + (me ? `You're a hot match for <b>${inTier("hot")}</b> and a warm match for <b>${inTier("warm")}</b>.`
           : `Add your resume to see how many fit you.`);
-  const card = (title, note, entries, cls = "") => `<section class="pane"><h2>${title}</h2><p class="note">${note}</p><ol class="bars ${cls}">${bars(entries)}</ol></section>`;
+  const card = (title, note, entries, cls = "") => `<section class="pane"><h2>${esc(title)}</h2><p class="note">${esc(note)}</p><ol class="bars ${cls}">${bars(entries)}</ol></section>`;
+  const f = shownField(), jobs = inField(D.jobs, f), where = f ? ` in ${f}` : "";  // about 45 roles: the fields, then one field's roles
   $("#charts").innerHTML = [
-    card("Most-requested skills", "Number of jobs naming each skill.", tally(D.jobs, j => j.skills).slice(0, 12)),
-    me ? card("Skills to add", "Jobs that name a skill your resume doesn't list.", gaps(D.jobs).slice(0, 12), "gap")
+    card("Most-requested skills", `Number of jobs${where} naming each skill.`, tally(jobs, j => j.skills).slice(0, 12)),
+    me ? card("Skills to add", `Jobs${where} that name a skill your resume doesn't list.`, gaps(jobs).slice(0, 12), "gap")
        : card("Skills to add", "Add your resume to see this.", []),
-    card("Jobs by role", "From the job title, or its skills when the title is generic.", tally(D.jobs, j => j.role)),
-    card("Jobs by seniority", "From the job title.", LEVELS.map(l => [l, D.jobs.filter(j => j.level === l).length]).filter(([, n]) => n)),
+    card("Jobs by field", "From the job's role.", tally(D.jobs, j => j.field)),
+    card(`Jobs${where} by role`, `${f ? "" : "The 12 most common. "}From the job title, or its skills when the title is generic.`, tally(jobs, j => j.role).slice(0, f ? undefined : 12)),
+    card("Jobs by seniority", "From the job title.", LADDER.map(l => [l, D.jobs.filter(j => j.level === l).length]).filter(([, n]) => n)),
     card("Jobs by location", "A remote job open to the US and Canada counts in each.", tally(D.jobs, j => j.where)),
     card("Jobs by type", "From the posting's own field, its title, or a plain statement in the text.", tally(D.jobs, j => j.type)),
   ].join("");
@@ -273,9 +300,9 @@ function renderInsights() {
 function renderSources() {
   const steps = [
     [`Scan ${D.sources.length} sources`, "Every 6 hours a scheduled job reads company career sites on Greenhouse, Ashby, Lever, Workday, SmartRecruiters and Workable, plus job boards such as The Muse, Himalayas and Hacker News."],
-    ["Keep what fits", `Software engineering roles in the US, Canada or remote, posted in the last ${D.rules.max_age_days} days. Anything past ${FRESH_DAYS} days moves to Over ${FRESH_DAYS} days ago. Each is tagged with its skills, role, seniority and job type, plus pay and work mode when stated.`],
+    ["Keep what fits", `Jobs in every field, from intern to executive, in the US, Canada or remote, posted in the last ${D.rules.max_age_days} days. Anything past ${FRESH_DAYS} days moves to Over ${FRESH_DAYS} days ago. Each is tagged with its skills, field, role, seniority and job type, plus pay and work mode when stated.`],
     ["Match your resume", "Add your resume and every job gets a score out of 100 for role, seniority, years, must-have skills, other skills and degree, with skills from your latest job counting most. This happens in your browser."],
-    ["Narrow it down", "Filter by how recently it was posted, role, seniority, technology, location, pay, work mode or job type, then open the posting on the company's own site. Applications keeps what you save or apply to."],
+    ["Narrow it down", "Filter by how recently it was posted, field or role, seniority, skill, location, pay, work mode or job type, then open the posting on the company's own site. Applications keeps what you save or apply to."],
   ];
   $("#steps").innerHTML = steps.map(([t, d]) => `<li><b>${esc(t)}</b>${esc(d)}</li>`).join("");
   const ok = D.sources.filter(s => s.ok), bad = D.sources.filter(s => !s.ok), kinds = {};
@@ -321,7 +348,7 @@ function init() {
     return;
   }
   D.all = D.jobs;
-  D.all.forEach((j, i) => { j.i = i; j.key = jobKey(j); j.must ||= []; j.nice ||= []; byKey.set(j.key, j); });
+  D.all.forEach((j, i) => { j.i = i; j.key = jobKey(j); j.must ||= []; j.nice ||= []; j.field = fieldOf(j.role); byKey.set(j.key, j); });
   const { fresh, older } = splitAge(D.all);
   D.jobs = fresh;
   D.older = older;
@@ -331,8 +358,8 @@ function init() {
   $("#updated").title = new Date(D.generated_at).toLocaleString();
   initScan();
   [...new Set(D.all.map(j => j.source))].sort().forEach(s => $("#src").insertAdjacentHTML("beforeend", `<option>${esc(s)}</option>`));
-  ROLE_ORDER.filter(r => D.all.some(j => j.role === r)).forEach(r => $("#role").insertAdjacentHTML("beforeend", `<option>${esc(r)}</option>`));
-  LEVELS.filter(l => D.all.some(j => j.level === l)).forEach(l => $("#level").insertAdjacentHTML("beforeend", `<option>${l}</option>`));
+  $("#role").insertAdjacentHTML("beforeend", roleOptions());
+  LADDER.filter(l => D.all.some(j => j.level === l)).forEach(l => $("#level").insertAdjacentHTML("beforeend", `<option>${esc(l)}</option>`));
   $("#techlist").innerHTML = ALL_SKILLS.map(k => `<option value="${esc(k)}"></option>`).join("");
 
   const sync = () => {
@@ -371,7 +398,7 @@ function init() {
   const addTech = () => { const k = findSkill($("#techq").value); if (k) { $("#techq").value = ""; if (!state.techs.includes(k)) set("techs", [...state.techs, k]); } };
   $("#techq").addEventListener("change", addTech);
   $("#techq").addEventListener("keydown", e => { if (e.key === "Enter") addTech(); });
-  $("#reset").addEventListener("click", () => { Object.assign(state, DEFAULTS, { techs: [], sort: state.sort, hideApplied: state.hideApplied }); sync(); changed(); });
+  $("#reset").addEventListener("click", () => { Object.assign(state, DEFAULTS, { techs: [], sort: state.sort, hideApplied: state.hideApplied, autoRole: state.autoRole }); sync(); changed(); });
   $("#filtersbtn").addEventListener("click", () => showMore($("#fmore").hidden));
   document.addEventListener("click", e => { if (!$("#fmore").hidden && !e.composedPath().includes($("#filters"))) showMore(false); });
   $("#more").addEventListener("click", () => { tab().limit += 40; renderList(); });
