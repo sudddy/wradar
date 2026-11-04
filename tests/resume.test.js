@@ -138,6 +138,15 @@ test("a title that names no role leaves the role empty", () => {
   assert.equal(resume(job("Laboratory Assistant", "2021 - Present", "Prepared reagents.")).role, null);
 });
 
+test("an employer whose name holds a role noun doesn't take the title's place", () => {
+  const role = (...lines) => read(["EXPERIENCE", ...lines, "- Built Java and Kafka services."].join("\n")).role;
+  assert.equal(role("Trader Joe's    Jun 2019 - Present", "Software Engineer"), "Backend");
+  assert.equal(role("Coach, New York, NY    Jun 2019 - Present", "Senior Software Engineer"), "Backend");
+  assert.equal(role("Senior Software Engineer", "Lead Bank, Kansas City, MO", "Mar 2021 – Present"), "Backend");
+  assert.equal(role("Registered Nurse", "Advocate Health, Chicago, IL    Jan 2020 - Present"), "Clinical");
+  assert.equal(role("VP Sales    2019 - Present", "Acme Corp, New York, NY"), "Sales", "a title that doesn't end on its noun still counts alone");
+});
+
 test("a letter outside ASCII is part of its word, as in Python", () => {
   assert.equal(resume(job("Coordinator, Prévoyance", "2021 - Present", "Kept the files.")).role, null, "not PR, so not Communications");
 });

@@ -170,7 +170,7 @@ const YEARS_FIELD = { "Data & research": "Engineering" };
 
 // ---- Experience entries ----
 // A job title in any field. The job's field, not this test, decides whether its years count.
-const TITLE = new RegExp(`\\b(?:${["engineer", "developer", "programmer", "swe", "sde", "sre", "devops", "architect", "scientist", "technical staff",
+const NOUNS = ["engineer", "developer", "programmer", "swe", "sde", "sre", "devops", "architect", "scientist", "technical staff",
   "lead", "manager", "director", "head of", "vp", "svp", "evp", "vice president", "chief", "ceo", "cfo", "coo", "cmo", "cio", "cto", "ciso",
   "officer", "president", "founder", "owner", "partner", "executive", "analyst", "associate", "specialist", "generalist",
   "coordinator", "consultant", "representative", "rep", "agent", "advocate", "designer", "researcher", "recruiter", "sourcer", "accountant",
@@ -178,7 +178,12 @@ const TITLE = new RegExp(`\\b(?:${["engineer", "developer", "programmer", "swe",
   "attorney", "lawyer", "paralegal", "strategist", "marketer", "writer", "copywriter", "editor", "producer", "planner", "buyer",
   "administrator", "assistant", "receptionist", "supervisor", "advisor", "adviser", "teacher", "tutor", "instructor", "professor",
   "lecturer", "trainer", "coach", "nurse", "physician", "therapist", "counselor", "pharmacist", "technician", "clinician", "dentist",
-  "paramedic", "artist", "illustrator", "animator", "intern", "internship", "co-op"].join("|")})\\b`, "i");
+  "paramedic", "artist", "illustrator", "animator", "intern", "internship", "co-op"].join("|");
+const TITLE = new RegExp(`\\b(?:${NOUNS})\\b`, "i");
+// A title ends on its noun, but for a grade or a note in brackets ("Engineer II (Contract)"), or names it before of, to or
+// for ("VP of Sales"). An employer only contains one: "Trader Joe's", "Advocate Health", "Lead Bank".
+const HEAD = new RegExp(`\\b(?:${NOUNS})(?:\\s+(?:[IV]+|\\d))?(?:\\s*\\(.*\\))?$|\\b(?:${NOUNS}|head) (?:of|to|for)\\b`, "i");
+const PLACE = /^[A-Z][^,]*,\s*[A-Z]{2}\b/;  // "New York, NY" after the name: "Coach, New York, NY" is an employer
 // Skills that alone don't make a block of text a job. A copy of PRACTICE and DOMAIN in match.js, its not-stack words: keep them in step.
 const SOFT = new Set(["Agile", "Mentoring", "Cross-functional", "Technical Leadership", "Code Review", "Jira", "Git", "On-call", "AI Coding Tools",
   "Generative AI Tools", "Stakeholder Management", "Executive Presence", "Presentation Skills", "Facilitation", "Negotiation", "Design Thinking",
@@ -194,10 +199,11 @@ const headerLike = l => {
   return words.filter(w => /[A-Z]/.test(w)).length * 2 > words.length;  // iOS and .NET count as capitalised
 };
 
-function findTitle(s, fam) {
+// strict: only a title that ends on its noun and isn't followed by a place.
+function findTitle(s, fam, strict) {
   for (const part of s.split(/\s*[|•·@]\s*|\s+[-–—]\s+|\s{2,}|\s+at\s+/)) {
-    const bits = part.split(/,\s+/), i = bits.findIndex(b => TITLE.test(b));
-    if (i < 0) continue;
+    const bits = part.split(/,\s+/), i = bits.findIndex(b => (strict ? HEAD : TITLE).test(b.trim()));
+    if (i < 0 || strict && PLACE.test(bits.slice(i + 1).join(", "))) continue;
     const tail = bits[i + 1];  // "Software Engineer, Backend", "Manager, Customer Success": a one or two word tail that names a family or role
     return bits[i].trim() + (tail && tail.split(/\s+/).length <= 2 && fam.some(([, rx]) => rx.test(tail)) ? `, ${tail.trim()}` : "");
   }
@@ -209,15 +215,19 @@ function jobBlocks(lines, today, fam) {
   lines.forEach((l, i) => { const span = dateRange(l, today); if (span) hits.push({ i, ...span }); });
   const heads = hits.map((h, k) => {
     const floor = k ? hits[k - 1].i : -1, next = k + 1 < hits.length ? hits[k + 1].i : lines.length;
-    let top = h.i, bottom = h.i, title = findTitle(undated(lines[h.i]), fam);
-    const onDates = !!title;
-    while (top - 1 > floor && h.i - top < 2 && headerLike(lines[top - 1])) { top--; title ||= findTitle(lines[top], fam); }
-    while (!title && bottom + 1 < next && bottom - h.i < 2 && headerLike(lines[bottom + 1])) { bottom++; title = findTitle(lines[bottom], fam); }
-    // The employer, which may share a name with a skill, sits below when no header line besides the title's sits above.
-    // A long line there is the first line of work.
-    const employer = bottom - top > (onDates ? 0 : 1), below = lines[bottom + 1];
-    if (title && !employer && bottom + 1 < next && headerLike(below) && below.split(/\s+/).length <= 6) bottom++;
-    return { ...h, top, bottom, title };
+    const read = strict => {
+      let top = h.i, bottom = h.i, title = findTitle(undated(lines[h.i]), fam, strict);
+      const onDates = !!title;
+      while (top - 1 > floor && h.i - top < 2 && headerLike(lines[top - 1])) { top--; title ||= findTitle(lines[top], fam, strict); }
+      while (!title && bottom + 1 < next && bottom - h.i < 2 && headerLike(lines[bottom + 1])) { bottom++; title = findTitle(lines[bottom], fam, strict); }
+      // The employer, which may share a name with a skill, sits below when no header line besides the title's sits above.
+      // A long line there is the first line of work.
+      const employer = bottom - top > (onDates ? 0 : 1), below = lines[bottom + 1];
+      if (title && !employer && bottom + 1 < next && headerLike(below) && below.split(/\s+/).length <= 6) bottom++;
+      return { ...h, top, bottom, title };
+    };
+    const strict = read(true);  // "Software Engineer" under "Trader Joe's    2019 - Present" beats the employer's name
+    return strict.title ? strict : read(false);
   });
   const blocks = heads.map((h, k) => ({ kind: "job", start: h.start, end: h.end, title: h.title,
     body: lines.slice(h.bottom + 1, k + 1 < heads.length ? heads[k + 1].top : lines.length) }));
