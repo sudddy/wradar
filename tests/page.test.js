@@ -14,6 +14,12 @@ test("the page loads on the stub", () => {
   assert.match(page.$("#list").innerHTML, /Backend Engineer 0/);
 });
 
+test("a click on the list opens the job it shows, whatever order jobs.js holds", () => {
+  const page = openPage({ data: pageData({ jobs: [row(3), row(2), row(1), row(0)] }) });  // the list shows the newest first
+  page.$("#list").fire("click", { target: { closest: () => ({ dataset: { n: "0" } }) } });
+  assert.match(page.$("#detail").innerHTML, /<h2 id="dtitle" tabindex="-1">Backend Engineer 0<\/h2>/);
+});
+
 test("a first visit with no resume opens on step 1, the welcome, with a way to browse anyway", () => {
   const page = openPage({ at: "" });
   assert.equal(page.run("page"), "resume");

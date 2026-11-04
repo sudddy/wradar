@@ -352,9 +352,9 @@ function init() {
     $("#list").innerHTML = '<li class="empty">No job data yet. Run <code>python3 fetch_jobs.py</code>, then reload.</li>';
     return;
   }
-  const rows = D.jobs;
+  const first = D.jobs;  // not "rows": that is the list on show, which a click on the list reads below
   Object.assign(D, { all: [], jobs: [], older: [] });
-  addRows(rows);
+  addRows(first);
   loadResume();
   loadTracker();
   $("#updated").textContent = `Scanned ${agoShort(D.generated_at)}`;
