@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Poll public job boards, keep software engineering jobs, tag their skills, write docs/jobs.js.
+"""Poll public job boards, keep every job in the US, Canada or remote, tag its skills, write docs/jobs.js and older.js.
 
 Rules only, no AI at runtime. Standard library only. Run: python3 fetch_jobs.py
 Fetching is in sources.py, the rules in rules.py. Resume matching happens in the dashboard, against whichever resume
@@ -8,17 +8,24 @@ the viewer uploads.
 import json
 import sys
 from concurrent.futures import ThreadPoolExecutor
-from datetime import timedelta
+from datetime import datetime, timedelta
 from functools import partial
 from pathlib import Path
 from urllib.error import HTTPError
 
 from rules import BACKEND, FAMILIES, FIELDS, FRONTEND, LADDER, LEVELS, ROLES, SEGMENT, evaluate, load_rules
-from scan_state import PREFIX, failed_over, held_over, is_slow, job_key, load_previous, merge, same_job, slot_open
+from scan_state import (OLDER, PREFIX, failed_over, held_over, is_slow, job_key, load_previous, merge, same_job,
+                        slot_open)
 from sources import BOARDS, FEEDS, NOW
 
 ROOT = Path(__file__).parent
 OUT = ROOT / "docs" / "jobs.js"
+FRESH_DAYS = 30  # jobs.js holds rows this new; the rest go to older.js, which the page loads after its first paint
+
+
+def write_js(path, prefix, data):
+    # errors: a lone surrogate from a source can't be encoded, and must not stop the scan; it is written as "?"
+    path.write_text(prefix + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n", errors="replace")
 
 
 def describe(e):
@@ -71,15 +78,16 @@ def main():
     jobs = sorted(merge(held_rows + failed_rows + [row for _, kept in results for row in kept], prev, NOW, cutoff,
                         own={label for label, _, _ in BOARDS.values()}), key=lambda j: j["posted"] or j["first_seen"], reverse=True)
     sources = sorted(ran + held_sources, key=lambda s: (not s["ok"], s["name"].lower()))
+    old = lambda j: datetime.fromisoformat(j["posted"] or j["first_seen"]) < NOW - timedelta(days=FRESH_DAYS)  # noqa: E731
     data = dict(generated_at=NOW.isoformat(), slow_fetched_at=NOW.isoformat() if run_slow else prev["slow_fetched_at"],
                 keywords=r["keywords"],  # the dashboard matches uploaded resumes with these
                 rules=dict({k: cfg[k] for k in ("max_age_days", "locations", "scan_url")}, levels=LEVELS, ladder=LADDER,
                            families=FAMILIES, roles=ROLES, segment=SEGMENT, fields=FIELDS,
                            backend=sorted(BACKEND), frontend=sorted(FRONTEND)),
-                sources=sources, jobs=jobs)
+                sources=sources, jobs=[j for j in jobs if not old(j)])
     OUT.parent.mkdir(exist_ok=True)
-    # errors: a lone surrogate from a source can't be encoded, and must not stop the scan; it is written as "?"
-    OUT.write_text(PREFIX + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n", errors="replace")
+    write_js(OUT, PREFIX, data)
+    write_js(OUT.with_name("older.js"), OLDER, dict(generated_at=data["generated_at"], jobs=[j for j in jobs if old(j)]))
     OUT.with_name("scan.json").write_text(json.dumps(dict(generated_at=data["generated_at"], jobs=len(jobs))) + "\n")
     ok = sum(s["ok"] for s in sources)
     print(f"{len(jobs)} jobs kept from {sum(s['seen'] for s in sources)} seen; {ok}/{len(sources)} sources OK")

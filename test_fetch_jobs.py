@@ -194,6 +194,7 @@ class Main(unittest.TestCase):
             out.write_text(s.PREFIX + json.dumps(prev) + ";\n")
             with mock.patch.object(f, "OUT", out), mock.patch.object(f, "run_source", source), mock.patch("builtins.print"):
                 f.main()
+            self.fresh, self.older = s.read_js(out, s.PREFIX), s.read_js(Path(d) / "older.js", s.OLDER)
             return s.load_previous(out), json.loads((Path(d) / "scan.json").read_text()), tasks
 
     def test_open_slot_runs_everything_and_writes_the_contract(self):
@@ -208,6 +209,15 @@ class Main(unittest.TestCase):
         self.assertEqual((exported["ladder"][0], exported["ladder"][-1], exported["roles"][0], exported["segment"]),
                          ("Intern", "C-level", list(rules.ROLES[0]), rules.SEGMENT))
         self.assertEqual((exported["fields"]["Cybersecurity"], exported["fields"]["Other"]), ("IT & security", "Other"))
+
+    def test_rows_older_than_30_days_go_to_older_js_and_come_back_next_scan(self):
+        prev = dict(slow_fetched_at=days(0), sources=[],
+                    jobs=[row(source="Workday", title=t, posted=days(n), first_seen=days(n)) for t, n in (("Old", 40), ("New", 29))])
+        data, scan, _ = self.scan(prev)
+        fresh, older = ({j["title"] for j in d["jobs"]} for d in (self.fresh, self.older))
+        self.assertEqual((older, "New" in fresh, "Old" in fresh), ({"Old"}, True, False))
+        self.assertEqual((self.older["generated_at"], scan["jobs"]), (self.fresh["generated_at"], len(fresh) + 1))
+        self.assertIn("Old", {j["title"] for j in data["jobs"]})  # load_previous() reads both files
 
     def test_closed_slot_skips_slow_sources_and_keeps_their_rows(self):
         prev = dict(slow_fetched_at=days(0), sources=[dict(name="NVIDIA", kind="Workday", url="", ok=True, seen=9, kept=1)],
