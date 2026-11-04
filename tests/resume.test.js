@@ -286,7 +286,9 @@ test("professional, law and associate degrees", () => {
   for (const t of ["LL.M., Taxation, NYU School of Law", "LLM in International Law, Columbia", "Master of Laws, Osgoode Hall"]) assert.equal(degree(t), "Master's", t);
   for (const t of ["Associate of Applied Science, Nursing", "Associate Degree in Accounting, Valencia College", "ADN, Miami Dade College"]) assert.equal(degree(t), "Associate", t);
   for (const t of ["BSN, University of Iowa", "MSN, Vanderbilt"]) assert.equal(degree(t), t.startsWith("B") ? "Bachelor's" : "Master's", t);
-  assert.equal(degree("B.S. Biology, Johns Hopkins University, Baltimore, MD"), "Bachelor's", "a Maryland address is not a medical degree");
+  for (const t of ["B.S. Biology, Johns Hopkins University, Baltimore, MD", "B.S. Biology, Johns Hopkins, Baltimore, MD, USA", "B.A. Economics, Boston, MA, USA",
+    "B.S. Biology, UT M.D. Anderson School of Health Professions"]) assert.equal(degree(t), "Bachelor's", `${t}: an address or a cancer centre is no degree`);
+  assert.equal(degree("Doctor of Philosophy, Physics, Caltech"), "PhD");
   assert.equal(degree("JD Edwards EnterpriseOne training"), null);
   assert.equal(degree("Skills: Python, LLM, RAG"), null, "a large language model is not a law degree");
   assert.equal(degree("J.D. Candidate, Harvard Law School\nB.A., Political Science, Tufts"), "Bachelor's");

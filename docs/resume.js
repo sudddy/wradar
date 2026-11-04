@@ -271,14 +271,15 @@ const PRO = "medicine|osteopath\\w*|pharmacy|dental|nursing practice|psychology|
 const DEGREES = [
   ["PhD", new RegExp(`\\bph\\.? ?d\\b|\\bd\\.? ?phil\\b|\\bdoctorate\\b|\\bdoctor of (?!(?:${PRO})\\b)`, "i"), /$^/],
   ["Professional", new RegExp(`\\bdoctor of (?:${PRO})\\b|\\bjuris doctor|\\bbachelor of laws\\b`, "i"),
-    /\b(?:J\.D|JD(?!\s+Edwards)|LL\.?B|M\.D|Pharm\.?\s?D|Psy\.?D|D\.?N\.?P|D\.?D\.?S|D\.?M\.?D|D\.O)\b|\b(?:MD|DO)\b(?=\s*[,(]|\s*$)/],
+    /\b(?:J\.D|JD(?!\s+Edwards)|LL\.?B|M\.D(?!\.?\s*Anderson\b)|Pharm\.?\s?D|Psy\.?D|D\.?N\.?P|D\.?D\.?S|D\.?M\.?D|D\.O)\b|\b(?:MD|DO)\b(?=\s*[,(]|\s*$)/],
   ["Master's", /\bmaster(?:\s+of|\s+in|\s+degree|['’]s|s\b)/i, /\b(?:M\.?S(?:c|CS|EE?|N)?|M\.S|M\.?Eng|M\.?Tech|M\.?B\.?A|M\.?C\.?A|M\.?C\.?S|M\.?Ed|M\.A|LL\.M)\b(?!\s+(?:Office|Excel|Word|Project|SQL|Access|Azure|Teams)\b)|\bMA\b(?=\s+(?:in|of)\b|\s*[,(]|\s*$)|\bLLM\b(?=\s+(?:in|of)\b|\s*\()/],
   ["Bachelor's", /\bbachelor(?:\s+of|\s+in|\s+degree|['’]s|s\b)/i, /\b(?:B\.?S(?:c|CS|EE?|N)?|B\.?Eng|B\.?Tech|B\.?B\.?A|B\.?C\.?A|B\.?C\.?S|B\.?Com|B\.A|B\.E)\b|\b(?:BA|BE)\b(?=\s+(?:in|of)\b|\s*[,(]|\s*$)/],
   ["Associate", /\bassociate(?:['’]?s)?\s+(?:of|in|degree)\b/i, /\b(?:A\.A\.S|A\.S|A\.A|AAS|ADN)\b/],
 ];
 const NOT_HELD = /\b(?:expected|anticipated|in progress|candidate|pursuing|ongoing|incomplete|abd|not completed)\b/i;
 const held = (l, i, all) => !NOT_HELD.test(l) && !NOT_HELD.test(all[i + 1] || "");  // "MBA, Wharton" over "Expected May 2027"
-const STATE = /,\s*M[ADS](?=\s*,?\s*(?:\d|[|(]|$))/g;  // the place that ends "Boston, MA", "Baltimore, MD" or "Oxford, MS 38655, 2018"
+// The place that ends "Boston, MA", "Baltimore, MD, USA" or "Oxford, MS 38655, 2018". M.D. Anderson is a cancer centre.
+const STATE = /,\s*M[ADS](?=\s*,?\s*(?:\d|[|(]|$|USA?\b|United States\b))/g;
 
 function degreeOf(lines) {
   lines = lines.map(l => l.replace(STATE, "")).filter(held);
