@@ -10,6 +10,12 @@ from pathlib import Path
 
 from extract import degree, rich_text, salary, split_sections, tier_skills, work_mode, years_min
 
+try:  # Python's own regex parser, to read the words a re: alias can't match without
+    from re import _constants as sre, _parser as sre_parse  # Python 3.11+
+except ImportError:  # Python 3.10
+    import sre_constants as sre
+    import sre_parse
+
 ROOT = Path(__file__).parent
 
 US_STATES = ("alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho"
@@ -199,16 +205,38 @@ def compile_keywords(d):
     return {name: re.compile("|".join(map(pattern, aliases))) for name, aliases in d.items() if not name.startswith("_")}
 
 
+def required(seq):
+    """Words, lowercased, one of which every match of a parsed regex contains; None when that can't be told. A part it
+    doesn't know adds no words, so the answer can only be weaker than it might be, never wrong."""
+    options, run = [], ""
+    for op, av in [*seq, (None, None)]:
+        if op is sre.LITERAL and av < 128 and chr(av).isalnum():
+            run += chr(av).lower()
+            continue
+        options += [{run}] if len(run) > 1 else []
+        run = ""
+        if op is sre.SUBPATTERN:
+            options.append(required(av[-1]))
+        elif op is sre.BRANCH:
+            alts = [required(a) for a in av[1]]
+            options.append(None if None in alts else set().union(*alts))
+        elif op in (sre.MAX_REPEAT, sre.MIN_REPEAT) and av[0] > 0:
+            options.append(required(av[2]))
+    return max(filter(None, options), key=lambda words: min(map(len, words)), default=None)
+
+
 def needles(d):
-    """Skill -> (keys, [(key, plain alias lowercased)], regex of its other aliases or None), for skills(). A plain alias's
-    key is its longest run of letters and digits, which is a whole word of any text the alias matches."""
+    """Skill -> (keys, [(key, plain alias lowercased)], regex of its other aliases or None, words that regex needs or
+    None), for skills(). A plain alias's key is its longest run of letters and digits, a whole word of any text it matches."""
     out = {}
     for name, aliases in d.items():
         if not name.startswith("_"):
             plain = [a for a in aliases if not a.startswith("re:") and a.isascii() and WORD.search(a.lower())]
             rest = [a for a in aliases if a not in plain]
             pairs = [(max(WORD.findall(a), key=len), a) for a in (p.lstrip("=").lower() for p in plain)]
-            out[name] = frozenset(k for k, _ in pairs), pairs, re.compile("|".join(map(pattern, rest))) if rest else None
+            words = [required(sre_parse.parse(pattern(a))) for a in rest]
+            out[name] = (frozenset(k for k, _ in pairs), pairs, re.compile("|".join(map(pattern, rest))) if rest else None,
+                         None if None in words else set().union(*words))
     return out
 
 
@@ -225,16 +253,16 @@ def matches_at(rx, s, low, plain):
 
 def skills(kw, s, needles=None):
     """Skills named in s. With needles, a skill's regex runs only where a plain alias whose key is a word of s appears,
-    and its re: aliases search the whole text: the same result as searching everything, many times faster."""
+    and its re: aliases only when a word they need is in s: the same result as searching everything, many times faster."""
     if not needles:
         return {name for name, rx in kw.items() if rx.search(s)}
     low = s.translate(FOLD).lower()
     words = set(WORD.findall(low)) | {w.lower() for w in CASED_WORD.findall(s)}  # case-blind aliases, then =Cased ones
     found = set()
     for name, rx in kw.items():
-        keys, pairs, rest = needles[name]
-        if (rest and rest.search(s)) or (not keys.isdisjoint(words)
-                                         and matches_at(rx, s, low, [a for k, a in pairs if k in words])):
+        keys, pairs, rest, need = needles[name]
+        if (rest and (need is None or any(w in low for w in need)) and rest.search(s)) or (
+                not keys.isdisjoint(words) and matches_at(rx, s, low, [a for k, a in pairs if k in words])):
             found.add(name)
     return found
 

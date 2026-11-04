@@ -31,6 +31,20 @@ class Keywords(unittest.TestCase):
             for text in (said, said.upper(), said.swapcase(), said.translate(odd), f"x{said}x", f"ſ{said}ı", f"K{said}İ"):
                 self.assertEqual(rules.skills(R["kw"], text, R["needles"]), rules.skills(R["kw"], text), (name, text))
 
+    def test_words_a_re_alias_needs(self):
+        need = lambda p: rules.required(rules.sre_parse.parse(p))  # noqa: E731
+        self.assertEqual(need(r"\b[Gg]olang\b|(?:(?<=, )|(?<=\bin ))Go(?![\w-])|\bGo(?=\s*[,/)])"), {"olang", "go"})
+        self.assertEqual(need(r"(?:[Ff]luent|[Nn]ative)\b[^.\n]{0,50}\bSpanish\b|\(Spanish\s*\)"), {"spanish"})
+        self.assertEqual(need(r"\b[Dd]ata [Pp]rivacy\b(?! [Nn]otice)"), {"rivacy"})  # the longer of two words it needs
+        for p in (r"R(?![\w&+'-])", r"(?:Kafka)?", r"[A-Z]{2,}", r"Go|\d+"):
+            self.assertIsNone(need(p), p)
+        aliases = {"Lever": ["re:(?:(?<=[,/(] )|(?<=\\bor ))(?:Lever)\\b(?![\\w-])"], "R": ["re:(?<=, )R(?![\\w&+'-])", "rstudio"],
+                   "Spanish": ["re:[Ff]luent\\b[^.\\n]{0,50}\\bSpanish\\b|\\bSpanish[- ]speaking\\b"]}
+        kw, nd = rules.compile_keywords(aliases), rules.needles(aliases)
+        for text in ("ATS: Greenhouse, Lever", "Workday or Lever", "Lever ownership", "LEVER", "Python, R", "fluent in Spanish",
+                     "Spanish-speaking", "SPANISH", "Greenhouse"):
+            self.assertEqual(rules.skills(kw, text, nd), rules.skills(kw, text), text)
+
 
 class Locations(unittest.TestCase):
     def test_where(self):
