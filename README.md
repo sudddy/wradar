@@ -1,6 +1,6 @@
 # wradar
 
-A job radar for software engineers. Finds software engineering jobs in the US, Canada and remote, for every technology. Anyone can add their own resume to see how well each job fits them, and keep track of what they've saved and applied to.
+A job radar for every field. Finds jobs in the US, Canada and remote, from interns to C-level, in engineering, sales, finance, marketing, design, people, legal, healthcare and more. Anyone can add their own resume to see how well each job fits them, and keep track of what they've saved and applied to.
 
 No AI runs here. A Python script (standard library only) polls public job sources on a schedule and applies fixed rules.
 
@@ -14,9 +14,9 @@ The app is served from **https://sudddy.github.io/wradar/** once GitHub Pages is
 
 The footer links to **Insights** (most-requested skills and how the jobs break down by role, seniority, location and type) and **How it works and privacy** (how jobs are found and which of the 332 sources were read in the 6 hours up to the last scan).
 
-Jobs are kept for 90 days after posting. Past 30 days they move to Over 30 days ago, and they stop counting in Insights and the hot match count.
+Jobs are kept for 90 days after posting. Past 30 days they move to Over 30 days ago, and they stop counting in Insights and the hot match count. The scan writes the last 30 days to `docs/jobs.js` and the rest to `docs/older.js`, which the page loads after it first appears.
 
-Job data refreshes every 6 hours via GitHub Actions. To refresh sooner, use **Scan now** in the top bar, or the Actions tab → **Fetch jobs** → **Run workflow**. Editing `config.json`, `keywords.json`, `fetch_jobs.py`, `extract.py` or `scan_state.py` also triggers a refresh.
+Job data refreshes every 6 hours via GitHub Actions. To refresh sooner, use **Scan now** in the top bar, or the Actions tab → **Fetch jobs** → **Run workflow**. Editing `config.json`, `keywords.json`, `fetch_jobs.py`, `sources.py`, `rules.py`, `extract.py` or `scan_state.py` also triggers a refresh.
 
 To run it on your own machine instead: `python3 fetch_jobs.py`, then open `docs/index.html`. On a Mac with Python from python.org, run `SSL_CERT_FILE=/etc/ssl/cert.pem python3 fetch_jobs.py` (or Python's Install Certificates command first), or every source fails its certificate check.
 
@@ -28,7 +28,7 @@ Remotive, Workable, Workday, SmartRecruiters and Jobicy are read at most once pe
 
 ## Your resume
 
-Click **Choose a file** (PDF, Word .docx or text), drop a file on the panel, or paste the text. The app reads it in the browser, with experience, skills, projects and education read separately. It works out your years from tech jobs, your level, role and degree, and whether each skill shows in your latest job, an older job or project, or is only listed.
+Click **Choose a file** (PDF, Word .docx or text), drop a file on the panel, or paste the text. The app reads it in the browser, with experience, skills, projects and education read separately. It works out your years in the field of your latest job, your level, role and degree (professional degrees such as JD and MD included), and whether each skill shows in your latest job, an older job or project, or is only listed.
 
 Your resume shows all of that. Add or remove skills and correct your years, and every score updates at once. **Replace** and **Remove** do what they say. Without a resume every filter except Match at least still works; the match numbers just stay empty. A resume saved by an earlier version keeps working, and the app asks you to add it again for better scores.
 
@@ -53,7 +53,7 @@ Each job gets a score out of 100 from six parts. It's the points earned out of t
 | Part | Points | How it's scored |
 |---|---|---|
 | Role | 20 | Full for the same family, part for an adjacent one, little otherwise |
-| Seniority | 15 | Full for the same level, less the further apart |
+| Seniority | 15 | Full for the same level, less the further apart. Levels run from Intern to C-level on two tracks, individual and manager |
 | Years | 15 | Full if you meet the ask, falling to 0 at 40% of it |
 | Top must-haves | 36 | The five required skills that matter most for the role, weighted, with a skill named in the title counting most |
 | Everything else | 10 | Other required skills, nice-to-haves and mentions |
@@ -61,15 +61,16 @@ Each job gets a score out of 100 from six parts. It's the points earned out of t
 
 - **Hot** is 75 or more, **Warm** 65 to 74, **Cool** under 65.
 - A skill counts fully from your latest job, .8 from an older job or project, and .5 if it's only listed, and a little less if unused for over 24 or 60 months. A skill you add by hand counts .8.
+- Moving from an individual role to a manager one costs, less so when your resume shows people you managed. A licence a field asks for (RN, CPA, bar admission) counts fully when you hold it, and a posting that requires one you don't hold stops at Warm.
 - Same-kind required skills count as one requirement, so "Go or Python" is met by either.
 - Caps keep poor fits low whatever the other parts add up to. For example, a job whose title sits two levels above yours stops at 45, and one whose title names a skill that's not on your resume stops at 60.
 - Each job shows why you fit (up to 4), gaps (up to 3) and what to do next (up to 3). If a cap held the score down, its reason comes first under gaps.
 
-Only the skills in `keywords.json` are visible to the matcher, so a requirement outside it doesn't count for or against you.
+Only the skills in `keywords.json` (about 480 across every field) are visible to the matcher, so a requirement outside it doesn't count for or against you.
 
 ## What it shows
 
-- Filters, in one panel: search; **Posted** (the last 2, 3, 7 or 30 days, or over 30 days ago); location (US, Canada, Remote), role (Backend, Full stack, Frontend, Data, DevOps / SRE…), seniority (Junior, Mid, Senior, Staff+) and work mode; plus **More filters**: minimum pay, job type, source, technologies (pick any or all, e.g. Java, Node.js) and minimum match. Choices are remembered in the browser; **Clear filters** clears them.
+- Filters, in one panel: search (title, company, skill, role or field); **Posted** (the last 2, 3, 7 or 30 days, or over 30 days ago); location (US, Canada, Remote), role (grouped by field, such as All Sales, All Finance or Backend), level (Intern to C-level) and work mode; plus **More filters**: minimum pay, job type, source, technologies (pick any or all, e.g. Java, Node.js) and minimum match. Choices are remembered in the browser; **Clear filters** clears them.
 - Pay and work mode filters leave out jobs that don't state them, and the count says how many. Pay is compared in each job's own currency, top of the range, with hourly pay counted as 2,080 hours a year.
 - Rows: match, title, your mark, company, pay, work mode, place and age. Sort by best match or newest.
 - The selected job: its pay, work mode, place and age, then **Apply on company site**, **Applied**, **Save** and **Hide**, then the score and its parts, why you fit, gaps and next steps, the skills it asks for (must-haves, nice to have, also mentioned) each marked as on or not on your resume, and the rest of its facts. After Apply on company site it asks "Did you apply?"
@@ -78,7 +79,7 @@ Only the skills in `keywords.json` are visible to the matcher, so a requirement 
 - Applicants: shown when a source provides it, otherwise "Not available" (public job APIs don't expose this)
 - The skills most often asked for and, with a resume, the skills to add across the listed jobs, and which sources were read in the 6 hours up to the last scan
 
-Role comes from the job title; a generic title like "Software Engineer" falls back to its skills. Seniority comes from the title too, and a title with no level word reads as Mid.
+Role comes from the job title, then the board's department; a generic title like "Software Engineer" falls back to its skills. After a resume is read, Role is set to your field (you can clear it). Level comes from the title too, and a title with no level word reads as Mid. An Account Director is a senior seller, not a Director.
 
 Job type comes from the posting's own field where the site has one (Lever, Ashby, SmartRecruiters, Workable, Workday, Amazon and most feeds). Otherwise it's read from the title or a plain statement in the description; if neither says, it shows "Not specified".
 
@@ -91,7 +92,7 @@ Pay comes from the posting's own field on Lever and Ashby, otherwise from the de
 | Greenhouse company boards | 154 | public job board API |
 | Ashby company boards | 116 | public posting API |
 | Lever company boards | 29 | public postings API |
-| Workday career sites (NVIDIA, Salesforce, Capital One, TD, BMO…) | 15 | the career site's own JSON search, top 200 "software engineer" results |
+| Workday career sites (NVIDIA, Salesforce, Capital One, TD, BMO…) | 15 | the career site's own JSON search, the newest 200 jobs |
 | SmartRecruiters (ServiceNow, Canva, Freshworks…) | 7 | public postings API |
 | Workable | 2 | public widget API |
 | Job boards: Remotive, RemoteOK, Jobicy, Himalayas, We Work Remotely, Working Nomads, The Muse, HN "Who is hiring", Amazon Jobs | 9 | public APIs / RSS |
@@ -102,17 +103,18 @@ LinkedIn, Indeed and Glassdoor aren't polled: they have no public jobs API and t
 
 | Path | What it is |
 |---|---|
-| `fetch_jobs.py` | Polls the sources, applies the rules, writes `docs/jobs.js` and `docs/scan.json` |
+| `fetch_jobs.py` | Runs the scan and writes `docs/jobs.js`, `docs/older.js` and `docs/scan.json` |
+| `sources.py`, `rules.py` | One adapter per source type; the rules (levels, role families, fields, skills) and `evaluate()` |
 | `extract.py` | Reads a posting's required skills, years, pay, work mode and degree |
 | `scan_state.py` | What one scan keeps from the last: first-seen dates, Workday dates, slow-source rows |
 | `config.json` / `keywords.json` | The rules and the skill dictionary |
 | `docs/index.html`, `docs/app.css`, `docs/app.js` | The app (plain HTML, CSS and JavaScript, no build step) |
 | `docs/match.js`, `docs/resume.js` | Scoring, and reading a resume |
 | `docs/board.js`, `docs/tracker.js`, `docs/scan.js` | The job list and detail, Saved / Applied / Hidden, and the Scan now button |
-| `docs/jobs.js`, `docs/scan.json` | Job data from the last run, and its timestamp and count |
+| `docs/jobs.js`, `docs/older.js`, `docs/scan.json` | Job data from the last run (the last 30 days, and older), and its timestamp and count |
 | `worker/scan.js` | Cloudflare Worker behind Scan now |
 | `.github/workflows/fetch-jobs.yml` | The 6-hourly schedule |
-| `test_fetch_jobs.py`, `tests/` | Python and JavaScript tests |
+| `test_*.py`, `tests/` | Python and JavaScript tests |
 | `CLAUDE.md` | Notes for working on the project with Claude Code |
 
 ## Changing the rules
