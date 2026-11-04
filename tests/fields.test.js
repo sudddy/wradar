@@ -83,11 +83,14 @@ test("Level follows the ladder, and data from before the ladder and fields still
   const page = openPage({ data: fields() });
   assert.equal(page.$("#level").innerHTML, "<option>Intern</option><option>Mid</option><option>Director</option>");
   assert.match(read("docs/index.html"), /<option>Contract<\/option><option>Internship<\/option>/);
-  const { ladder, roles, fields: f, ...rules } = REAL.rules;
-  const old = openPage({ data: { ...fields(), rules: { ...rules, scan_url: "" } } });
+  const { ladder, roles, fields: f, segment, ...rules } = REAL.rules;
+  const old = openPage({ data: { ...fields(), rules: { ...rules, scan_url: "" } } });  // and no older.js
   assert.equal(old.$("#level").innerHTML, "<option>Mid</option>");
   assert.match(old.$("#role").innerHTML, /^<optgroup label="Engineering"><option value="field:Engineering">All Engineering<\/option><option>Backend<\/option><option>Sales<\/option>/);
   assert.equal(old.run("D.all.every(j => j.field === 'Engineering')"), true);
+  withResume(old);
+  assert.equal(old.run("D.all.every(j => j.score != null)"), true);
+  assert.equal(old.$("#count").textContent, "6 jobs");
 });
 
 test("search finds a job by its role or its field", () => {
