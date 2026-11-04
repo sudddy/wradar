@@ -2,6 +2,7 @@
 import re
 import unittest
 from datetime import timedelta
+from unittest import mock
 
 import rules
 import sources
@@ -41,9 +42,13 @@ class Keywords(unittest.TestCase):
         aliases = {"Lever": ["re:(?:(?<=[,/(] )|(?<=\\bor ))(?:Lever)\\b(?![\\w-])"], "R": ["re:(?<=, )R(?![\\w&+'-])", "rstudio"],
                    "Spanish": ["re:[Ff]luent\\b[^.\\n]{0,50}\\bSpanish\\b|\\bSpanish[- ]speaking\\b"]}
         kw, nd = rules.compile_keywords(aliases), rules.needles(aliases)
+        with mock.patch.object(rules, "sre_parse", None):  # a Python without the private parser: slower, the same skills
+            blind = rules.needles(aliases)
+        self.assertEqual({name: need for name, (*_, need) in blind.items()}, dict.fromkeys(aliases))
         for text in ("ATS: Greenhouse, Lever", "Workday or Lever", "Lever ownership", "LEVER", "Python, R", "fluent in Spanish",
                      "Spanish-speaking", "SPANISH", "Greenhouse"):
             self.assertEqual(rules.skills(kw, text, nd), rules.skills(kw, text), text)
+            self.assertEqual(rules.skills(kw, text, blind), rules.skills(kw, text), text)
 
 
 class Locations(unittest.TestCase):
@@ -102,7 +107,11 @@ class Classify(unittest.TestCase):
                             "Product Manager": "Mid", "Customer Success Manager": "Mid", "Senior Product Manager": "Senior",
                             "Group Product Manager": "Staff+", "Enterprise Architect": "Staff+", "Solutions Architect": "Mid",
                             "Staff Accountant": "Mid", "Software Engineering Intern": "Intern",
-                            "New Grad Software Engineer": "Junior"}.items():
+                            "New Grad Software Engineer": "Junior", "Account Director - Enterprise": "Senior",
+                            "Senior Account Director": "Senior", "Client Director, Financial Services": "Senior",
+                            "Director, Account Management": "Director", "SMTS Software Engineer": "Senior", "LMTS": "Staff+",
+                            "PMTS, Platform": "Staff+", "Lead Member of Technical Staff": "Staff+",
+                            "Développeur Logiciels (Stagiaire), Backend": "Intern"}.items():
             self.assertEqual(rules.level(title), want, title)
         self.assertEqual(set(rules.LADDER), {name for name, _ in rules.LEVELS} | {"Mid"})
 
@@ -127,6 +136,26 @@ class Classify(unittest.TestCase):
                             "Customer Success Manager": "Customer success", "Recruiter": "Recruiting",
                             "Staff Accountant": "Accounting", "Financial Analyst": "Finance", "Corporate Counsel": "Legal",
                             "Executive Assistant": "Administrative", "Teacher": "Education"}.items():
+            self.assertEqual(rules.family(title, set()), want, title)
+
+    def test_family_for_titles_first_read_as_other(self):  # from a full scan; the late entries yield to a field's own noun
+        for title, want in {"SDET Intern": "QA / Test", "SDET Manager": "QA / Test", "Senior Full Stack": "Full stack",
+                            "Sr REACT NATIVE": "Mobile", "Web Development Intern": "Frontend",
+                            "PhD Machine Learning Internship 2027": "ML / AI", "Head of Technology and AI Innovation": "ML / AI",
+                            "Software Development Manager, AI Foundations": "ML / AI", "Tech Lead": "General",
+                            "Software Development Project Manager": "Program management",
+                            "Machine Learning Research Intern (Summer 2027)": "Research", "UX Research Intern": "Design",
+                            "Sr Manager, Applied Science, Search": "Research", "Sr. Manager, Data Analysis": "Analytics",
+                            "Développeur Logiciels (Stagiaire), Backend": "Backend", "Ingénieur Logiciel Android": "Mobile",
+                            "Senior Business Systems Analyst": "IT", "Finance Systems Analyst": "Finance", "Senior DB2 DBA": "IT",
+                            "Senior Director, GTM People Business Partner": "People & HR", "Senior Director, GTM Finance": "Finance",
+                            "GTM Lead": "Sales", "Manager, Mid Market (East)": "Sales",
+                            "Mid-Market Customer Success Manager": "Customer success", "Technical Success Manager": "Customer success",
+                            "Neuropsychologist - Contract (1099)": "Clinical", "Talent Partner, Technical": "Recruiting",
+                            "Client Service Associate": "Support", "Personal Banking Associate": "Finance",
+                            "Manager, SEC Reporting": "Accounting", "Vice President, Global Affairs": "Communications",
+                            "Data Entry Clerk": "Administrative", "Head of PR": "Communications",
+                            "Vice-président(e) exécutif(ve)": "Other"}.items():  # "pr" before "é" is not PR, in JavaScript too
             self.assertEqual(rules.family(title, set()), want, title)
 
     def test_department_fallback_and_fields(self):
@@ -181,6 +210,16 @@ class Evaluate(unittest.TestCase):
         row = rules.evaluate(job(company="Datadog", description="<p>We use Redis.</p><p>Requirements</p><ul><li>Java and "
                                                                 "Datadog</li></ul>"), R, CUTOFF)
         self.assertEqual((row["skills"], row["must"]), (["Java", "Redis"], ["Java"]))
+        kw = {"Datadog": ["datadog"], "HRIS": ["hris", "=Rippling", "bamboohr"], "Work Management Tools": ["=Notion", "asana"],
+              "Grafana": ["grafana"], "Java": ["java"]}  # vendors folded into a skill as aliases
+        r = dict(R, kw=rules.compile_keywords(kw), needles=rules.needles(kw))
+        for company, body, want in (("Datadog", "Java and DATADOG. Datadog's agent.", ["Java"]),
+                                    ("Notion", "Plan in Notion.", []), ("Notion", "Asana or Notion.", ["Work Management Tools"]),
+                                    ("Rippling", "Rippling runs payroll.", []), ("Rippling", "An HRIS such as BambooHR.", ["HRIS"]),
+                                    ("Grafana Labs", "Grafana Labs builds Grafana in Java.", ["Java"]),
+                                    ("", "Java and Datadog.", ["Datadog", "Java"])):
+            row = rules.evaluate(job(title="Analyst", company=company, description=body), r, CUTOFF)
+            self.assertEqual(row["skills"], want, (company, body))
 
     def test_lazy_fields_only_fetched_when_needed(self):
         calls = []

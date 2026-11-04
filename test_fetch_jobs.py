@@ -81,7 +81,11 @@ class Years(unittest.TestCase):
                            "Requirements\nA BS plus five (5) years of experience": 5, "Requirements\n10+ YoE in product": 10,
                            "Requirements\nFive or more years of Go": 5, "Requirements\nOne year of Java": 1,
                            "Requirements\nUp to two years of Go": None, "Requirements\nA two year degree": None,
-                           "Requirements\n18+ years leading sales teams": 18, "Requirements\n25+ years in banking": None}.items():
+                           "Requirements\n18+ years leading sales teams": 18, "Requirements\n25+ years in banking": None,
+                           "Requirements\n2+ years in retail\nYou are at least 18 years of age.": 2,  # an age, not experience
+                           "Requirements\nMust be 18 years or older": None, "Requirements\n16 years or over": None,
+                           "Great team.\nYou must be 18 years of age or older with retail experience.": None,
+                           "Requirements\n5 years of agency experience": 5}.items():
             self.assertEqual(x.years_min(x.split_sections(body)), want, body)
 
 
