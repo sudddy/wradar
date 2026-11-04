@@ -69,7 +69,7 @@ class Sources(unittest.TestCase):
         jobs = self.run_with(sources.amazon, payloads=[{"jobs": [{
             "title": "SDE", "job_path": "/jobs/1", "posted_date": "October 30, 2026", "description": "Build things",
             "basic_qualifications": "- 5+ years of Java<br/>- Linux", "preferred_qualifications": "- Kafka",
-            "normalized_location": "Seattle, WA", "country_code": "USA"}]}, {"jobs": []}, {"jobs": []}])
+            "normalized_location": "Seattle, WA", "country_code": "USA"}]}] + [{"jobs": []}] * 9)
         sec = x.split_sections(x.rich_text(jobs[0]["description"]))
         self.assertEqual(("- 5+ years of Java" in sec["must"], "- Kafka" in sec["nice"], "- Kafka" in sec["must"]),
                          (True, True, False))
@@ -102,7 +102,7 @@ class Sources(unittest.TestCase):
         rss = (b"<rss><channel><item><title>Acme: Backend Engineer</title><region>USA Only</region>"
                b"<type>Contract</type><pubDate>Mon, 02 Nov 2026 07:31:15 +0000</pubDate>"
                b"<link>https://weworkremotely.com/x</link><description>Java</description></item></channel></rss>")
-        jobs = self.run_with(sources.weworkremotely, payloads=[rss, rss, rss])
+        jobs = self.run_with(sources.weworkremotely, payloads=[rss] * 9)
         self.assertEqual((jobs[0]["company"], jobs[0]["title"], jobs[0]["type"]), ("Acme", "Backend Engineer", "Contract"))
         self.assertEqual(rules.where(jobs[0]["location"]), ["US", "Remote"])
 
@@ -124,17 +124,50 @@ class Sources(unittest.TestCase):
                   "Sales / Business"),
                  (sources.jobicy, (), [{"jobs": [dict(jobTitle="Associate", companyName="C", url=job["url"],
                                                       jobIndustry=["QA & Testing"])]}, {"jobs": []}], "QA & Testing"),
-                 (sources.workingnomads, (), [[dict(job, company_name="C", category_name="Development")]], "Development"),
+                 (sources.workingnomads, (), [[dict(job, company_name="C", category_name="Marketing")]], "Marketing"),
                  (sources.themuse, (), [{"page_count": 1, "results": [dict(name="Associate", company={"name": "C"},
                                                                            refs={"landing_page": job["url"]},
                                                                            categories=[{"name": "Sales"}])]}], "Sales"),
-                 (sources.amazon, (), [{"jobs": [dict(job, job_path="/1", job_category="Human Resources")]},
-                                       {"jobs": []}, {"jobs": []}], "Human Resources"),
+                 (sources.amazon, (), [{"jobs": [dict(job, job_path="/1", job_category="Human Resources")]}]
+                  + [{"jobs": []}] * 9, "Human Resources"),
                  (sources.weworkremotely, (), [b"<rss><channel><item><title>C: Associate</title>"
-                                               b"<category>Customer Support</category></item></channel></rss>"] * 3,
+                                               b"<category>Customer Support</category></item></channel></rss>"] * 9,
                   "Customer Support")]
         for fn, args, payloads, want in cases:
             self.assertEqual(self.run_with(fn, *args, payloads=payloads)[0]["dept"], want, fn.__name__)
+
+    def requests(self, fn, *args, answer):
+        """-> [(url, body)] fn asked for, every call answered with answer (bytes as they are, anything else as JSON)."""
+        reply = answer if isinstance(answer, bytes) else json.dumps(answer).encode()
+        with mock.patch.object(sources, "fetch", return_value=reply) as fetch:
+            fn(*args)
+        return [(c.args[0], c.args[1] if len(c.args) > 1 else None) for c in fetch.call_args_list]
+
+    def test_sources_ask_for_every_field(self):  # no search words, no category: the rules decide what is kept
+        [(url, body)] = self.requests(sources.workday, "acme.wd5/Ext", "Acme", answer={"total": 0, "jobPostings": []})
+        self.assertEqual((url, body["searchText"], body["limit"]),
+                         ("https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Ext/jobs", "", 20))
+        [(url, _)] = self.requests(sources.remotive, answer={"jobs": []})
+        self.assertEqual(url, "https://remotive.com/api/remote-jobs")
+        urls = [u for u, _ in self.requests(sources.himalayas, answer={"jobs": []})]
+        self.assertEqual((len(urls), any("q=" in u for u in urls), urls[0]),
+                         (20, False, "https://himalayas.app/jobs/api/search?country=United%20States&page=1"))
+        urls = [u for u, _ in self.requests(sources.themuse, answer={"page_count": 320, "results": []})]
+        self.assertEqual((len(urls), any("category=" in u or "level=" in u for u in urls), urls[-1][-8:]),
+                         (99, False, "&page=98"))
+        urls = [u for u, _ in self.requests(sources.amazon, answer={"jobs": []})]
+        self.assertEqual((len(urls), "base_query=&" in urls[0], urls[-1][-10:]), (10, True, "offset=900"))
+        urls = [u for u, _ in self.requests(sources.weworkremotely, answer=b"<rss><channel></channel></rss>")]
+        self.assertEqual((len(set(urls)), urls[4]),
+                         (9, "https://weworkremotely.com/categories/remote-customer-support-jobs.rss"))
+        [(url, _)] = self.requests(sources.workingnomads, answer=[])
+        self.assertEqual(url, "https://www.workingnomads.com/api/exposed_jobs/")
+
+    def test_working_nomads_keeps_every_category(self):
+        jobs = self.run_with(sources.workingnomads, payloads=[[
+            dict(title=t, company_name="C", url="https://x.test/1", category_name=c)
+            for t, c in (("Backend Engineer", "Development"), ("Recruiter", "Administration"))]])
+        self.assertEqual([j["title"] for j in jobs], ["Backend Engineer", "Recruiter"])
 
 
 if __name__ == "__main__":

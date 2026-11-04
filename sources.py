@@ -125,8 +125,8 @@ def workable(slug, name):
             for j in get_json(f"https://apply.workable.com/api/v1/widget/accounts/{slug}?details=true")["jobs"]]
 
 
-def workday(spec, name, query="software engineer", limit=200):
-    """spec is "<tenant>.<wdN>/<site>", e.g. "nvidia.wd5/NVIDIAExternalCareerSite"."""
+def workday(spec, name, query="", limit=200):
+    """spec is "<tenant>.<wdN>/<site>", e.g. "nvidia.wd5/NVIDIAExternalCareerSite". An empty search lists newest first."""
     host, site = spec.split("/")
     base = f"https://{host}.myworkdayjobs.com"
     api, out, total = f"{base}/wday/cxs/{host.split('.')[0]}/{site}", [], limit
@@ -167,7 +167,7 @@ def remotive():
     return [dict(title=j["title"], company=j["company_name"], url=j["url"], posted=j.get("publication_date"),
                  type=j.get("job_type"), location="Remote " + (j.get("candidate_required_location") or ""),
                  description=j.get("description", ""), dept=j.get("category"))
-            for j in get_json("https://remotive.com/api/remote-jobs?category=software-dev")["jobs"]]
+            for j in get_json("https://remotive.com/api/remote-jobs")["jobs"]]
 
 
 def remoteok():
@@ -190,13 +190,16 @@ def himalayas():
                  type=j.get("employmentType"), location="Remote " + ", ".join(j.get("locationRestrictions") or []),
                  description=j.get("description", ""))
             for country in ("United States", "Canada") for page in range(1, 11)
-            for j in get_json(f"https://himalayas.app/jobs/api/search?q=software%20engineer"
-                              f"&country={quote(country)}&page={page}")["jobs"]]
+            for j in get_json(f"https://himalayas.app/jobs/api/search?country={quote(country)}&page={page}")["jobs"]]
+
+
+WWR_FEEDS = ("back-end-programming", "full-stack-programming", "devops-sysadmin", "front-end-programming", "customer-support",
+             "product", "design", "sales-and-marketing", "management-and-finance")
 
 
 def weworkremotely():
     out = []
-    for cat in ("back-end-programming", "full-stack-programming", "devops-sysadmin"):
+    for cat in WWR_FEEDS:
         for it in ET.fromstring(fetch(f"https://weworkremotely.com/categories/remote-{cat}-jobs.rss")).iter("item"):
             company, _, title = it.findtext("title", "").partition(": ")
             out.append(dict(title=title or company, company=company, url=it.findtext("link", ""),
@@ -210,14 +213,13 @@ def workingnomads():
     return [dict(title=j["title"], company=j["company_name"], url=j["url"], posted=j.get("pub_date"),
                  location="Remote " + (j.get("location") or ""), dept=j.get("category_name"),
                  description=f"{j.get('description', '')} {j.get('tags') or ''}")
-            for j in get_json("https://www.workingnomads.com/api/exposed_jobs/") if j.get("category_name") == "Development"]
+            for j in get_json("https://www.workingnomads.com/api/exposed_jobs/")]
 
 
 def themuse():
-    base = ("https://www.themuse.com/api/public/jobs?category=Software%20Engineering&level=Senior%20Level"
-            "&level=Mid%20Level&location=United%20States&location=Canada&location=Flexible%20%2F%20Remote")
+    base = "https://www.themuse.com/api/public/jobs?location=United%20States&location=Canada&location=Flexible%20%2F%20Remote"
     out, page, pages = [], 0, 1
-    while page < min(pages, 40):
+    while page < min(pages, 99):  # page 100 is refused; results aren't sorted by date, so this is a sample
         data = get_json(f"{base}&page={page}")
         pages, page = data["page_count"], page + 1
         out += [dict(title=j["name"], company=j["company"]["name"], url=j["refs"]["landing_page"],
@@ -244,7 +246,7 @@ def hackernews():
 
 
 def amazon():
-    url = ("https://www.amazon.jobs/en/search.json?base_query=software%20engineer&result_limit=100&sort=recent"
+    url = ("https://www.amazon.jobs/en/search.json?base_query=&result_limit=100&sort=recent"
            "&normalized_country_code%5B%5D=USA&normalized_country_code%5B%5D=CAN&offset=")
     return [dict(title=j["title"], company="Amazon", url="https://www.amazon.jobs" + j["job_path"],
                  posted=j.get("posted_date"), type=j.get("job_schedule_type"), dept=j.get("job_category"),
@@ -252,7 +254,7 @@ def amazon():
                  description="<br>".join(v or "" for v in (
                      j.get("description"), "BASIC QUALIFICATIONS", j.get("basic_qualifications"),
                      "PREFERRED QUALIFICATIONS", j.get("preferred_qualifications"))))
-            for offset in (0, 100, 200) for j in get_json(url + str(offset))["jobs"]]
+            for offset in range(0, 1000, 100) for j in get_json(url + str(offset))["jobs"]]  # newest 1,000: about 2 weeks
 
 
 FEEDS = {"remotive": ("Remotive", remotive, "https://remotive.com"),
