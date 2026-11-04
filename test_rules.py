@@ -163,6 +163,11 @@ class Evaluate(unittest.TestCase):
             row = rules.evaluate(job(title=title, description="Great team."), R, CUTOFF)
             self.assertEqual((row["level"], row["role"], row["type"]), (level, role, kind), title)
 
+    def test_the_company_is_not_one_of_its_skills(self):
+        row = rules.evaluate(job(company="Datadog", description="<p>We use Redis.</p><p>Requirements</p><ul><li>Java and "
+                                                                "Datadog</li></ul>"), R, CUTOFF)
+        self.assertEqual((row["skills"], row["must"]), (["Java", "Redis"], ["Java"]))
+
     def test_lazy_fields_only_fetched_when_needed(self):
         calls = []
         lazy = lambda v: lambda: calls.append(v) or v  # noqa: E731

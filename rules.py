@@ -327,11 +327,12 @@ def evaluate(job, r, cutoff):
     tags = [t for t in where(location) if t in cfg["locations"]]
     if not tags:
         return None
-    body = rich_text(val("description"))
+    body, company = rich_text(val("description")), job["company"].strip()
     sec, found = split_sections(body), skills(r["kw"], f"{title}\n{body}", r["needles"])
+    found = {k for k in found if not r["kw"][k].search(company)}  # Datadog's postings name Datadog; it isn't a skill asked for
     names = [k for k in r["kw"] if k in found]
     must, nice = tier_skills(names, title, sec, r["kw"])
-    return dict(title=title, company=job["company"].strip(), where=tags, location=location[:120],
+    return dict(title=title, company=company, where=tags, location=location[:120],
                 url=job["url"], posted=posted.isoformat() if posted else None, source=job["source"],
                 type=job_type(val("type"), title, body), level=level(title), role=family(title, found, job.get("dept") or ""),
                 applicants=job.get("applicants"),  # no public board API exposes this; dashboard shows "Not available"
