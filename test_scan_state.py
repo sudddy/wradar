@@ -110,3 +110,5 @@ class SlowGate(unittest.TestCase):
             self.assertEqual(s.load_previous(path), {})
             path.write_text(s.PREFIX + '{"jobs": []};\n')
             self.assertEqual(s.load_previous(path), {"jobs": []})
+            path.with_name("older.js").write_text(s.OLDER + '{"generated_at": "x", "jobs": [{"title": "Old"}]};\n')
+            self.assertEqual(s.load_previous(path), {"jobs": [{"title": "Old"}]})  # older.js's rows come back
