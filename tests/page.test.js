@@ -388,6 +388,27 @@ test("a link to a job not in jobs.js waits for older.js before it says the job i
   const gone = openPage({ at: board.hashFor("jobs", "nobody|nothing"), older: "wait" });
   gone.older(null);  // no older.js at all, as with data from before it
   assert.match(gone.$("#detail").innerHTML, /This job is no longer listed\./);
+  assert.equal(gone.$("#live").textContent, "This job is no longer listed.");
+});
+
+test("a phone link to an older job gets focus and is announced once older.js brings it", () => {
+  const page = openPage({ wide: false, at: board.hashFor("older", "co50|backend engineer 50"), older: "wait", data: pageData({ jobs: [row(0)] }) });
+  assert.match(page.$("#list").innerHTML, /Loading the older jobs…/);
+  page.doc.activeElement = null;  // there was no title to focus while it loaded
+  page.older(older(row(50)));
+  assert.equal(page.doc.activeElement, page.$("#dtitle"));
+  assert.equal(page.$("#live").textContent, "Backend Engineer 50 at Co50");
+});
+
+test("focus in the detail or the list stays there when older.js redraws the board", () => {
+  const inDetail = openPage({ older: "wait" });
+  inDetail.doc.activeElement = inDetail.$("#detail").querySelector("[data-do=saved]");
+  inDetail.older(older(row(50)));
+  assert.equal(inDetail.doc.activeElement, inDetail.$("#dtitle"));
+  const inList = openPage({ older: "wait" });
+  inList.doc.activeElement = inList.$("#list").querySelector(".jitem");
+  inList.older(older(row(50)));
+  assert.equal(inList.doc.activeElement, inList.$("#list .jitem[aria-current=true]"));
 });
 
 test("an Applications row waits for older.js before it says No longer listed", () => {

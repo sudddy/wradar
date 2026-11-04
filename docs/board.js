@@ -108,14 +108,20 @@ function loadOlder() {
 }
 
 // The match stats count every row, so they are built again and every job scored again.
-// Your resume keeps its own pane, which may hold text being pasted.
+// The board is drawn again with focus where it was, and a job the detail waited for is announced. Your resume keeps its own pane, which may hold text being pasted.
 function joinOlder(rows) {
+  const sel = BOARDS.includes(page) && tab().sel, waited = sel && !byKey.has(sel);
   olderIn = true;
   if (addRows(rows)) { stats = null; scoreJobs(); }
   if (BOARDS.includes(page)) {
-    const held = $("#list").contains(document.activeElement);
+    const was = document.activeElement, inList = $("#list").contains(was), inDetail = $("#detail").contains(was);
+    const covered = $("#board").classList.contains("showing") && !wide() && (!was || was === document.body);  // a link opened on a phone
     renderBoard();
-    if (held) focusBoard();
+    if (inDetail || covered) $("#dtitle")?.focus({ preventScroll: true });
+    else if (inList) focusBoard();
+    if (!waited) return;
+    $("#list .jitem[aria-current=true]")?.scrollIntoView({ block: "nearest" });
+    announce(byKey.has(sel) ? `${byKey.get(sel).title} at ${byKey.get(sel).company}` : "This job is no longer listed.");
   } else {
     renderCounts();
     page === "resume" ? renderSide() : VIEWS[page]();
@@ -150,7 +156,7 @@ function item(j, n, stop) {
 
 function emptyText() {
   if (page === "mine") return MINE_EMPTY[mineSeg];
-  if (page === "older") return "No older jobs match these filters. Try clearing one.";
+  if (page === "older") return olderIn ? "No older jobs match these filters. Try clearing one." : "Loading the older jobs…";
   if (state.days < FRESH_DAYS && listed({ jobs: unhidden(D.jobs) }).kept.length) return `No jobs posted in the last ${state.days} days match these filters. Try a longer time under Posted.`;
   const n = listed({ jobs: unhidden(D.older) }).kept.length;
   return n ? `No jobs match these filters. <a href="#older">${plural(n, "older job")} ${n === 1 ? "does" : "do"}.</a>` : "No jobs match these filters. Try clearing one.";
