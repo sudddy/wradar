@@ -2,6 +2,7 @@
 import re
 import unittest
 from datetime import timedelta
+from unittest import mock
 
 import rules
 import sources
@@ -41,9 +42,13 @@ class Keywords(unittest.TestCase):
         aliases = {"Lever": ["re:(?:(?<=[,/(] )|(?<=\\bor ))(?:Lever)\\b(?![\\w-])"], "R": ["re:(?<=, )R(?![\\w&+'-])", "rstudio"],
                    "Spanish": ["re:[Ff]luent\\b[^.\\n]{0,50}\\bSpanish\\b|\\bSpanish[- ]speaking\\b"]}
         kw, nd = rules.compile_keywords(aliases), rules.needles(aliases)
+        with mock.patch.object(rules, "sre_parse", None):  # a Python without the private parser: slower, the same skills
+            blind = rules.needles(aliases)
+        self.assertEqual({name: need for name, (*_, need) in blind.items()}, dict.fromkeys(aliases))
         for text in ("ATS: Greenhouse, Lever", "Workday or Lever", "Lever ownership", "LEVER", "Python, R", "fluent in Spanish",
                      "Spanish-speaking", "SPANISH", "Greenhouse"):
             self.assertEqual(rules.skills(kw, text, nd), rules.skills(kw, text), text)
+            self.assertEqual(rules.skills(kw, text, blind), rules.skills(kw, text), text)
 
 
 class Locations(unittest.TestCase):

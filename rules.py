@@ -12,9 +12,12 @@ from extract import degree, rich_text, salary, split_sections, tier_skills, work
 
 try:  # Python's own regex parser, to read the words a re: alias can't match without
     from re import _constants as sre, _parser as sre_parse  # Python 3.11+
-except ImportError:  # Python 3.10
-    import sre_constants as sre
-    import sre_parse
+except ImportError:
+    try:  # Python 3.10
+        import sre_constants as sre
+        import sre_parse
+    except ImportError:  # gone in a later Python: every re: alias is then searched in every posting, slower but the same
+        sre = sre_parse = None
 
 ROOT = Path(__file__).parent
 
@@ -234,7 +237,7 @@ def needles(d):
             plain = [a for a in aliases if not a.startswith("re:") and a.isascii() and WORD.search(a.lower())]
             rest = [a for a in aliases if a not in plain]
             pairs = [(max(WORD.findall(a), key=len), a) for a in (p.lstrip("=").lower() for p in plain)]
-            words = [required(sre_parse.parse(pattern(a))) for a in rest]
+            words = [required(sre_parse.parse(pattern(a))) if sre_parse else None for a in rest]
             out[name] = (frozenset(k for k, _ in pairs), pairs, re.compile("|".join(map(pattern, rest))) if rest else None,
                          None if None in words else set().union(*words))
     return out
