@@ -11,6 +11,7 @@ const MAX = { Role: 20, Seniority: 15, Years: 15, "Top must-haves": 36, "Everyth
 const TIERS = [["Hot", 75], ["Warm", 65], ["Cool", 0]];
 const TOP_N = 5, TOP_WEIGHT = [3, 2.5, 2, 1.5, 1], TITLE_WEIGHT = 4;
 const UNSTATED = { name: "Mid", soft: true, unstated: true };
+const SOLO = { name: "Senior", soft: false, solo: true };  // from a manager's level, a title with no level word is an individual job
 const INTERN = /\bintern(?:ship)?s?\b/i;
 const GRAD = /\b(?:new grad|university grad|graduate|early career|emerging talent|apprentice)\b/i;
 const NO_STACK = "It names none of the skills wradar knows, so check the posting yourself.";
@@ -349,16 +350,20 @@ function score(p, job, stats) {
   if (role != null && role < .3) cap(50, offTrack);
   else if (role != null && role < .5) cap(65, offTrack);
 
-  // 2. Seniority, both directions, and the track. A level guessed from the years bar counts half. An intern's next job is Junior.
-  const mine = levelOf(p), lv = plan.level || (RANK[mine] <= 1 ? UNSTATED : null);
-  const people = p.evidence?.["People Management"]?.strength >= 2;
+  // 2. Seniority, both directions, and the track. A level guessed from the years bar counts half, but not from a manager's level:
+  // a title with no level word names no team, so it is an individual job whatever years it asks. An intern's next job is Junior.
+  const mine = levelOf(p), lv = plan.level || (RANK[mine] <= 1 ? UNSTATED : BOSS.has(mine) ? SOLO : null);
+  const people = p.evidence?.["People Management"]?.strength >= 2, soft = lv?.soft && !BOSS.has(mine);
   const graduating = mine === "Intern" && lv?.name === "Junior", early = !lv?.unstated && RANK[mine] <= 1 && RANK[lv?.name] <= 1;
   let level = lv && mine ? levelFit(mine, lv.name, p.years, stats, people) : null;
-  if (level != null && lv.soft) level = 1 - (1 - level) / 2;
-  add("Seniority", level, level != null ? `${mine} to ${lv.name}${lv.soft ? " (read from years)" : ""}` : !lv ? "Level not stated" : "No level found on your resume");
+  if (level != null && soft) level = 1 - (1 - level) / 2;
+  add("Seniority", level, level != null ? `${mine} to ${lv.solo ? "an individual role" : lv.name}${lv.soft ? " (read from years)" : ""}`
+    : !lv ? "Level not stated" : "No level found on your resume");
   if (level != null) {
     const d = RANK[lv.name] - RANK[mine], turn = BOSS.has(lv.name) !== BOSS.has(mine);
+    const solo = lv.solo && d < -1 && `It names no team or level, so it reads as an individual role below your ${mine} experience.`;
     if (lv.unstated) cap(69, "It states no level, and most postings like this ask for 2 or more years.");
+    else if (lv.solo) { if (solo) gaps.push(solo); }
     else if (!d && !turn) fits.push(`The level matches your ${mine} experience.`);
     else if (graduating) next.push("Say when you graduate, so they know when you can start.");
     else if (d === 1) next.push(`This is a step up: show ${lv.name} scope, such as what you led and decided.`);
@@ -369,9 +374,10 @@ function score(p, job, stats) {
       cap(74, NO_TEAM);
     } else if (BOSS.has(lv.name)) next.push("Open with the team you led, its size and what it delivered.");
     if (turn && BOSS.has(mine)) next.push("Lead with work you did yourself.");
-    if (d === 1 && !lv.soft && !graduating) cap(74, `This is a step up from your ${mine} experience.`);
-    if (d === -1 && !lv.soft) cap(85, `This sits one level below your ${mine} experience.`);
-    if (Math.abs(d) >= 2) cap(lv.soft ? 74 : d > 0 ? 45 : 60, `${lv.name} is ${plural(Math.abs(d), "level")} ${d > 0 ? "above" : "below"} your ${mine} experience.`);
+    if (solo) cap(60, solo);
+    if (d === 1 && !soft && !graduating) cap(74, `This is a step up from your ${mine} experience.`);
+    if (d === -1 && !soft && !lv.solo) cap(85, `This sits one level below your ${mine} experience.`);
+    if (Math.abs(d) >= 2 && !lv.solo) cap(soft ? 74 : d > 0 ? 45 : 60, `${lv.name} is ${plural(Math.abs(d), "level")} ${d > 0 ? "above" : "below"} your ${mine} experience.`);
   }
   if (lv?.grad && p.years >= 3) cap(49, "This is an early-career program, and your experience is past it.");
 

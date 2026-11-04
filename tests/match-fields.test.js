@@ -82,6 +82,19 @@ test("an intern's next job is Junior, and early in a career a year short is inte
   assert.equal(on({ ...full, level: "Mid", years: 1 }, grad(3, "Mid")).held.why, "It asks for 3+ years and you have 1.");  // later on, a ratio as before
 });
 
+test("from a manager's level, a title with no level word is an individual job, whatever years it asks", () => {
+  const must = ["Salesforce", "Prospecting", "Enterprise Sales"], vp = person("Sales", "VP", 18, [...must, "People Management"]);
+  const ae = years_required => onAll(vp, job({ title: "Account Executive", role: "Sales", level: "Mid", must, years_required }));
+  assert.equal(part(ae(1), "Seniority").note, "VP to Junior (read from years)");
+  assert.deepEqual(ae(1).held, { at: 60, why: "Junior is 6 levels below your VP experience." });
+  assert.equal(part(ae(null), "Seniority").note, "VP to an individual role");
+  assert.deepEqual(ae(null).held, { at: 60, why: "It names no team or level, so it reads as an individual role below your VP experience." });
+  const mgr = onAll({ ...vp, level: "Manager" }, job({ title: "Account Executive", role: "Sales", level: "Mid", must, years_required: null }));
+  assert.equal(part(mgr, "Seniority").got, 10.2);
+  assert.ok(mgr.next.includes("Lead with work you did yourself."), JSON.stringify(mgr.next));
+  assert.equal(part(on({ ...full, level: "Senior" }, job({ title: "Backend Engineer", level: "Mid", years_required: 5 })), "Seniority").note, "Senior to Senior (read from years)");
+});
+
 test("a Director of Marketing moving to VP is one step up, and so is each manager step", () => {
   const skills = ["Demand Generation", "Brand Strategy", "Marketing Automation", "Performance Marketing", "People Management"];
   const dir = person("Marketing", "Director", 14, skills), at = (title, level) => job({ title, role: "Marketing", level, must: skills, years_required: 12 });
