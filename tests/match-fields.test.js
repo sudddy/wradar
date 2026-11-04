@@ -152,6 +152,9 @@ test("from a manager's level, a title with no level word is an individual job, w
   const mgr = onAll({ ...vp, level: "Manager" }, job({ title: "Account Executive", role: "Sales", level: "Mid", must, years_required: null }));
   assert.equal(part(mgr, "Seniority").got, 10.2);
   assert.ok(mgr.next.includes("Lead with work you did yourself."), JSON.stringify(mgr.next));
+  assert.deepEqual(mgr.held, { at: 85, why: "It names no team or level, so it reads as an individual role below your Manager experience." });
+  const senior = onAll({ ...vp, level: "Manager" }, job({ title: "Senior Account Executive", role: "Sales", level: "Senior", must, years_required: null }));
+  assert.ok(mgr.score <= senior.score, `${mgr.score} above ${senior.score}`);  // a title with no level word is no more senior than one that names Senior
   assert.equal(part(on({ ...full, level: "Senior" }, job({ title: "Backend Engineer", level: "Mid", years_required: 5 })), "Seniority").note, "Senior to Senior (read from years)");
 });
 

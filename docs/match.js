@@ -387,9 +387,9 @@ function score(p, job, stats) {
     : !lv ? "Level not stated" : "No level found on your resume");
   if (level != null) {
     const d = RANK[lv.name] - RANK[mine], turn = BOSS.has(lv.name) !== BOSS.has(mine);
-    const solo = lv.solo && d < -1 && `It names no team or level, so it reads as an individual role below your ${mine} experience.`;
+    const solo = lv.solo && `It names no team or level, so it reads as an individual role below your ${mine} experience.`;
     if (lv.unstated) cap(69, "It states no level, and most postings like this ask for 2 or more years.");
-    else if (lv.solo) { if (solo) gaps.push(solo); }
+    else if (solo) gaps.push(solo);
     else if (!d && !turn) fits.push(`The level matches your ${mine} experience.`);
     else if (graduating) next.push("Say when you graduate, so they know when you can start.");
     else if (d === 1) next.push(`This is a step up: show ${lv.name} scope, such as what you led and decided.`);
@@ -400,7 +400,7 @@ function score(p, job, stats) {
       cap(74, NO_TEAM);
     } else if (BOSS.has(lv.name)) next.push("Open with the team you led, its size and what it delivered.");
     if (turn && BOSS.has(mine)) next.push("Lead with work you did yourself.");
-    if (solo) cap(60, solo);
+    if (solo) cap(d < -1 ? 60 : 85, solo);  // as a title that names Senior would be
     if (d === 1 && !soft && !graduating) cap(74, `This is a step up from your ${mine} experience.`);
     if (d === -1 && !soft && !lv.solo) cap(85, `This sits one level below your ${mine} experience.`);
     if (Math.abs(d) >= 2 && !lv.solo) cap(soft ? 74 : d > 0 ? 45 : 60, `${lv.name} is ${plural(Math.abs(d), "level")} ${d > 0 ? "above" : "below"} your ${mine} experience.`);
