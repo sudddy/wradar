@@ -1,6 +1,6 @@
 """Read the structure of a job posting: sections, required skills, years, pay, work mode, degree.
 
-Rules only, no AI at runtime. Standard library only. fetch_jobs.evaluate() calls these once per job.
+Rules only, no AI at runtime. Standard library only. rules.evaluate() calls these once per job.
 """
 import html
 import re
@@ -9,7 +9,7 @@ BLOCK = re.compile(r"</?(?:p|div|ul|ol|li|h[1-6]|tr|table|section|article|blockq
 
 
 def rich_text(s):
-    """HTML or plain text -> text with one block per line. Same content as fetch_jobs.text(), keeps structure."""
+    """HTML or plain text -> text with one block per line. Same content as sources.text(), keeps structure."""
     s = BLOCK.sub("\n", html.unescape(s or ""))
     s = html.unescape(re.sub(r"<[^>]+>", " ", s)).replace("’", "'")
     s = re.sub(r"\s[•·▪●◦‣∙]\s", "\n", s)
@@ -26,7 +26,7 @@ NICE_H = re.compile(
     r"(?:nice[- ]?to[- ]?haves?|nice to have skills|nice if|preferred|desired|desirable|bonus (?:points?|skills?|if|for)"
     r"|bonus qualifications|bonus(?:es)?$|optional|even better|extra credit|good to have|great to have|plus(?:es)?|big plus"
     r"|(?:it's|it is|it'd be|it would be|would be) (?:a )?(?:great|nice|plus|awesome|bonus)|ways to stand out"
-    r"|what (?:will|would|could|can|might) (?:make|set) you|what sets you apart|stand out|strong candidates may"
+    r"|what (?:will|would|could|can|might) (?:make|set|help) you|what sets you apart|stand out|strong candidates may"
     r"|an? ideal candidate also|ideally|we'd (?:love|like) (?:to see|it if)|you (?:might|may) also have"
     r"|qualifications we want)\b.{0,60}")
 MUST_H = re.compile(
@@ -130,10 +130,11 @@ def tier_skills(names, title, sec, kw):
 WORDS = {w: n for n, w in enumerate("one two three four five six seven eight nine ten eleven twelve".split(), 1)}
 NUMBER = rf"\d{{1,2}}|\b(?:{'|'.join(WORDS)})\b"
 SUFFIX = r"\s*(?:\(\d{1,2}\+?\)\s*)?\+?\s*"  # "five (5)", "5+"
+AGE = r"\s+old|\s+of age\b|\s+or (?:older|over)\b"  # "at least 18 years of age" is an age, not experience
 YEARS = re.compile(rf"(?<![\d.$,])({NUMBER}){SUFFIX}(?:(?:-|–|—|to)\s*(?:{NUMBER}){SUFFIX})?(?:(?:plus|or more)\s+)?"
-                   r"(?:years?|yrs?|yoe)\b(?!\s+old|\s+ago|\s+degree)", re.I)
+                   rf"(?:years?|yrs?|yoe)\b(?!{AGE}|\s+ago|\s+degree)", re.I)
 EXPERIENCE = re.compile(
-    r"(\d{1,2})\s*\+?\s*(?:(?:-|–|to)\s*\d{1,2}\s*\+?\s*)?years?(?:\s+of)?(?:\s+[\w/&-]+){0,5}?\s+experience", re.I)
+    rf"(\d{{1,2}})\s*\+?\s*(?:(?:-|–|to)\s*\d{{1,2}}\s*\+?\s*)?years?(?!{AGE})(?:\s+of)?(?:\s+[\w/&-]+){{0,5}}?\s+experience", re.I)
 NOT_YEARS = re.compile(r"\b(company|founded|for over|over the (?:last|past)|in the (?:last|past)|within|history|since"
                        r"|ago|last \d|no more than|up to|less than|fewer than)\b", re.I)
 
@@ -144,7 +145,7 @@ def number(s):
 
 def clause_years(c):
     """Years one clause asks for. Alternatives joined by "or" -> the lowest bar."""
-    ms = [m for m in YEARS.finditer(c) if 0 < number(m.group(1)) <= 15
+    ms = [m for m in YEARS.finditer(c) if 0 < number(m.group(1)) <= 20
           and not NOT_YEARS.search(c[max(0, m.start() - 25):m.start()])]
     hits = [number(m.group(1)) for m in ms]
     gap = c[ms[0].end():ms[-1].start()] if ms else ""
@@ -159,7 +160,7 @@ def years_min(sec):
             return max(found)
     if sec["must"] or sec["soft"]:
         return None
-    return max((int(m.group(1)) for c in sec["other"] for m in EXPERIENCE.finditer(c) if 0 < int(m.group(1)) <= 15),
+    return max((int(m.group(1)) for c in sec["other"] for m in EXPERIENCE.finditer(c) if 0 < int(m.group(1)) <= 20),
                default=None)
 
 
@@ -170,7 +171,7 @@ RANGE = re.compile(
     rf"(?P<c1>{CUR})\s?(?P<lo>{NUM})(?P<b1>{BIG})?(?:\s*(?:USD|CAD))?(?:/(?:year|yr|hour|hr))?\s*"
     rf"(?:-|–|—|[Tt][Oo]|and|through|up to)\s*(?P<c2>{CUR})?\s?(?P<hi>{NUM})(?P<b2>{BIG})?"
     rf"(?:\s*(?P<c3>USD|CAD|US|CA|Canadian)\b)?"
-    rf"(?P<per>\s*(?:per|/|an?|each)\s*(?:hour|hr|year|yr|annum|annually|month|mo)\b)?")
+    rf"(?P<per>\s*(?:per|/|an?|each)\s*(?:hour|hr|year|yr|annum|annually|month|mo|session|visit|encounter|appointment)\b)?")
 RANGE2 = re.compile(r"(?<![\d$,.])(?P<lo>\d{2,3},\d{3}(?:\.\d\d)?)\s*(?:-|–|—|to)\s*(?P<hi>\d{2,3},\d{3}(?:\.\d\d)?)\s*"
                     r"(?P<c3>USD|CAD)\b")
 RANGE3 = re.compile(r"(?<![\d$,.])(?P<lo>\d{2,3},\d{3})\s*(?P<c1>USD|CAD)\s*(?:-|–|—|to)\s*(?P<hi>\d{2,3},\d{3})\s*"
@@ -198,7 +199,7 @@ def amount(s):
 
 
 def plausible(lo, hi, per):
-    """Pay an engineer could really be offered, in a range narrow enough to mean something."""
+    """Pay a job could really offer, in a range narrow enough to mean something."""
     return 15 <= lo <= hi <= 400 if per == "hour" else 30_000 <= lo <= hi <= 1_500_000 and hi / lo <= 4
 
 
@@ -211,7 +212,7 @@ def range_values(m):
     if lo_s.lower().endswith("k") and hi < 1000:
         hi *= 1000
     per = (m.groupdict().get("per") or "").lower()
-    if "month" in per or per.endswith("mo"):
+    if "month" in per or per.endswith("mo") or re.search(r"session|visit|encounter|appointment", per):  # not a wage
         return None
     if ("hour" in per or "hr" in per) or (hi <= 500 and not per):
         return (lo, hi, "hour") if plausible(lo, hi, "hour") else None
@@ -330,13 +331,19 @@ def work_mode(field, title, location, body):
     return None
 
 
-DEGREE = [("bachelor", r"(?i:\bbachelor'?s?\b|\bundergraduate degree\b|\b(?:4|four)[- ]year degree\b|\bcollege degree\b"
+DEGREE = [("associate", r"(?i:\bassociate'?s?'? (?:degree|of (?:arts|science|applied science))\b|\bassociate's\b)"
+                        r"|\bA\.?A\.?S\b"),
+          ("bachelor", r"(?i:\bbachelor'?s?\b|\bundergraduate degree\b|\b(?:4|four)[- ]year degree\b|\bcollege degree\b"
                        r"|\buniversity degree\b)"
                        r"|\bB\.?S\.?c?\b(?! ?in? ?(?:Office|SQL))|\bB\.A\b|\bBA\b|\bB\.?E\b(?=[ ,/.])"
                        r"|\bB\.?Tech\b"),
           ("master", r"(?i:\bmaster'?s?'? (?:degree|in|of)\b|\bmaster'?s'?\b|\bm\.?eng\b)"
                      r"|\bM\.?S\.?c?\b(?! ?(?:Office|SQL|Azure|Teams|Excel|Word|Project|Dynamics|Windows))"
                      r"|\bM\.S\b|\bMBA\b"),
+          ("professional", r"\bM\.D\.|\bMD(?=\s*(?:,|/|or|and)\s*D\.?O\b)|\bJ\.D\.|\bJD\b(?=\s*(?:degree|from|required|or|,|/))"
+                           r"|(?i:\bdoctor of (?:medicine|osteopath\w*|pharmacy|dental|nursing practice|psychology"
+                           r"|physical therapy)\b|\bjuris doctor(?:ate)?\b)|\bPharm\.?D\b|\bPsy\.?D\b"
+                           r"|(?<![-#])\bDNP\b|\bDDS\b(?=\s*(?:,|/|or)\s*DMD\b)|\bDMD\b"),  # not the #LI-DNP tag
           ("phd", r"(?i:\bph\.?\s?d\.?s?\b|\bdoctora(?:te|l)\b)")]
 EQUIV = re.compile(r"\bor (?:an? )?(?:equivalent|comparable|similar|relevant|sufficient)\b"
                    r"(?! (?:fields?|disciplines?|majors?|degrees?|technical field))"
@@ -351,7 +358,8 @@ def levels(clauses):
 
 
 def degree(sec):
-    """-> {"level": bachelor/master/phd, "req": required/preferred} or None. Lowest level named is the bar."""
+    """-> {"level": associate/bachelor/master/professional/phd, "req": required/preferred} or None. Lowest level named is
+    the bar; a professional doctorate (JD, MD, PharmD...) counts below a PhD, so "Juris Doctorate" reads as professional."""
     must = levels(sec["must"])
     if must:
         lines = [c for c in sec["must"] if levels([c])]

@@ -1,0 +1,21 @@
+Sam Ortiz
+Chicago, IL | sam@example.com
+
+PROFESSIONAL SUMMARY
+CPA and finance manager with 9 years in FP&A and accounting.
+
+SKILLS
+Excel, NetSuite, Adaptive Insights, GAAP, Month-end Close, Budgeting, Forecasting, SQL, Tableau
+
+EXPERIENCE
+Finance Manager, FP&A — Harbor Freight Labs    Apr 2022 - Present
+- Manage two analysts; own the annual operating plan and monthly forecast in Adaptive Insights.
+Senior Financial Analyst — Lakeview Health    Jun 2019 - Mar 2022
+- Built the revenue model in Excel and Tableau dashboards.
+Staff Accountant — Grant & Ruiz LLP    Aug 2016 - May 2019
+- Ran month-end close and reconciliations in NetSuite under GAAP.
+
+EDUCATION
+B.S., Accounting, DePaul University, 2016
+CERTIFICATIONS
+Certified Public Accountant (CPA), Illinois, 2018

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:          # "Run workflow" button in the Actions tab
   push:                       # re-fetch right away when the rules change
     branches: [main]
-    paths: [config.json, keywords.json, fetch_jobs.py, extract.py, scan_state.py]
+    paths: [config.json, keywords.json, fetch_jobs.py, sources.py, rules.py, extract.py, scan_state.py]
 
 permissions:
   contents: write
@@ -29,7 +29,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/jobs.js docs/scan.json
+          git add docs/jobs.js docs/older.js docs/scan.json
           git diff --cached --quiet && exit 0
           git commit -m "Refresh job data"
           git pull --rebase --autostash

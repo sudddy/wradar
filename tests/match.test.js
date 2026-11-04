@@ -10,19 +10,10 @@ const read = f => fs.readFileSync(path.join(__dirname, "..", f), "utf8");
 const sandbox = { window: {} };
 vm.runInNewContext(read("docs/jobs.js"), sandbox);
 const rows = sandbox.window.JOB_DATA.jobs;
-const stats = buildStats(rows);
+const stats = buildStats(rows, sandbox.window.JOB_DATA.rules);
 
-const MUST = ["Java", "Kafka", "AWS", "PostgreSQL", "Kubernetes"];
-const job = ({ must = MUST, nice = [], ...over } = {}) => ({ title: "Senior Backend Engineer", role: "Backend", level: "Senior",
-  must, nice, skills: [...must, ...nice], years_required: 5, degree: null, ...over });
-const on = (p, j, others = []) => score(p, j, buildStats([j, ...others]));
-const part = (r, name) => r.parts.find(x => x.name === name);
-const lines = r => [...r.fits, ...r.gaps, ...r.next, ...r.parts.map(x => x.note), ...(r.held ? [r.held.why] : [])];
+const { MUST, job, on, part, lines, ev, old, full, onAll } = require("./match-helpers.js");
 
-const ev = (strength, recent) => ({ strength, years: 3, recent });
-const old = { name: "resume.txt", skills: MUST, years: 8 };
-const full = { ...old, name: "PDF resume", role: "Backend", level: "Senior", degree: "Bachelor's",
-  evidence: Object.fromEntries(MUST.map(k => [k, ev(3, 0)])) };
 const PROFILES = [
   old,
   { name: "x", skills: [], years: null },
@@ -33,6 +24,8 @@ const PROFILES = [
   { name: "Word resume", skills: ["Python", "PyTorch", "Spark", "LLMs"], years: 12, role: "ML / AI", level: "Staff+", degree: "PhD",
     evidence: { PyTorch: ev(3, 0), Spark: ev(2, 65) } },
   { name: "Text resume", skills: ["Python", "Go", "Docker"], years: 4, role: "General", level: null, degree: null, evidence: {} },
+  { name: "PDF resume", skills: ["Salesforce", "Prospecting", "SaaS", "People Management", "SQL"], years: 15, role: "Sales", level: "Director",
+    degree: "Bachelor's", evidence: { Salesforce: ev(3, 0), "People Management": ev(3, 0), SQL: ev(1, null) } },
 ];
 
 test("loads beside app.js as a classic script, sharing nothing but wmatch", () => {
@@ -132,7 +125,7 @@ test("a held result says so beside the parts, and its reason leads the gaps", ()
 
 test("years short lines", () => {
   assert.ok(on(old, job({ years_required: 16 })).next.includes("You are 8 years short: go in through a referral if you can."));
-  assert.ok(on({ ...old, years: 7 }, job({ years_required: 8 })).next.includes("You are 1 year short: apply anyway and open with your biggest shipped result."));
+  assert.ok(on({ ...old, years: 7 }, job({ years_required: 8 })).next.includes("You are 1 year short: apply anyway and open with your biggest result, with its numbers."));
 });
 
 test("years lines read naturally at the edges", () => {
@@ -178,6 +171,10 @@ test("no line mentions the scoring or an unproven claim", () => {
   for (const j of [job({ must: [], skills: [] }), job({ title: "Software Engineer", role: "General", level: "Mid", years_required: null, must: ["Java", "Go", "Rust", "Scala"] })]) {
     for (const p of PROFILES) for (const l of lines(on(p, j))) seen.add(l);
   }
+  for (const j of [job({ title: "VP, Sales", role: "Sales", level: "VP", must: ["Salesforce", "People Management"] }),
+    job({ title: "Account Executive", role: "Sales", level: "Mid", must: ["Payments", "CRM"] }), job({ title: "Associate", role: "Other", must: ["Excel"] })]) {
+    for (const p of PROFILES) for (const l of lines(onAll(p, j))) seen.add(l);
+  }
   assert.ok(seen.size > 100, `only ${seen.size} lines seen`);
   for (const l of seen) assert.doesNotMatch(l, banned);
 });
@@ -194,7 +191,7 @@ test("a coverage reason states what is true by count", () => {
   const one = on({ ...full, skills: have, evidence: Object.fromEntries(have.map(k => [k, ev(1, null)])) }, job({ title: "Expert Observability Engineer", role: "General", must: obs }));
   assert.equal(one.held.why, "Not on your resume: Observability.");
   const single = on({ ...full, skills: ["React"], role: "Frontend" }, job({ title: "Front End Engineer", role: "Frontend", must: ["React"] }));
-  assert.equal(single.held.why, "Its stack is just React, so check the posting yourself.");
+  assert.equal(single.held.why, "It names only React, so check the posting yourself.");
   for (const p of PROFILES) for (const j of rows) {
     const r = score(p, j, stats), [, c, n] = (/^(\d+) of (\d+)/.exec(part(r, "Top must-haves").note) || [0, 0, 0]).map(Number), why = r.held?.why || "";
     if (why.startsWith("Most of its")) assert.ok((n - c) * 2 > n, `${j.title}: ${c} of ${n}`);
@@ -204,17 +201,18 @@ test("a coverage reason states what is true by count", () => {
   }
 });
 
-test("a posting that names no stack says so, and that part drops out", () => {
+test("a posting that names no known skills says so, and that part drops out", () => {
   const r = on(full, job({ must: [], skills: [] }));
-  assert.equal(r.gaps[0], "It names no stack, so check the posting yourself.");
+  assert.equal(r.gaps[0], "It names none of the skills wradar knows, so check the posting yourself.");
   assert.ok(!r.gaps.includes("It has no clear requirements list, so check the posting yourself."));  // the same advice twice
   assert.equal(part(r, "Top must-haves").max, 0);
+  assert.equal(part(r, "Top must-haves").note, "No skills named");
 });
 
-test("a posting with only nice-to-haves says it has no clear requirements list, not that it names no stack", () => {
+test("a posting with only nice-to-haves says it has no clear requirements list, not that it names no skills", () => {
   const r = on(full, job({ must: [], nice: ["AWS", "Kafka"] }));
   assert.ok(r.gaps.includes("It has no clear requirements list, so check the posting yourself."), JSON.stringify(r.gaps));
-  assert.ok(!r.gaps.includes("It names no stack, so check the posting yourself."), JSON.stringify(r.gaps));
+  assert.ok(!r.gaps.includes("It names none of the skills wradar knows, so check the posting yourself."), JSON.stringify(r.gaps));
 });
 
 test("a missing must-have is still listed when nothing holds the score down", () => {
@@ -247,7 +245,7 @@ test("what the resume doesn't show is said as the resume's, not the posting's", 
   assert.equal(silent.held.why, "Your resume shows too little about your role or level, so check the posting yourself.");
   assert.equal(on({ ...full, role: "General", skills: MUST.slice(0, 4) }, job()).held.why, "Your resume shows no role family, so check the posting yourself.");
   const families = sandbox.window.JOB_DATA.rules.families.map(([, rx]) => new RegExp(rx, "i"));
-  for (const j of rows.filter(x => families.some(rx => rx.test(x.title)))) {
+  for (const j of rows.filter(x => x.role !== "Other" && families.some(rx => rx.test(x.title)))) {  // Other: the scan placed it in no field ("Data Entry Clerk")
     assert.ok(!lines(score({ ...old, role: "General" }, j, stats)).some(l => l.includes("names no family")), j.title);
   }
 });
@@ -272,7 +270,7 @@ test("same-kind skills a title joins with or or / are one requirement", () => {
   assert.equal(part(on(java, job({ title: "Software Engineer - Java, Go or Kotlin", must: ["Java", "Go", "Kotlin"] })), "Top must-haves").note, "1 of 1: Java or Go or Kotlin");
   assert.equal(on(java, job({ title: "Software Engineer - Java and Kotlin", must: ["Java", "Kotlin"] })).held.why, "The title names Kotlin, which is not on your resume.");
   const python = { ...full, skills: ["Python"], evidence: { Python: ev(3, 0) } };
-  assert.equal(on(python, job({ title: "Software Engineer - Python/Golang", must: ["Python", "Go"] })).held.why, "Its stack is just one language, so check the posting yourself.");
+  assert.equal(on(python, job({ title: "Software Engineer - Python/Golang", must: ["Python", "Go"] })).held.why, "It names only one language, so check the posting yourself.");
 });
 
 test("the Everything else note counts each kind it scores", () => {
@@ -285,4 +283,31 @@ test("a weak implied skill is named by the skill the resume shows", () => {
   const r = on({ ...full, skills: ["PostgreSQL", "Java"], evidence: { PostgreSQL: ev(1, null), Java: ev(3, 0) } }, job({ must: ["SQL", "Java"] }));
   assert.ok(r.next.includes("PostgreSQL is only listed: if you used it at work, show that in a job bullet."));
   assert.ok(!lines(r).some(l => l.startsWith("SQL ")));
+});
+
+test("data without fields scores as data whose every role is Engineering", () => {
+  const none = buildStats(rows), eng = buildStats(rows, { fields: Object.fromEntries(rows.map(r => [r.role, "Engineering"])) });
+  for (const p of PROFILES) for (let i = 0; i < rows.length; i += 7) {
+    const a = score(p, rows[i], none), b = score(p, rows[i], eng);
+    assert.equal(b.tie, a.tie, rows[i].title);
+    assert.deepEqual(b.gaps, a.gaps, rows[i].title);
+  }
+});
+
+test("R in a title is the language only when it stands alone", () => {
+  const py = { ...full, skills: ["Python", "SQL"], evidence: { Python: ev(3, 0), SQL: ev(3, 0) } }, must = ["R", "Python", "SQL"];
+  for (const title of ["Data Scientist, R&D", "SAP R/3 Data Analyst", "Brand(R) Data Scientist"]) {
+    assert.ok(!lines(on(py, job({ title, role: "Data", must }))).some(l => l.includes("title names R")), title);
+  }
+  assert.equal(on(py, job({ title: "Data Scientist - R", role: "Data", must })).held.why, "The title names R, which is not on your resume.");
+});
+
+test("a professional degree meets a bachelor's or master's bar, and only it meets its own", () => {
+  const asks = (level, req = "required") => job({ degree: { level, req } }), got = (degree, j) => part(on({ ...full, degree }, j), "Degree");
+  for (const level of ["associate", "bachelor", "master", "professional"]) assert.equal(got("Professional", asks(level)).got, 4, level);
+  assert.equal(got("Professional", asks("phd")).got, 0);
+  assert.equal(got("PhD", asks("professional")).got, 0);
+  assert.ok(on({ ...full, degree: "PhD" }, asks("professional")).gaps.includes("It lists a professional degree as required."));
+  assert.equal(got("PhD", asks("professional", "preferred")).got, 2);
+  assert.deepEqual([got("Associate", asks("associate")).got, got("Associate", asks("associate")).note], [4, "associate degree required"]);
 });

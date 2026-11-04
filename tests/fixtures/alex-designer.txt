@@ -1,0 +1,14 @@
+Alex Kim
+Toronto, ON
+
+SKILLS
+Figma, Sketch, Prototyping, User Research, Design Systems, Usability Testing, HTML/CSS
+
+EXPERIENCE
+Senior Product Designer, Maple Pay    May 2021 - Present
+- Lead design for checkout; built the Figma design system used by 6 teams.
+Product Designer, Lighthouse Apps    Sep 2017 - Apr 2021
+- Ran usability tests and shipped the onboarding redesign.
+
+EDUCATION
+Bachelor of Design, OCAD University, 2017

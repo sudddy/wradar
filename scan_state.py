@@ -6,7 +6,7 @@ import json
 import re
 from datetime import datetime
 
-PREFIX = "window.JOB_DATA = "
+PREFIX, OLDER = "window.JOB_DATA = ", "window.JOB_OLDER = "  # docs/jobs.js, docs/older.js
 SLOW = {"remotive", "workable", "workday", "smartrecruiters", "jobicy"}  # strict limits, or a detail call per job
 SLOT_SECONDS = 6 * 3600
 NEWER = dict(must=[], nice=[], salary=None, mode=None, degree=None, posted_approx=False)  # fields a row from older data lacks
@@ -14,11 +14,17 @@ LEGAL = {"inc", "llc", "ltd", "limited", "corp", "corporation", "co", "gmbh", "a
 SHORT = {"sr": "senior", "jr": "junior"}  # as the level rules read them
 
 
-def load_previous(path):
+def read_js(path, prefix):
     try:
-        return json.loads(path.read_text()[len(PREFIX):].rstrip(";\n"))
+        return json.loads(path.read_text()[len(prefix):].rstrip(";\n"))
     except (FileNotFoundError, ValueError):
         return {}
+
+
+def load_previous(path):
+    """The last scan: jobs.js, with the rows of older.js beside it added back (data written before it existed has none)."""
+    prev, older = read_js(path, PREFIX), read_js(path.with_name("older.js"), OLDER).get("jobs", [])
+    return dict(prev, jobs=prev.get("jobs", []) + older) if older else prev
 
 
 def job_key(j):
