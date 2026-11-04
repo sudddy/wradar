@@ -31,7 +31,7 @@ const PERSONAS = [
     secrets: /daniel|okafor|harborline|sentry|kestrel|lakeshore|toronto|example\.com/i },
   { file: "priya-raman", years: 1.5, role: "Frontend", titleLevel: null, level: "Junior", degree: "Bachelor's", skills: 15, latest: 5,
     secrets: /priya|raman|mosaic|hill country|austin|example\./i },
-  { file: "marta-lindqvist", years: 12, role: "ML / AI", titleLevel: "Staff+", level: "Staff+", degree: "PhD", skills: 18, latest: 9,
+  { file: "marta-lindqvist", years: 12, role: "ML / AI", titleLevel: "Staff+", level: "Staff+", degree: "PhD", skills: 20, latest: 9,
     secrets: /marta|lindqvist|aurora|cedar|cascade|seattle|example\.com/i },
   { file: "cassandra-reyes", years: 6, role: "DevOps / SRE", titleLevel: null, level: "Senior", degree: "Bachelor's", skills: 21, latest: 9,
     secrets: /cassandra|reyes|northgate|pinecrest|front range|denver|boulder|example\.com/i },
@@ -40,10 +40,26 @@ const PERSONAS = [
   // Held out: written before the parser was tuned, and not changed to suit it.
   { file: "ivan-ios", years: 4, role: "Mobile", titleLevel: null, level: "Mid", degree: "Bachelor's", skills: 7, latest: 4,
     secrets: /ivan|kovalenko|pinecrest|harbor lane|tar river|raleigh|durham|example\.com/i },
-  { file: "nora-data", years: 6, role: "Data", titleLevel: "Senior", level: "Senior", degree: "Bachelor's", skills: 13, latest: 5,
+  { file: "nora-data", years: 6, role: "Data", titleLevel: "Senior", level: "Senior", degree: "Bachelor's", skills: 17, latest: 5,
     secrets: /nora|haddad|lakeshore|cobalt|north prairie|minneapolis|st\. paul|example\.com/i },
   { file: "samir-sre", years: 11.5, role: "DevOps / SRE", titleLevel: "Staff+", level: "Staff+", degree: "Master's", skills: 18, latest: 8,
     secrets: /samir|qureshi|quillstone|bluefin|ardent|lake erie|pittsburgh|cleveland|example\.com/i },
+  // Outside engineering: written for the all-roles review, before the reader learned other fields.
+  { file: "sam-finance", years: 10, role: "Finance", titleLevel: "Manager", level: "Manager", degree: "Bachelor's", skills: 13, latest: 3,
+    key: ["FP&A", "GAAP", "Month-end Close", "NetSuite", "CPA", "People Management"],
+    secrets: /\bsam\b|ortiz|harbor freight|lakeview|grant & ruiz|depaul|chicago|example\.com/i },
+  { file: "jordan-marketing", years: 15.5, role: "Marketing", titleLevel: "Director", level: "Director", degree: "Master's", skills: 13, latest: 5,
+    key: ["Demand Generation", "Product Marketing", "HubSpot", "Marketo", "People Management"],
+    secrets: /jordan|\bvale\b|northwind|bluebird|copperline|austin|baylor|university of texas|example\.com/i },
+  { file: "alex-designer", years: 9, role: "Design", titleLevel: "Senior", level: "Senior", degree: "Bachelor's", skills: 6, latest: 3,
+    key: ["Figma", "Design Systems", "User Research"],
+    secrets: /\balex\b|\bkim\b|maple pay|lighthouse|toronto|ocad/i },
+  { file: "riley-recruiter", years: 8, role: "Recruiting", titleLevel: "Senior", level: "Senior", degree: "Bachelor's", skills: 7, latest: 3,
+    key: ["Greenhouse", "Full-cycle Recruiting", "Technical Recruiting", "Candidate Sourcing"],
+    secrets: /riley|\bchen\b|cascade cloud|evergreen|seattle|university of washington/i },
+  { file: "morgan-sales", years: 19.5, role: "Sales", titleLevel: "VP", level: "VP", degree: "Bachelor's", skills: 8, latest: 4,
+    key: ["Salesforce", "Gong", "Enterprise Sales", "Quota Attainment", "People Management"],
+    secrets: /morgan|blake|ridgeway|pinnacle|summit systems|new york|\bnyu\b/i },
 ];
 
 // ---- PDF.js shaped items ----
@@ -82,6 +98,7 @@ for (const want of PERSONAS) test(`reads the facts of ${want.file}`, () => {
   const p = read(fixture(want.file));
   assert.deepEqual({ years: p.years, role: p.role, titleLevel: p.level, level: levelOf(p), degree: p.degree, skills: p.skills.length, latest: latest(p) },
     { years: want.years, role: want.role, titleLevel: want.titleLevel, level: want.level, degree: want.degree, skills: want.skills, latest: want.latest });
+  for (const k of want.key || []) assert.ok(p.skills.includes(k), k);
 });
 
 test("evidence says where each skill was used and how long ago", () => {
@@ -92,10 +109,11 @@ test("evidence says where each skill was used and how long ago", () => {
   assert.equal(read(fixture("priya-raman")).evidence["Next.js"].strength, 2, "a project counts as older work");
 });
 
-test("years count tech jobs only, and stated years don't override that", () => {
+test("years count the field of the latest job, and stated years don't override that", () => {
   const p = read(fixture("elena-marsh"));
   assert.equal(p.years, 4);
   assert.match(fixture("elena-marsh"), /11 years of professional experience/);
+  assert.equal(read(fixture("elena-marsh").replace("Chemistry Teacher", "Software Engineer")).years, 11, "the teaching years count once they are engineering");
 });
 
 test("a title line that starts with a dot still names the job", () => {
@@ -105,6 +123,9 @@ test("a title line that starts with a dot still names the job", () => {
 
 test("a resume with no dates falls back on the stated years", () => {
   assert.equal(read("SUMMARY\nBackend engineer with 7+ years of experience in Java.\nSKILLS\nJava, Kafka\n").years, 7);
+  assert.equal(read("SUMMARY\nSales executive with 18 years building enterprise sales teams.\nSKILLS\nSalesforce\n").years, 18);
+  assert.equal(read("SUMMARY\nCPA and finance manager with 9 years in FP&A and accounting.\nSKILLS\nNetSuite\n").years, 9);
+  assert.equal(read("SUMMARY\nRecruiter with 6 years leading technical hiring.\nSKILLS\nGreenhouse\n").years, 6);
 });
 
 test("empty text gives an empty profile", () => {
@@ -166,10 +187,51 @@ test("a state code is not a degree, and joined abbreviations are", () => {
   for (const t of ["MSE, Johns Hopkins", "MS in Computer Science, Georgia Tech", "Georgia Tech, MS Computer Science", "MA, Economics"]) assert.equal(degree(t), "Master's", t);
 });
 
+test("professional, law and associate degrees", () => {
+  const degree = text => read(`EDUCATION\n${text}`).degree;
+  for (const t of ["J.D., Osgoode Hall Law School", "JD, Georgetown Law, 2014", "Juris Doctor, University of Michigan", "LL.B., McGill University",
+    "Bachelor of Laws, University of Toronto", "M.D., Johns Hopkins University", "MD, University of Toronto", "Doctor of Medicine, McMaster University",
+    "D.O., Kansas City University", "Doctor of Osteopathic Medicine, KCU", "PharmD, University of Florida", "Psy.D., Clinical Psychology, Rutgers",
+    "DNP, Duke University", "Doctor of Nursing Practice, Duke", "DDS, NYU College of Dentistry", "DMD, Tufts"]) assert.equal(degree(t), "Professional", t);
+  assert.equal(degree("JD, Georgetown Law\nPh.D., Economics, Yale"), "PhD");
+  assert.equal(degree("JD, Georgetown Law\nMBA, Wharton"), "Professional");
+  for (const t of ["LL.M., Taxation, NYU School of Law", "LLM in International Law, Columbia", "Master of Laws, Osgoode Hall"]) assert.equal(degree(t), "Master's", t);
+  for (const t of ["Associate of Applied Science, Nursing", "Associate Degree in Accounting, Valencia College", "ADN, Miami Dade College"]) assert.equal(degree(t), "Associate", t);
+  for (const t of ["BSN, University of Iowa", "MSN, Vanderbilt"]) assert.equal(degree(t), t.startsWith("B") ? "Bachelor's" : "Master's", t);
+  for (const t of ["B.S. Biology, Johns Hopkins University, Baltimore, MD", "B.S. Biology, Johns Hopkins, Baltimore, MD, USA", "B.A. Economics, Boston, MA, USA",
+    "B.S. Biology, UT M.D. Anderson School of Health Professions"]) assert.equal(degree(t), "Bachelor's", `${t}: an address or a cancer centre is no degree`);
+  assert.equal(degree("Doctor of Philosophy, Physics, Caltech"), "PhD");
+  assert.equal(degree("JD Edwards EnterpriseOne training"), null);
+  assert.equal(degree("Skills: Python, LLM, RAG"), null, "a large language model is not a law degree");
+  assert.equal(degree("J.D. Candidate, Harvard Law School\nB.A., Political Science, Tufts"), "Bachelor's");
+  assert.equal(degree("B.S. Computer Science, MIT, 2018\nM.S. Computer Science (in progress), Stanford"), "Bachelor's", "a degree over one in progress is held");
+});
+
+test("a credential not yet held names no skill", () => {
+  const skills = text => read(`EXPERIENCE\nStaff Accountant    2021 - Present\n- Closed the books.\nCERTIFICATIONS\n${text}`).skills;
+  assert.ok(skills("Certified Public Accountant (CPA), Illinois, 2018").includes("CPA"));
+  for (const t of ["CPA Candidate, passed FAR and AUD", "CFA Level II Candidate", "PMP (in progress)", "Project Management Professional, expected 2027"])
+    assert.ok(!skills(t).some(k => ["CPA", "CFA", "PMP"].includes(k)), t);
+  assert.deepEqual(skills("Certified Public Accountant (CPA), 2018\nCFA Level II Candidate\nPMP\nExpected 2027").filter(k => ["CPA", "CFA", "PMP"].includes(k)), ["CPA"]);
+  assert.ok(!read("EDUCATION\nJ.D. Candidate, Harvard Law School, 2027").skills.includes("Law Degree & Bar"));
+});
+
+test("bar admissions and licensure are their own sections", () => {
+  const attorney = h => read(["EXPERIENCE", "Associate Attorney    2015 - Present", "- Drafted commercial contracts.", h, "Admitted to the bar in New York and New Jersey"].join("\n"));
+  assert.equal(attorney("BAR ADMISSIONS").evidence["Law Degree & Bar"].strength, 1);
+  assert.equal(attorney("Bar Admission").evidence["Law Degree & Bar"].strength, 1);
+  const nurse = read(["EXPERIENCE", "Charge Nurse    2018 - Present", "- Ran a 30-bed surgical unit.", "LICENSURE", "Compact license, Texas Board of Nursing"].join("\n"));
+  assert.equal(nurse.evidence["RN License"].strength, 1);
+});
+
+test("an Executive Summary heading opens the summary", () => {
+  assert.equal(read("EXECUTIVE SUMMARY\nVP of Sales with 18 years building teams.\nSKILLS\nSalesforce").years, 18);
+});
+
 // ---- Rules ----
 test("every exported rule compiles in JavaScript with no Python-only syntax", () => {
-  assert.ok(rules.levels.length && rules.families.length && rules.backend.length && rules.frontend.length);
-  const patterns = [...rules.levels, ...rules.families].map(([, rx]) => rx);
+  assert.ok(rules.levels.length && rules.families.length && rules.roles.length && rules.segment && rules.backend.length && rules.frontend.length);
+  const patterns = [...rules.levels, ...rules.families, ...rules.roles].map(([, rx]) => rx).concat(rules.segment);
   const aliases = Object.values(keywords).flat().filter(a => a.startsWith("re:")).map(a => a.slice(3));
   for (const rx of [...patterns, ...aliases]) {
     assert.doesNotThrow(() => new RegExp(rx, "i"), rx);
@@ -190,6 +252,16 @@ test("a jobs.js from before the rules were exported still reads resumes", () => 
   assert.equal(p.years, 9);
   assert.equal(p.level, null);
   assert.equal(p.role, "General");
+});
+
+// The rules jobs.js held before roles, segments, fields and the ladder were exported.
+const OLD_LEVELS = [["Staff+", "(?<!technical )\\bstaff\\b|\\b(principal|distinguished|architect|fellow)\\b"],
+  ["Senior", "\\b(senior|sr\\.?|lead|iii|iv)\\b"], ["Junior", "\\b(junior|jr\\.?|entry|associate|i)\\b"]];
+test("a jobs.js from before roles were exported reads every role as engineering, with the old levels", () => {
+  const old = { levels: OLD_LEVELS, families: rules.families, backend: rules.backend, frontend: rules.frontend };
+  const facts = name => { const p = parseResume(fixture(name), SKILLS, old, NOW); return [p.role, p.level]; };
+  assert.deepEqual(facts("daniel-okafor"), ["Backend", "Senior"]);
+  assert.deepEqual(facts("marta-lindqvist"), ["ML / AI", "Staff+"]);
 });
 
 // ---- PDF ----
