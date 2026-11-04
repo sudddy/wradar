@@ -165,8 +165,9 @@ function merged(spans) {
   return total;
 }
 const half = months => Math.floor(months / 6) / 2;  // rounds down: postings ask for "N+ years"
-// Data and research years count as engineering years, as both counted as tech before every field was read.
-const YEARS_FIELD = { "Data & research": "Engineering" };
+// Years pool by field, as tech years did before every field was read: data and research years count as engineering years,
+// and hardware years don't, so a civil engineer turned developer counts the developer years.
+const yearsField = (role, field) => (role === "Hardware" ? role : field === "Data & research" ? "Engineering" : field);
 
 // ---- Experience entries ----
 // A job title in any field. The job's field, not this test, decides whether its years count.
@@ -356,8 +357,8 @@ function parseResume(text, skills, rules, now = new Date()) {
   const span = list => merged(list.map(b => [b.start, b.end]));
   const worked = jobs.filter(b => b.work && b.end != null), byField = {};
   for (const b of worked) {
-    const f = b.title && tr.field(tr.family(b.title, b.found));
-    b.field = f && f !== "Other" ? YEARS_FIELD[f] || f : null;
+    const role = b.title && tr.family(b.title, b.found), f = role && tr.field(role);
+    b.field = f && f !== "Other" ? yearsField(role, f) : null;
     if (b.field) (byField[b.field] ||= []).push(b);
   }
   const fields = Object.keys(byField).sort((a, b) => span(byField[b]) - span(byField[a])), last = Math.max(...worked.map(b => b.end));

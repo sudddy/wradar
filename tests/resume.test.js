@@ -172,9 +172,11 @@ test("a side job held alongside the main one doesn't move the career", () => {
   assert.deepEqual([club.role, club.level], ["Backend", "Junior"]);
 });
 
-test("data and research years count with engineering years", () => {
+test("data and research years count with engineering years, and hardware years don't", () => {
   const p = resume(job("Machine Learning Engineer", "Jan 2022 - Present", "Built Python services."), job("Data Scientist", "Jan 2018 - Dec 2021", "Trained models in Python."));
   assert.equal(p.years, 8.5);
+  const civil = resume(job("Software Engineer", "Jan 2024 - Present", "Built Python services."), job("Civil Engineer", "Jan 2014 - Dec 2023", "Designed bridges."));
+  assert.equal(civil.years, 2.5, "hardware engineering years are not software years");
 });
 
 test("a job whose title names no field counts toward the field its skills share", () => {
