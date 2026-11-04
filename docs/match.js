@@ -66,9 +66,8 @@ const DOMAIN = new Set(["SaaS", "B2B", "Payments", "Fintech", "Banking", "Billin
   "DEI Programs", "Troubleshooting", "Data Analysis", "Project Management", "Program Management", "Recruiting", "Customer Success", "Business Operations",
   "Strategic Planning", "Account Reconciliation", "Demand & Supply Planning"]);
 const isSoft = (k, eng) => PRACTICE.has(k) || eng && DOMAIN.has(k);
-// A licence or certificate is held or not: listed under Certifications, it proves as much as a job bullet does, and one never stands
-// in for another: an RN is no near match for a physician job. A posting screens on one first in a field that asks for it at least a
-// quarter as often as the field that asks most; elsewhere it is likely another sense, as CPA is cost per acquisition in marketing.
+// A licence or certificate is held or not: listed, it proves as much as a job bullet does, and none stands in for another (an RN is no
+// near match for a physician job). A field screens on one it asks for a quarter as often as the field asking most; CPA elsewhere is cost per acquisition.
 const CREDENTIALS = new Set(["CPA", "CFA", "PMP", "HR Certification", "FINRA Licenses", "Law Degree & Bar", "Insurance License", "RN License",
   "Nurse Practitioner License", "Physician Assistant License", "Medical License", "Pharmacist License", "Social Work License", "Case Manager Certification"]);
 
@@ -266,13 +265,14 @@ function buildStats(jobs, rules) {
   for (const [k, n] of Object.entries(total)) core[""][k] = n / N;
   for (const [name, F] of Object.entries(inField)) fieldCore[name] = Object.fromEntries(Object.entries(F.total).map(([k, n]) => [k, n / F.n]));
   const ask = Object.fromEntries(Object.entries(asked).map(([l, a]) => [l, a.sort((x, y) => x - y)[a.length >> 1]]));
-  const df = {}, n = {}, most = {};
+  const df = {}, n = {}, most = {}, toEng = {};
   for (const j of jobs) for (const key of new Set(["", shareOf(j.role)])) {
     n[key] = (n[key] || 0) + 1;
     for (const k of j.must) ((df[key] ||= {})[k] = (df[key][k] || 0) + 1);
   }
   for (const f in df) for (const k in df[f]) if (CREDENTIALS.has(k)) most[k] = Math.max(most[k] || 0, df[f][k] / n[f]);
-  const stats = { ask, df, n, shareOf, plans: new Map(), credits: new WeakMap() };
+  for (const k in ROLE_NEAR) for (const [x, y] of [k.split("|"), k.split("|").reverse()]) if (fieldOf(y) === "Engineering" && fieldOf(x) !== "Engineering") toEng[x] = Math.max(toEng[x] || 0, ROLE_NEAR[k]);
+  const stats = { ask, df, n, shareOf, toEng, plans: new Map(), credits: new WeakMap() };
   for (const j of jobs) stats.plans.set(j, planJob(j, { votes, core, fieldCore, fieldOf, shareOf, df, n, most }));
   return stats;
 }
@@ -357,14 +357,14 @@ function score(p, job, stats) {
   const cap = (at, why) => caps.push([at, why]);
   const pct = k => Math.round(100 * (stats.df[plan.share]?.[k] || 0) / stats.n[plan.share]), among = postings(plan.share);
 
-  // 1. Title: same family? A resume read as General or Other says nothing about its family, and a job read as General says nothing
-  // about its own, but a field still differs: a plain "Software Engineer" is no role match for an analyst, nor a sales job for an engineer.
+  // 1. Title: same family? A General or Other resume says nothing of its family, nor a General job of its own, but fields still differ:
+  // "Software Engineer" is no match for an analyst. A General resume is as near as its nearest engineering family, yet too unknown for Hot.
   const track = p.role === "General" || p.role === "Other" ? null : p.role, field = stats.shareOf(p.role);
   const cross = field && plan.share && field !== plan.share && (!track || !plan.role);
   const yours = track || (cross ? field : null), theirs = plan.role ? plan.role.name : cross ? plan.share : null, read = plan.role?.read;
   const own = plan.role && !read && theirs === track;
   const side = plan.sideTrack || !own && plan.sideTopic;
-  const family = yours && theirs ? (read ? .85 : 1) * roleFit(yours, theirs) : null;
+  const family = yours && theirs ? (read ? .85 : 1) * (cross && !track ? stats.toEng[theirs] ?? .15 : roleFit(yours, theirs)) : null;
   const role = side ? Math.min(family ?? 1, .45) : family;
   add("Role", role, role != null ? (side ? "Different track" : `${yours} to ${theirs}${read ? " (read from skills)" : ""}`)
     : !plan.role ? "Title names no family" : "No role found on your resume");
@@ -476,7 +476,7 @@ function score(p, job, stats) {
   else if (proof < 3 && cov.missed.length) cap(74, "Fewer than three of its top must-haves are confirmed by your resume.");
   else if (known < 2) cap(74, stated < 2 ? "It says too little about the role or level, so check the posting yourself."
     : "Your resume shows too little about your role or level, so check the posting yourself.");
-  if (role == null && cov.missed.length) cap(74, !plan.role ? "Its title names no family, so check the posting yourself." : "Your resume shows no role family, so check the posting yourself.");
+  if (cross && !track || role == null && cov.missed.length) cap(74, !plan.role ? "Its title names no family, so check the posting yourself." : "Your resume shows no role family, so check the posting yourself.");
 
   const max = parts.reduce((s, x) => s + x.max, 0);
   const exact = max ? 100 * parts.reduce((s, x) => s + x.got, 0) / max : 0, raw = Math.round(exact);

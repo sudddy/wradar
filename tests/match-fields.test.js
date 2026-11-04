@@ -114,7 +114,7 @@ test("a credential screens only in a field that asks for it: CPA in a marketing 
   assert.deepEqual(acct.held, { at: 74, why: "Not on your resume: CPA." });
 });
 
-test("a General job is no role match for someone from another field, nor a job in another field for a General resume", () => {
+test("a General job is no role match for someone from another field, and a General resume is as near as its nearest engineering family", () => {
   const must = ["SQL", "Python", "Tableau"], swe = job({ title: "Software Engineer", role: "General", level: "Mid", must, years_required: 3 });
   const analyst = person("Analytics", "Mid", 4, must), r = onAll(analyst, swe);
   assert.equal(part(r, "Role").note, "Analytics to Engineering");
@@ -124,6 +124,12 @@ test("a General job is no role match for someone from another field, nor a job i
   const ae = onAll(person("General", "Mid", 4, ["Salesforce", "Prospecting"]), job({ title: "Account Executive", role: "Sales", level: "Mid", must: ["Salesforce", "Prospecting"] }));
   assert.equal(part(ae, "Role").note, "Engineering to Sales");
   assert.ok(ae.gaps.includes("This is a Sales role and your track is Engineering."), JSON.stringify(ae.gaps));
+  const skills = ["SIEM", "Incident Response"], soc = job({ title: "Security Analyst", role: "Cybersecurity", level: "Mid", must: skills, years_required: 3 });
+  const general = onAll(person("General", "Mid", 4, skills), soc);
+  assert.equal(part(general, "Role").note, "Engineering to Cybersecurity");
+  assert.equal(part(general, "Role").got, 14);  // as near as Security, its nearest engineering family
+  assert.deepEqual(general.held, { at: 74, why: "Your resume shows no role family, so check the posting yourself." });
+  assert.equal(onAll(person("Security", "Mid", 4, skills), soc).tier, "Hot");
 });
 
 test("an intern's next job is Junior, and early in a career a year short is internships, not a hold", () => {
