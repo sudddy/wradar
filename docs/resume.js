@@ -367,8 +367,8 @@ function parseResume(text, skills, rules, now = new Date()) {
   const span = list => merged(list.map(b => [b.start, b.end]));
   const worked = jobs.filter(b => b.work && b.end != null), byField = {};
   for (const b of worked) {
-    const role = b.title && tr.family(b.title, b.found), f = role && tr.field(role);
-    b.field = f && f !== "Other" ? yearsField(role, f) : null;
+    const its = b.title && tr.family(b.title, b.found), f = its && tr.field(its);
+    b.field = f && f !== "Other" ? yearsField(its, f) : null;
     if (b.field) (byField[b.field] ||= []).push(b);
   }
   const fields = Object.keys(byField).sort((a, b) => span(byField[b]) - span(byField[a])), last = Math.max(...worked.map(b => b.end));
