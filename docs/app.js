@@ -20,8 +20,8 @@ const DAYS = [2, 3, 7, FRESH_DAYS];  // the Posted choices; Over 30 days ago is 
 const FIELDS = ["Engineering", "Data & research", "Product", "Design", "Sales", "Customer", "Marketing", "People", "Finance", "Legal & compliance",
   "Operations", "IT & security", "Healthcare", "Education", "Other"];
 const fieldOf = role => (D.rules.fields ? D.rules.fields[role] || "Other" : "Engineering");  // data from before fields is all engineering
-// autoRole: Role was set from the first resume read, so a Role cleared after that stays cleared.
-const DEFAULTS = { v: 2, q: "", role: "", level: "", type: "", where: "", work: "", pay: 0, min: 0, src: "", days: FRESH_DAYS, sort: "score", techs: [], mode: "any", hideApplied: false, autoRole: false };
+// autoRole: the Role a resume read set, so a Role cleared or picked after that stays as the person left it.
+const DEFAULTS = { v: 2, q: "", role: "", level: "", type: "", where: "", work: "", pay: 0, min: 0, src: "", days: FRESH_DAYS, sort: "score", techs: [], mode: "any", hideApplied: false, autoRole: "" };
 const state = savedFilters(store.get("wradar-filters"), DEFAULTS);
 const PASTED = "Pasted resume";
 const byKey = new Map();
@@ -72,9 +72,10 @@ function useResume(name, text) {
   const profile = { name, ...wresume.parseResume(text, SKILLS, D.rules) };
   if (!profile.skills.length) { status = "No skills were recognized in that resume. Check it's the right file, or paste the text."; return refresh(); }
   me = Object.fromEntries(wresume.STORED_KEYS.map(k => [k, profile[k]]));
-  if (!state.autoRole && myField()) {  // once, and only into an empty Role; it stays on show and can be cleared
-    state.autoRole = true;
-    if (!state.role) $("#role").value = state.role = "field:" + myField();
+  if (state.role === state.autoRole) {  // an empty Role, or the one the last resume set: one the person picked or cleared stays
+    const role = $("#role");
+    role.value = myField() ? "field:" + myField() : "";
+    role.value = state.role = state.autoRole = role.value;  // a field with no jobs has no option, so Role reads "" and shows All roles
   }
   status = ""; pasting = false; justRead = true; state.sort = "score";
   store.set("wradar-filters", state);  // Your resume doesn't save the filters, and a reload must keep Role and the flag

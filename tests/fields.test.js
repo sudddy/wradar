@@ -28,7 +28,7 @@ test("every field in the real data has its place in Role", () => {
   }
 });
 
-test("the first resume read sets Role to its field once, and a cleared Role stays cleared after a reload", () => {
+test("a resume read sets an empty Role to its field, and a cleared Role stays cleared after a reload", () => {
   const storage = new Map(), page = withResume(openPage({ storage }));
   assert.equal(page.run("state.role"), "field:Engineering");
   assert.equal(page.$("#role").value, "field:Engineering");
@@ -41,6 +41,36 @@ test("the first resume read sets Role to its field once, and a cleared Role stay
   pickRole(chosen, "field:Sales");
   withResume(chosen);
   assert.equal(chosen.run("state.role"), "field:Sales");
+});
+
+// A resume read as one role, whatever resume.js makes of a text.
+const readAs = (page, role) => {
+  page.context.ROLE = role;
+  page.run("wresume.parseResume = () => ({ skills: ['Salesforce'], evidence: {}, years: 5, level: 'Mid', role: ROLE, degree: null }); useResume('Pasted resume', 'x')");
+  return page.run("state.role");
+};
+// #role as a <select> keeps a value only when it has that option.
+const asSelect = el => { let v = ""; Object.defineProperty(el, "value", { get: () => v, set: x => { v = x === "" || el.innerHTML.includes(`value="${x}"`) ? x : ""; } }); };
+
+test("another resume moves the Role a resume set, never one the person picked or cleared", () => {
+  const page = openPage({ data: fields() });
+  assert.equal(readAs(page, "Backend"), "field:Engineering");
+  assert.equal(readAs(page, "Sales"), "field:Sales");
+  assert.equal(readAs(page, null), "");  // a resume with no role says nothing about the field
+  assert.equal(readAs(page, "Sales"), "field:Sales");
+  pickRole(page, "Backend");
+  assert.equal(readAs(page, "Solutions & presales"), "Backend");
+  pickRole(page, "");
+  assert.equal(readAs(page, "Sales"), "");
+});
+
+test("a resume from a field with no jobs leaves Role on All roles", () => {
+  const page = openPage({ data: fields() });
+  asSelect(page.$("#role"));
+  assert.equal(readAs(page, "Recruiting"), "");
+  assert.equal(page.$("#role").value, "");
+  assert.equal(readAs(page, "Sales"), "field:Sales");
+  assert.equal(page.$("#role").value, "field:Sales");
 });
 
 test("a resume read on the welcome keeps its Role after a reload", () => {
