@@ -108,24 +108,30 @@ function loadOlder() {
 }
 
 // The match stats count every row, so they are built again and every job scored again.
-// The board is drawn again with focus where it was, and a job the detail waited for is announced. Your resume keeps its own pane, which may hold text being pasted.
+// Only what the older rows change is drawn again, with focus kept: Your resume keeps its own pane, which may hold text being pasted.
 function joinOlder(rows) {
   const sel = BOARDS.includes(page) && tab().sel, waited = sel && !byKey.has(sel);
   olderIn = true;
   if (addRows(rows)) { stats = null; scoreJobs(); }
-  if (BOARDS.includes(page)) {
-    const was = document.activeElement, inList = $("#list").contains(was), inDetail = $("#detail").contains(was);
-    const covered = $("#board").classList.contains("showing") && !wide() && (!was || was === document.body);  // a link opened on a phone
-    renderBoard();
-    if (inDetail || covered) $("#dtitle")?.focus({ preventScroll: true });
-    else if (inList) focusBoard();
-    if (!waited) return;
-    $("#list .jitem[aria-current=true]")?.scrollIntoView({ block: "nearest" });
-    announce(byKey.has(sel) ? `${byKey.get(sel).title} at ${byKey.get(sel).company}` : "This job is no longer listed.");
-  } else {
-    renderCounts();
-    page === "resume" ? renderSide() : VIEWS[page]();
-  }
+  if (BOARDS.includes(page)) return redrawBoard(sel, waited);
+  renderCounts();
+  if (page === "insights") renderInsights();  // its hot and warm counts; Sources shows nothing older.js brings
+  if (page !== "resume") return;
+  const i = $("#mybest").contains(document.activeElement) && document.activeElement.dataset.i;  // Your best matches may reorder
+  renderSide();
+  if (i) ($(`#mybest [data-i="${i}"]`) || $("#mybest button"))?.focus({ preventScroll: true });
+}
+
+// A job the detail waited for is announced, and on a phone a link opened there gets the focus route() gives it.
+function redrawBoard(sel, waited) {
+  const was = document.activeElement, inList = $("#list").contains(was), inDetail = $("#detail").contains(was);
+  const covered = $("#board").classList.contains("showing") && !wide() && (!was || was === document.body);
+  renderBoard();
+  if (inDetail || covered) $("#dtitle")?.focus({ preventScroll: true });
+  else if (inList) focusBoard();
+  if (!waited) return;
+  $("#list .jitem[aria-current=true]")?.scrollIntoView({ block: "nearest" });
+  announce(byKey.has(sel) ? `${byKey.get(sel).title} at ${byKey.get(sel).company}` : "This job is no longer listed.");
 }
 
 // ---- Rows ----

@@ -431,3 +431,18 @@ test("older rows that arrive on Your resume leave the text being pasted alone", 
   assert.equal(page.$("#me").innerHTML, "text being pasted");
   assert.equal(page.$("#n-older").textContent, "2");
 });
+
+test("older rows keep focus on Your best matches, and leave How it works as it is", () => {
+  const page = withResume(openPage({ at: "#resume", older: "wait" }));
+  const best = page.$("#mybest").querySelector("button");
+  best.dataset = { i: "2" };
+  page.doc.activeElement = best;
+  page.$("#mybest").innerHTML = "";
+  page.older(older(row(50)));
+  assert.match(page.$("#mybest").innerHTML, /data-i="0"/);
+  assert.equal(page.doc.activeElement, page.$('#mybest [data-i="2"]'));
+  const how = openPage({ at: "#sources", older: "wait" });
+  how.$("#srcok").innerHTML = "a link with focus";
+  how.older(older(row(50)));
+  assert.equal(how.$("#srcok").innerHTML, "a link with focus");
+});
