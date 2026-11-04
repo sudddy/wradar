@@ -106,6 +106,35 @@ class Sources(unittest.TestCase):
         self.assertEqual((jobs[0]["company"], jobs[0]["title"], jobs[0]["type"]), ("Acme", "Backend Engineer", "Contract"))
         self.assertEqual(rules.where(jobs[0]["location"]), ["US", "Remote"])
 
+    def test_department_where_the_payload_has_one(self):  # read at scan time only, to place a title that names no role
+        job = dict(title="Associate", url="https://x.test/1")
+        cases = [(sources.greenhouse, ("x", "X"), [{"jobs": [dict(job, absolute_url=job["url"],
+                                                                 departments=[{"name": "Sales"}, {"name": "EMEA"}])]}],
+                  "Sales / EMEA"),
+                 (sources.lever, ("x", "X"), [[dict(text="Associate", hostedUrl=job["url"],
+                                                   categories={"department": "Sales", "team": "Enterprise"})]],
+                  "Sales / Enterprise"),
+                 (sources.ashby, ("x", "X"), [{"jobs": [dict(job, jobUrl=job["url"], department="People", team="Recruiting")]}],
+                  "People / Recruiting"),
+                 (sources.smartrecruiters, ("x", "X"), [{"totalFound": 1, "content": [
+                     {"id": "7", "name": "Associate", "function": {"id": "finance", "label": "Finance"}, "department": {}}]},
+                     {"jobAd": {"sections": {}}}], "Finance"),
+                 (sources.workable, ("x", "X"), [{"jobs": [dict(job, department="Legal")]}], "Legal"),
+                 (sources.remotive, (), [{"jobs": [dict(job, company_name="C", category="Sales / Business")]}],
+                  "Sales / Business"),
+                 (sources.jobicy, (), [{"jobs": [dict(jobTitle="Associate", companyName="C", url=job["url"],
+                                                      jobIndustry=["QA & Testing"])]}, {"jobs": []}], "QA & Testing"),
+                 (sources.workingnomads, (), [[dict(job, company_name="C", category_name="Development")]], "Development"),
+                 (sources.themuse, (), [{"page_count": 1, "results": [dict(name="Associate", company={"name": "C"},
+                                                                           refs={"landing_page": job["url"]},
+                                                                           categories=[{"name": "Sales"}])]}], "Sales"),
+                 (sources.amazon, (), [{"jobs": [dict(job, job_path="/1", job_category="Human Resources")]},
+                                       {"jobs": []}, {"jobs": []}], "Human Resources"),
+                 (sources.weworkremotely, (), [b"<rss><channel><item><title>C: Associate</title>"
+                                               b"<category>Customer Support</category></item></channel></rss>"] * 3,
+                  "Customer Support")]
+        for fn, args, payloads, want in cases:
+            self.assertEqual(self.run_with(fn, *args, payloads=payloads)[0]["dept"], want, fn.__name__)
 
 
 if __name__ == "__main__":

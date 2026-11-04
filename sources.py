@@ -1,6 +1,7 @@
 """Fetch raw jobs from public job boards and feeds. One adapter per source type, standard library only.
 
-Each adapter returns [{title, company, location, url, posted, type, description}]; rules.evaluate() decides what is kept.
+Each adapter returns [{title, company, location, url, posted, type, description}], plus dept, the board's department or
+category, where the payload has one; rules.evaluate() decides what is kept and reads dept only to place the role.
 """
 import html
 import json
@@ -57,6 +58,7 @@ def days_ago(s):
 def greenhouse(slug, name):
     return [dict(title=j["title"], company=j.get("company_name") or name, url=j["absolute_url"],
                  posted=j.get("first_published") or j.get("updated_at"), description=j.get("content", ""),
+                 dept=join(*(d.get("name") for d in j.get("departments") or [])),
                  location=join((j.get("location") or {}).get("name"),
                                *(o.get("location") or o.get("name") for o in j.get("offices") or [])))
             for j in get_json(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true")["jobs"]]
@@ -68,7 +70,7 @@ def lever(slug, name):
         c, pay = j.get("categories") or {}, j.get("salaryRange") or {}
         lists = "".join(f"<p>{x.get('text', '')}</p><ul>{x.get('content', '')}</ul>" for x in j.get("lists") or [])
         out.append(dict(title=j["text"], company=name, url=j["hostedUrl"], posted=j.get("createdAt"),
-                        type=c.get("commitment"), mode=j.get("workplaceType"),
+                        type=c.get("commitment"), mode=j.get("workplaceType"), dept=join(c.get("department"), c.get("team")),
                         salary=structured_pay(pay.get("min"), pay.get("max"), pay.get("currency"), pay.get("interval")),
                         location=join(c.get("location"), *(c.get("allLocations") or []), j.get("workplaceType"),
                                       COUNTRY.get(j.get("country"))),
@@ -90,7 +92,7 @@ def ashby(slug, name):
                 for c in t.get("components") or [] if c.get("compensationType") == "Salary"]
         out.append(dict(title=j["title"], company=name, url=j["jobUrl"], posted=j.get("publishedAt"),
                         type=j.get("employmentType"), mode=j.get("workplaceType"), location=location,
-                        salary=pick_pay([p for p in pays if p], where(location)),
+                        dept=join(j.get("department"), j.get("team")), salary=pick_pay([p for p in pays if p], where(location)),
                         description=j.get("descriptionHtml") or j.get("descriptionPlain", "")))
     return out
 
@@ -103,6 +105,7 @@ def smartrecruiters(slug, name):
             loc = p.get("location") or {}
             out.append(dict(title=p["name"], company=name, url=f"https://jobs.smartrecruiters.com/{slug}/{p['id']}",
                             posted=p.get("releasedDate"), type=(p.get("typeOfEmployment") or {}).get("label"),
+                            dept=join((p.get("function") or {}).get("label"), (p.get("department") or {}).get("label")),
                             mode="Hybrid" if loc.get("hybrid") else "Remote" if loc.get("remote") else None,
                             location=join(loc.get("fullLocation"), COUNTRY.get(str(loc.get("country")).upper()),
                                           "Remote" if loc.get("remote") and not loc.get("hybrid") else ""),
@@ -116,7 +119,7 @@ def smartrecruiters(slug, name):
 
 def workable(slug, name):
     return [dict(title=j["title"], company=name, url=j["url"], posted=j.get("published_on") or j.get("created_at"),
-                 type=j.get("employment_type"), description=j.get("description", ""),
+                 type=j.get("employment_type"), description=j.get("description", ""), dept=j.get("department"),
                  location=join(j.get("city"), j.get("state"), j.get("country"), "Remote" if j.get("telecommuting") else "",
                                *(" ".join(v for v in loc.values() if isinstance(v, str)) for loc in j.get("locations") or [])))
             for j in get_json(f"https://apply.workable.com/api/v1/widget/accounts/{slug}?details=true")["jobs"]]
@@ -163,7 +166,7 @@ BOARDS = {"greenhouse": ("Greenhouse", greenhouse, "https://boards.greenhouse.io
 def remotive():
     return [dict(title=j["title"], company=j["company_name"], url=j["url"], posted=j.get("publication_date"),
                  type=j.get("job_type"), location="Remote " + (j.get("candidate_required_location") or ""),
-                 description=j.get("description", ""))
+                 description=j.get("description", ""), dept=j.get("category"))
             for j in get_json("https://remotive.com/api/remote-jobs?category=software-dev")["jobs"]]
 
 
@@ -177,7 +180,7 @@ def remoteok():
 def jobicy():
     return [dict(title=j["jobTitle"], company=j["companyName"], url=j["url"], posted=j.get("pubDate"),
                  type=" ".join(j.get("jobType") or []), location="Remote " + str(j.get("jobGeo", "")),
-                 description=j.get("jobDescription", ""))
+                 description=j.get("jobDescription", ""), dept=join(*(j.get("jobIndustry") or [])))
             for geo in ("usa", "canada")
             for j in get_json(f"https://jobicy.com/api/v2/remote-jobs?count=100&geo={geo}").get("jobs", [])]
 
@@ -197,7 +200,7 @@ def weworkremotely():
         for it in ET.fromstring(fetch(f"https://weworkremotely.com/categories/remote-{cat}-jobs.rss")).iter("item"):
             company, _, title = it.findtext("title", "").partition(": ")
             out.append(dict(title=title or company, company=company, url=it.findtext("link", ""),
-                            posted=it.findtext("pubDate"), type=it.findtext("type"),
+                            posted=it.findtext("pubDate"), type=it.findtext("type"), dept=it.findtext("category"),
                             location="Remote " + join(it.findtext("region"), it.findtext("country"), it.findtext("state")),
                             description=it.findtext("description", "")))
     return out
@@ -205,7 +208,7 @@ def weworkremotely():
 
 def workingnomads():
     return [dict(title=j["title"], company=j["company_name"], url=j["url"], posted=j.get("pub_date"),
-                 location="Remote " + (j.get("location") or ""),
+                 location="Remote " + (j.get("location") or ""), dept=j.get("category_name"),
                  description=f"{j.get('description', '')} {j.get('tags') or ''}")
             for j in get_json("https://www.workingnomads.com/api/exposed_jobs/") if j.get("category_name") == "Development"]
 
@@ -219,6 +222,7 @@ def themuse():
         pages, page = data["page_count"], page + 1
         out += [dict(title=j["name"], company=j["company"]["name"], url=j["refs"]["landing_page"],
                      posted=j.get("publication_date"), location=join(*(l["name"] for l in j.get("locations") or [])),
+                     dept=join(*(c.get("name") for c in j.get("categories") or [])),
                      description=j.get("contents", "")) for j in data["results"]]
     return out
 
@@ -243,7 +247,7 @@ def amazon():
     url = ("https://www.amazon.jobs/en/search.json?base_query=software%20engineer&result_limit=100&sort=recent"
            "&normalized_country_code%5B%5D=USA&normalized_country_code%5B%5D=CAN&offset=")
     return [dict(title=j["title"], company="Amazon", url="https://www.amazon.jobs" + j["job_path"],
-                 posted=j.get("posted_date"), type=j.get("job_schedule_type"),
+                 posted=j.get("posted_date"), type=j.get("job_schedule_type"), dept=j.get("job_category"),
                  location=join(j.get("normalized_location"), COUNTRY.get(j.get("country_code"))),
                  description="<br>".join(v or "" for v in (
                      j.get("description"), "BASIC QUALIFICATIONS", j.get("basic_qualifications"),
