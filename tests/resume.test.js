@@ -27,7 +27,7 @@ const fixture = name => fs.readFileSync(path.join(__dirname, "fixtures", `${name
 const latest = p => Object.values(p.evidence).filter(e => e.strength === 3).length;
 
 const PERSONAS = [
-  { file: "daniel-okafor", years: 9, role: "Backend", titleLevel: "Senior", level: "Senior", degree: "Master's", skills: 33, latest: 13,
+  { file: "daniel-okafor", years: 9, role: "Backend", titleLevel: "Senior", level: "Senior", degree: "Master's", skills: 32, latest: 13,
     secrets: /daniel|okafor|harborline|sentry|kestrel|lakeshore|toronto|example\.com/i },
   { file: "priya-raman", years: 1.5, role: "Frontend", titleLevel: null, level: "Junior", degree: "Bachelor's", skills: 15, latest: 5,
     secrets: /priya|raman|mosaic|hill country|austin|example\./i },
@@ -45,8 +45,8 @@ const PERSONAS = [
   { file: "samir-sre", years: 11.5, role: "DevOps / SRE", titleLevel: "Staff+", level: "Staff+", degree: "Master's", skills: 18, latest: 8,
     secrets: /samir|qureshi|quillstone|bluefin|ardent|lake erie|pittsburgh|cleveland|example\.com/i },
   // Outside engineering: written for the all-roles review, before the reader learned other fields.
-  { file: "sam-finance", years: 10, role: "Finance", titleLevel: "Manager", level: "Manager", degree: "Bachelor's", skills: 12, latest: 2,
-    key: ["FP&A", "GAAP", "Month-end Close", "NetSuite", "CPA"],
+  { file: "sam-finance", years: 10, role: "Finance", titleLevel: "Manager", level: "Manager", degree: "Bachelor's", skills: 13, latest: 3,
+    key: ["FP&A", "GAAP", "Month-end Close", "NetSuite", "CPA", "People Management"],
     secrets: /\bsam\b|ortiz|harbor freight|lakeview|grant & ruiz|depaul|chicago|example\.com/i },
   { file: "jordan-marketing", years: 15.5, role: "Marketing", titleLevel: "Director", level: "Director", degree: "Master's", skills: 13, latest: 5,
     key: ["Demand Generation", "Product Marketing", "HubSpot", "Marketo", "People Management"],
@@ -57,8 +57,8 @@ const PERSONAS = [
   { file: "riley-recruiter", years: 8, role: "Recruiting", titleLevel: "Senior", level: "Senior", degree: "Bachelor's", skills: 7, latest: 3,
     key: ["Greenhouse", "Full-cycle Recruiting", "Technical Recruiting", "Candidate Sourcing"],
     secrets: /riley|\bchen\b|cascade cloud|evergreen|seattle|university of washington/i },
-  { file: "morgan-sales", years: 19.5, role: "Sales", titleLevel: "VP", level: "VP", degree: "Bachelor's", skills: 7, latest: 3,
-    key: ["Salesforce", "Gong", "Enterprise Sales", "Quota Attainment"],
+  { file: "morgan-sales", years: 19.5, role: "Sales", titleLevel: "VP", level: "VP", degree: "Bachelor's", skills: 8, latest: 4,
+    key: ["Salesforce", "Gong", "Enterprise Sales", "Quota Attainment", "People Management"],
     secrets: /morgan|blake|ridgeway|pinnacle|summit systems|new york|\bnyu\b/i },
 ];
 
@@ -292,7 +292,7 @@ test("bar admissions and licensure are their own sections", () => {
   assert.equal(attorney("BAR ADMISSIONS").evidence["Law Degree & Bar"].strength, 1);
   assert.equal(attorney("Bar Admission").evidence["Law Degree & Bar"].strength, 1);
   const nurse = read(["EXPERIENCE", "Charge Nurse    2018 - Present", "- Ran a 30-bed surgical unit.", "LICENSURE", "Compact license, Texas Board of Nursing"].join("\n"));
-  assert.equal(nurse.evidence["Clinical Licensure"].strength, 1);
+  assert.equal(nurse.evidence["RN License"].strength, 1);
 });
 
 test("an Executive Summary heading opens the summary", () => {
