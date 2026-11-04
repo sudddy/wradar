@@ -1,6 +1,6 @@
 """Read the structure of a job posting: sections, required skills, years, pay, work mode, degree.
 
-Rules only, no AI at runtime. Standard library only. fetch_jobs.evaluate() calls these once per job.
+Rules only, no AI at runtime. Standard library only. rules.evaluate() calls these once per job.
 """
 import html
 import re
@@ -9,7 +9,7 @@ BLOCK = re.compile(r"</?(?:p|div|ul|ol|li|h[1-6]|tr|table|section|article|blockq
 
 
 def rich_text(s):
-    """HTML or plain text -> text with one block per line. Same content as fetch_jobs.text(), keeps structure."""
+    """HTML or plain text -> text with one block per line. Same content as sources.text(), keeps structure."""
     s = BLOCK.sub("\n", html.unescape(s or ""))
     s = html.unescape(re.sub(r"<[^>]+>", " ", s)).replace("’", "'")
     s = re.sub(r"\s[•·▪●◦‣∙]\s", "\n", s)

@@ -1,4 +1,6 @@
-"""Self-checks for the rules and source parsers. Run: python3 -m unittest"""
+"""Self-checks for reading a posting (extract.py) and for one whole scan (fetch_jobs.main). Run: python3 -m unittest
+
+The rules are in test_rules.py, the source parsers in test_sources.py; both share the helpers here."""
 import json
 import tempfile
 import unittest
@@ -8,10 +10,12 @@ from unittest import mock
 
 import extract as x
 import fetch_jobs as f
+import rules
 import scan_state as s
+import sources
 
-R = f.load_rules()
-NOW = f.NOW
+R = rules.load_rules()
+NOW = sources.NOW
 CUTOFF = NOW - timedelta(days=30)
 DESC = ("&lt;p&gt;5+ years of backend experience with Java, Kafka, AWS, Kubernetes, PostgreSQL "
         "and Go, gRPC. Payments domain.&lt;/p&gt;")
@@ -21,66 +25,6 @@ def job(**kw):
     base = dict(title="Senior Backend Engineer", company="Acme", location="Vancouver, BC", url="https://x.test/1",
                 posted=NOW.isoformat(), source="Greenhouse", description=DESC)
     return dict(base, **kw)
-
-
-class Keywords(unittest.TestCase):
-    def test_boundaries_and_lookalikes(self):
-        for text, name, found in (("JavaScript and TypeScript", "Java", False), ("PostgreSQL", "SQL", False),
-                                  ("the rest of the team", "REST APIs", False), ("REST and gRPC", "REST APIs", True),
-                                  ("Modern C++ experience", "C++", True), ("Java, Go, Rust", "Go", True),
-                                  ("services written in Go.", "Go", True), ("Golang", "Go", True),
-                                  ("Go-to-market team. Go beyond the basics.", "Go", False),
-                                  ("event-driven payment rails", "Ruby on Rails", False),
-                                  ("payment tracking via SWIFT GPI", "SWIFT", True),
-                                  ("payment tracking via SWIFT GPI", "Swift", False)):
-            self.assertEqual(name in f.skills(R["kw"], text), found, (text, name))
-
-
-class Locations(unittest.TestCase):
-    def test_where(self):
-        cases = {"Vancouver, BC": ["Canada"], "Vancouver, WA": ["US"], "San Francisco, CA": ["US"],
-                 "Toronto, ON, CA": ["Canada"], "Remote - US": ["US", "Remote"], "Remote Worldwide": ["Remote"],
-                 "Remote - Europe": [], "London, UK": [], "Remote Colorado": ["US", "Remote"],
-                 "Remote Europe, LATAM, APAC, the U.S., Canada": ["Canada", "US", "Remote"],
-                 "USA - Georgia - Alpharetta - 30005": ["US"], "Flexible / Remote": ["Remote"]}
-        for loc, want in cases.items():
-            self.assertEqual(f.where(loc), want, loc)
-
-
-class Types(unittest.TestCase):
-    def test_job_type(self):
-        for args, want in {("FullTime", "", ""): "Full-time", ("full_time", "", ""): "Full-time",
-                           ("Short Term", "", ""): "Contract", ("PartTime", "", ""): "Part-time",
-                           (None, "Backend Engineer (Contract)", ""): "Contract", (None, "SWE", "Great team."): "Not specified",
-                           (None, "Engineer", "We write smart contracts. This is a full-time role."): "Full-time",
-                           (None, "Engineer", "This is a 6-month contract."): "Contract"}.items():
-            self.assertEqual(f.job_type(*args), want, args)
-
-    def test_dates(self):
-        self.assertEqual((f.when("October 30, 2026").day, f.when("Mon, 02 Nov 2026 17:00:19 +0000").month,
-                          f.when(1793636892).year, f.days_ago("Posted 30+ Days Ago"), f.days_ago("Posted Yesterday")),
-                         (30, 11, 2026, 31, 1))
-
-
-class Classify(unittest.TestCase):
-    def test_level(self):
-        for title, want in {"Senior Backend Engineer": "Senior", "Staff Software Engineer": "Staff+",
-                            "Software Engineer II": "Mid", "Software Engineer I": "Junior",
-                            "Tech Lead, Payments": "Senior", "AI Engineer": "Mid", "Staff Engineer": "Staff+",
-                            "Member of Technical Staff": "Mid", "Senior Member of Technical Staff": "Senior",
-                            "Principal Member of Technical Staff": "Staff+"}.items():
-            self.assertEqual(f.level(title), want, title)
-
-    def test_family(self):  # security is checked before AI and cloud
-        for title, found, want in (("Senior Backend Engineer, Data Platform", set(), "Backend"),
-                                   ("Software Engineer, Payments", set(), "Backend"),
-                                   ("Senior Frontend Engineer", set(), "Frontend"),
-                                   ("Software Engineer", {"Java", "Kafka", "React"}, "Backend"),
-                                   ("Software Engineer", {"Java", "Kafka", "React", "Redux"}, "Full stack"),
-                                   ("Software Engineer", set(), "General"), ("AI Security Engineer", set(), "Security"),
-                                   ("Cloud Security Engineer", set(), "Security"),
-                                   ("Backend Engineer, Security", set(), "Backend")):
-            self.assertEqual(f.family(title, found), want, title)
 
 
 class RichText(unittest.TestCase):
@@ -204,144 +148,6 @@ class Degree(unittest.TestCase):
             self.assertIsNone(x.degree(x.split_sections(body)), body)
 
 
-class Evaluate(unittest.TestCase):
-    def test_keeps_and_tags(self):
-        row = f.evaluate(job(), R, CUTOFF)
-        self.assertEqual(row["skills"], ["Java", "Go", "gRPC", "Kafka", "AWS", "Kubernetes", "PostgreSQL", "Payments"])
-        self.assertEqual([row[k] for k in ("where", "years_required", "applicants", "type", "level", "role")],
-                         [["Canada"], 5, None, "Not specified", "Senior", "Backend"])
-
-    def test_extracted_fields_and_must_and_nice_are_subsets_of_skills(self):
-        body = ("<p>We use AWS.</p><p>Requirements</p><ul><li>5+ years of Java</li><li>Bachelor's degree in CS</li></ul>"
-                "<p>Nice to have</p><ul><li>Kafka</li></ul>"
-                "<p>Salary range: $150,000 - $200,000 USD per year. This is a hybrid role.</p>")
-        row = f.evaluate(job(title="Backend Engineer", description=body), R, CUTOFF)
-        self.assertEqual([row[k] for k in ("must", "nice", "years_required", "salary", "mode", "degree", "posted_approx")],
-                         [["Java"], ["Kafka"], 5, dict(min=150000, max=200000, cur="USD", per="year"), "Hybrid",
-                          dict(level="bachelor", req="required"), False])
-        self.assertEqual(set(row["skills"]) - set(row["must"]) - set(row["nice"]), {"AWS"})
-
-    def test_adapter_fields_win_over_the_body(self):
-        pay = dict(min=100000, max=110000, cur="USD", per="year")
-        row = f.evaluate(job(mode="Remote", salary=pay, posted_approx=True,
-                             description="Salary range: $150,000 - $200,000. This is a hybrid role."), R, CUTOFF)
-        self.assertEqual((row["mode"], row["salary"], row["posted_approx"]), ("Remote", pay, True))
-
-    def test_rules_reject(self):
-        for kw in (dict(title="Engineering Manager, Payments"), dict(title="Account Executive"),
-                   dict(title="Software Engineer Internships - Summer 2027"), dict(location="Berlin, Germany"),
-                   dict(posted=(NOW - timedelta(days=60)).isoformat()), dict(url="javascript:alert(1)")):
-            self.assertIsNone(f.evaluate(job(**kw), R, CUTOFF), kw)
-        self.assertIsNotNone(f.evaluate(job(description="Ruby and Rails"), R, CUTOFF))  # every technology is kept
-
-    def test_lazy_fields_only_fetched_when_needed(self):
-        calls = []
-        lazy = lambda v: lambda: calls.append(v) or v  # noqa: E731
-        f.evaluate(job(title="Account Executive", description=lazy(DESC)), R, CUTOFF)
-        self.assertEqual(calls, [])
-        row = f.evaluate(job(location=lazy("Toronto, ON"), description=lazy(DESC), type=lazy("Full time")), R, CUTOFF)
-        self.assertEqual((row["where"], row["type"]), (["Canada"], "Full-time"))
-
-
-class Sources(unittest.TestCase):
-    """Parsers against payload shapes captured from the live APIs."""
-
-    def run_with(self, fn, *args, payloads):
-        responses = iter(payloads)
-        fake = lambda url, body=None: (r if isinstance(r := next(responses), bytes) else json.dumps(r).encode())  # noqa
-        with mock.patch.object(f, "fetch", side_effect=fake):
-            return [{k: (v() if callable(v) else v) for k, v in j.items()} for j in fn(*args)]
-
-    def test_lever(self):
-        [j] = self.run_with(f.lever, "x", "X", payloads=[[{
-            "text": "Backend Engineer", "hostedUrl": "https://jobs.lever.co/x/1", "createdAt": 1793636892000,
-            "categories": {"commitment": "Permanent", "location": "Toronto", "allLocations": ["Toronto"]},
-            "workplaceType": "hybrid", "country": "CA", "description": "<div>Java</div>",
-            "lists": [{"text": "Requirements", "content": "<li>Kafka</li>"}], "additional": "<div>Pay</div>",
-            "salaryRange": {"min": 75600, "max": 103950, "currency": "USD", "interval": "per-year-salary"}}]])
-        self.assertEqual((j["type"], f.where(j["location"])), ("Permanent", ["Canada"]))
-        self.assertEqual(j["mode"], "hybrid")
-        self.assertEqual(j["salary"], dict(min=75600, max=103950, cur="USD", per="year"))
-        self.assertEqual(x.rich_text(j["description"]), "Java\nRequirements\nKafka\nPay")
-
-    def test_ashby_hybrid_is_not_remote_and_pays_in_its_home_currency(self):
-        pay = lambda cur, lo, hi: {"components": [  # noqa: E731
-            {"compensationType": "EquityPercentage", "interval": "NONE", "currencyCode": None, "minValue": None},
-            {"compensationType": "Salary", "interval": "1 YEAR", "currencyCode": cur, "minValue": lo, "maxValue": hi}]}
-        [j] = self.run_with(f.ashby, "x", "X", payloads=[{"jobs": [{
-            "title": "SWE", "jobUrl": "https://jobs.ashbyhq.com/x/1", "publishedAt": "2026-10-30T00:00:00Z",
-            "employmentType": "FullTime", "location": "San Francisco", "secondaryLocations": [], "isRemote": True,
-            "workplaceType": "Hybrid", "address": {"postalAddress": {"addressCountry": "United States"}},
-            "descriptionHtml": "<p>Java</p>", "descriptionPlain": "Java", "compensation": {"compensationTiers": [
-                pay("CAD", 295000, 535000), pay("USD", 205000, 380000), pay("USD", 175000, 325000)]}}]}])
-        self.assertEqual((f.where(j["location"]), j["mode"], j["description"]), (["US"], "Hybrid", "<p>Java</p>"))
-        self.assertEqual(j["salary"], dict(min=175000, max=380000, cur="USD", per="year"))  # USD tiers, not the first
-
-    def test_ashby_asks_for_compensation(self):
-        with mock.patch.object(f, "fetch", return_value=b'{"jobs": []}') as fetch:
-            f.ashby("x", "X")
-        self.assertIn("includeCompensation=true", fetch.call_args.args[0])
-
-    def test_smartrecruiters_fetches_description_lazily(self):
-        [j] = self.run_with(f.smartrecruiters, "Acme", "Acme", payloads=[
-            {"totalFound": 1, "content": [{"id": "7", "name": "Software Engineer", "releasedDate": "2026-10-30T00:00:00Z",
-                                           "typeOfEmployment": {"label": "Full-time"},
-                                           "location": {"fullLocation": "Austin, Texas, United States", "country": "us",
-                                                        "remote": True, "hybrid": False}}]},
-            {"jobAd": {"sections": {"jobDescription": {"title": "Job Description", "text": "Kafka"},
-                                    "qualifications": {"title": "Qualifications", "text": "Java"}}}}])
-        self.assertEqual((j["url"], f.where(j["location"]), j["mode"]), ("https://jobs.smartrecruiters.com/Acme/7",
-                                                                         ["US", "Remote"], "Remote"))
-        self.assertEqual(x.rich_text(j["description"]), "Job Description\nKafka\nQualifications\nJava")
-
-    def test_smartrecruiters_hybrid(self):
-        posting = {"id": "7", "name": "SWE", "location": {"fullLocation": "Austin", "remote": True, "hybrid": True}}
-        [j] = self.run_with(f.smartrecruiters, "Acme", "Acme", payloads=[
-            {"totalFound": 1, "content": [posting]}, {"jobAd": {"sections": {}}}])
-        self.assertEqual(j["mode"], "Hybrid")
-
-    def test_amazon_keeps_basic_and_preferred_apart(self):
-        jobs = self.run_with(f.amazon, payloads=[{"jobs": [{
-            "title": "SDE", "job_path": "/jobs/1", "posted_date": "October 30, 2026", "description": "Build things",
-            "basic_qualifications": "- 5+ years of Java<br/>- Linux", "preferred_qualifications": "- Kafka",
-            "normalized_location": "Seattle, WA", "country_code": "USA"}]}, {"jobs": []}, {"jobs": []}])
-        sec = x.split_sections(x.rich_text(jobs[0]["description"]))
-        self.assertEqual(("- 5+ years of Java" in sec["must"], "- Kafka" in sec["nice"], "- Kafka" in sec["must"]),
-                         (True, True, False))
-
-    def test_workday_multi_location(self):
-        [j] = self.run_with(f.workday, "acme.wd5/Ext", "Acme", payloads=[
-            {"total": 1, "jobPostings": [{"title": "SWE", "externalPath": "/job/x/SWE_1", "locationsText": "2 Locations",
-                                          "postedOn": "Posted 3 Days Ago"}]},
-            {"jobPostingInfo": {"location": "Toronto, ON", "additionalLocations": ["Seattle, WA"],
-                                "country": {"descriptor": "Canada"}, "timeType": "Full time", "jobDescription": "<p>Java</p>"}}])
-        self.assertEqual(j["url"], "https://acme.wd5.myworkdayjobs.com/Ext/job/x/SWE_1")
-        self.assertEqual((f.where(j["location"]), j["type"], j["posted_approx"]), (["Canada", "US"], "Full time", False))
-
-    def test_workday_flags_30_plus_days_and_skips_an_untitled_posting(self):
-        [j] = self.run_with(f.workday, "acme.wd5/Ext", "Acme", payloads=[
-            {"total": 2, "jobPostings": [{"externalPath": "/job/x/JR_0"}, {"title": "SWE", "externalPath": "/job/x/SWE_1",
-                                          "locationsText": "Seattle, WA", "postedOn": "Posted 30+ Days Ago"}]}, {"jobPostingInfo": {}}])
-        self.assertIs(j["posted_approx"], True)
-
-    def test_hackernews(self):
-        [j] = self.run_with(f.hackernews, payloads=[
-            {"hits": [{"title": "Ask HN: Who is hiring? (November 2026)", "objectID": "9"}]},
-            {"children": [{"id": 11, "created_at": "2026-11-02T16:00:00Z",
-                           "text": "Acme | Senior Backend Engineer, Designer | REMOTE (US) | Full-time<p>We use Java"},
-                          {"id": 12, "text": "Not a job post"}]}])
-        self.assertEqual((j["company"], j["title"], f.where(j["location"]), f.job_type(j["type"], "", "")),
-                         ("Acme", "Senior Backend Engineer", ["US", "Remote"], "Full-time"))
-
-    def test_weworkremotely(self):
-        rss = (b"<rss><channel><item><title>Acme: Backend Engineer</title><region>USA Only</region>"
-               b"<type>Contract</type><pubDate>Mon, 02 Nov 2026 07:31:15 +0000</pubDate>"
-               b"<link>https://weworkremotely.com/x</link><description>Java</description></item></channel></rss>")
-        jobs = self.run_with(f.weworkremotely, payloads=[rss, rss, rss])
-        self.assertEqual((jobs[0]["company"], jobs[0]["title"], jobs[0]["type"]), ("Acme", "Backend Engineer", "Contract"))
-        self.assertEqual(f.where(jobs[0]["location"]), ["US", "Remote"])
-
-
 def row(**kw):
     base = dict(title="SWE", company="Acme", where=["US"], url="https://x.test/1", posted=NOW.isoformat(),
                 source="Greenhouse", posted_approx=False)
@@ -375,10 +181,10 @@ class Main(unittest.TestCase):
         self.assertEqual(data["slow_fetched_at"], NOW.isoformat())
         self.assertTrue(any(s.is_slow(t) for t in tasks))
         self.assertEqual(scan, {"generated_at": data["generated_at"], "jobs": len(data["jobs"])})
-        rules, cfg = data["rules"], f.load_rules()["cfg"]  # config.json, so setting scan_url keeps scans running
-        self.assertEqual((rules["max_age_days"], rules["scan_url"], rules["levels"][0][0], rules["families"][0][0]),
+        exported, cfg = data["rules"], rules.load_rules()["cfg"]  # config.json, so setting scan_url keeps scans running
+        self.assertEqual((exported["max_age_days"], exported["scan_url"], exported["levels"][0][0], exported["families"][0][0]),
                          (cfg["max_age_days"], cfg["scan_url"], "Staff+", "Full stack"))
-        self.assertEqual((rules["backend"], rules["frontend"]), (sorted(f.BACKEND), sorted(f.FRONTEND)))
+        self.assertEqual((exported["backend"], exported["frontend"]), (sorted(rules.BACKEND), sorted(rules.FRONTEND)))
 
     def test_closed_slot_skips_slow_sources_and_keeps_their_rows(self):
         prev = dict(slow_fetched_at=days(0), sources=[dict(name="NVIDIA", kind="Workday", url="", ok=True, seen=9, kept=1)],
