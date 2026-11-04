@@ -10,7 +10,7 @@ const read = f => fs.readFileSync(path.join(__dirname, "..", f), "utf8");
 const sandbox = { window: {} };
 vm.runInNewContext(read("docs/jobs.js"), sandbox);
 const rows = sandbox.window.JOB_DATA.jobs;
-const stats = buildStats(rows);
+const stats = buildStats(rows, sandbox.window.JOB_DATA.rules);
 
 const MUST = ["Java", "Kafka", "AWS", "PostgreSQL", "Kubernetes"];
 const job = ({ must = MUST, nice = [], ...over } = {}) => ({ title: "Senior Backend Engineer", role: "Backend", level: "Senior",
@@ -263,7 +263,7 @@ test("what the resume doesn't show is said as the resume's, not the posting's", 
   assert.equal(silent.held.why, "Your resume shows too little about your role or level, so check the posting yourself.");
   assert.equal(on({ ...full, role: "General", skills: MUST.slice(0, 4) }, job()).held.why, "Your resume shows no role family, so check the posting yourself.");
   const families = sandbox.window.JOB_DATA.rules.families.map(([, rx]) => new RegExp(rx, "i"));
-  for (const j of rows.filter(x => families.some(rx => rx.test(x.title)))) {
+  for (const j of rows.filter(x => x.role !== "Other" && families.some(rx => rx.test(x.title)))) {  // Other: the scan placed it in no field ("Data Entry Clerk")
     assert.ok(!lines(score({ ...old, role: "General" }, j, stats)).some(l => l.includes("names no family")), j.title);
   }
 });
@@ -304,9 +304,9 @@ test("a weak implied skill is named by the skill the resume shows", () => {
 });
 
 test("data without fields scores as data whose every role is Engineering", () => {
-  const eng = buildStats(rows, { fields: Object.fromEntries(rows.map(r => [r.role, "Engineering"])) });
+  const none = buildStats(rows), eng = buildStats(rows, { fields: Object.fromEntries(rows.map(r => [r.role, "Engineering"])) });
   for (const p of PROFILES) for (let i = 0; i < rows.length; i += 7) {
-    const a = score(p, rows[i], stats), b = score(p, rows[i], eng);
+    const a = score(p, rows[i], none), b = score(p, rows[i], eng);
     assert.equal(b.tie, a.tie, rows[i].title);
     assert.deepEqual(b.gaps, a.gaps, rows[i].title);
   }
