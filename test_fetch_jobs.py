@@ -53,6 +53,11 @@ class Sections(unittest.TestCase):
         self.assertEqual([x.heading(h)[0] for h in heads], ["must", "must", "nice", "nice", None])
         self.assertEqual(x.split_sections("Requirements\nJava\nBonus\nKafka")["nice"], ["Bonus", "Kafka"])
 
+    def test_what_will_help_you_stand_out_is_nice_to_have(self):  # Toast's heading, in each order it comes in
+        for head in ("What will help you stand out (Nonessential Skills/Nice to Haves)",
+                     "What will help you standout (Nice to Haves/Non-Essential Skills)", "What will help you stand out:"):
+            self.assertEqual(x.split_sections(f"Requirements\nJava\n{head}\nKafka")["nice"][1:], ["Kafka"], head)
+
     def test_desirable_skills_as_the_only_list_is_required(self):
         sec = x.split_sections("Desirable skills\nGo\nRust")
         self.assertEqual(("Go" in sec["must"], sec["nice"]), (True, []))
@@ -75,7 +80,8 @@ class Years(unittest.TestCase):
                            "Great team.\nWe have 5+ years of history.": None,
                            "Requirements\nA BS plus five (5) years of experience": 5, "Requirements\n10+ YoE in product": 10,
                            "Requirements\nFive or more years of Go": 5, "Requirements\nOne year of Java": 1,
-                           "Requirements\nUp to two years of Go": None, "Requirements\nA two year degree": None}.items():
+                           "Requirements\nUp to two years of Go": None, "Requirements\nA two year degree": None,
+                           "Requirements\n18+ years leading sales teams": 18, "Requirements\n25+ years in banking": None}.items():
             self.assertEqual(x.years_min(x.split_sections(body)), want, body)
 
 
@@ -96,7 +102,8 @@ class Salary(unittest.TestCase):
 
     def test_money_that_is_not_pay(self):
         for body in ("We raised $50M - $100M from investors.", "Great team.", "$5,000 - $10,000 signing bonus",
-                     "Equity grant of $100,000 - $200,000 in stock", "$2,000 - $3,000 per month", "Salary: $0k - $10k"):
+                     "Equity grant of $100,000 - $200,000 in stock", "$2,000 - $3,000 per month", "Salary: $0k - $10k",
+                     "Pay: $80 - $120 per session", "Pay range: $150 - $200 per visit"):  # clinical pay per patient seen
             self.assertIsNone(x.salary(body, ["US"]), body)
 
     def test_labels_on_the_line_above_count_and_asides_do_not(self):
@@ -145,6 +152,19 @@ class Degree(unittest.TestCase):
                                  ("Requirements<br>Master's/ PhD degree", "master", "required")):
             self.assertEqual(x.degree(x.split_sections(x.rich_text(body))), dict(level=level, req=req), body)
         for body in ("Requirements\nJava", "Requirements\n10+ YoE (post-BS/MS) in a product role"):
+            self.assertIsNone(x.degree(x.split_sections(body)), body)
+
+    def test_associate_and_professional_degrees(self):
+        for body, level in (("Requirements\nAssociate degree or higher", "associate"),
+                            ("Requirements\nAssociate's or Bachelor's degree", "associate"),
+                            ("Requirements\nJD from an accredited law school", "professional"),
+                            ("Requirements\nJuris Doctorate required", "professional"),  # also reads as a doctorate
+                            ("Requirements\nMD/DO, board certified", "professional"),
+                            ("Requirements\nDoctor of Nursing Practice (DNP)", "professional"),
+                            ("Requirements\nPharmD or PhD", "professional"), ("Requirements\nMaster's or JD", "master")):
+            self.assertEqual(x.degree(x.split_sections(body))["level"], level, body)
+        for body in ("Requirements\nWork with our associates daily", "Requirements\nJD Edwards ERP", "Requirements\nJava\n#LI-DNP",
+                     "Requirements\nYou've debugged DDS/middleware issues"):
             self.assertIsNone(x.degree(x.split_sections(body)), body)
 
 
