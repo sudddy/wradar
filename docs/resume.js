@@ -179,7 +179,8 @@ const NOUNS = ["engineer", "developer", "programmer", "swe", "sde", "sre", "devo
   "attorney", "lawyer", "paralegal", "strategist", "marketer", "writer", "copywriter", "editor", "producer", "planner", "buyer",
   "administrator", "assistant", "receptionist", "supervisor", "advisor", "adviser", "teacher", "tutor", "instructor", "professor",
   "lecturer", "trainer", "coach", "nurse", "physician", "therapist", "counselor", "pharmacist", "technician", "clinician", "dentist",
-  "paramedic", "artist", "illustrator", "animator", "intern", "internship", "co-op"].join("|");
+  "paramedic", "artist", "illustrator", "animator", "intern", "internship", "co-op",
+  "rn", "lpn", "lvn", "cna", "np", "sdr", "bdr", "ae", "csm", "tpm", "hrbp"].join("|");
 const TITLE = new RegExp(`\\b(?:${NOUNS})\\b`, "i");
 // A title ends on its noun, but for a grade or a note in brackets ("Engineer II (Contract)"), or names it before of, to or
 // for ("VP of Sales"). An employer only contains one: "Trader Joe's", "Advocate Health", "Lead Bank".

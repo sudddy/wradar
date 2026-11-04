@@ -26,7 +26,8 @@ const resume = (...jobs) => read(["EXPERIENCE", ...jobs.flat()].join("\n"));
 test("a job title in any field names the job", () => {
   for (const [title, role, level] of [["Chemistry Teacher", "Education", null], ["Staff Accountant", "Accounting", null], ["Paralegal", "Legal", null],
     ["Registered Nurse", "Clinical", null], ["Senior Technical Recruiter", "Recruiting", "Senior"], ["VP of Sales", "Sales", "VP"],
-    ["Account Executive", "Sales", null], ["Executive Assistant", "Administrative", null], ["Marketing Intern", "Marketing", "Intern"]]) {
+    ["Account Executive", "Sales", null], ["Executive Assistant", "Administrative", null], ["Marketing Intern", "Marketing", "Intern"],
+    ["RN, Emergency Department", "Clinical", null], ["SDR", "Sales", null], ["Senior CSM", "Customer success", "Senior"]]) {
     const p = resume(job(title, "Jan 2021 - Present", "Kept the weekly plan."));
     assert.deepEqual([p.years, p.role, p.level], [5.5, role, level], title);
   }
