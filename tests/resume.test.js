@@ -161,7 +161,8 @@ test("years come from the latest job's field, else the field with the most month
   const sales = job("Account Executive", "Jan 2020 - Present", "Closed enterprise deals."), teach = job("Chemistry Teacher", "Jan 2010 - Dec 2019", "Taught chemistry.");
   assert.equal(resume(sales, teach).years, 6.5);
   const unknown = job("Laboratory Assistant", "Jan 2024 - Present", "Prepared reagents.");
-  assert.equal(resume(unknown, sales.map(l => l.replace("Present", "Dec 2023")), teach.map(l => l.replace("2010", "2019"))).years, 4, "the latest field is unknown: Sales has the most months");
+  assert.equal(resume(unknown, job("Chemistry Teacher", "Jan 2021 - Dec 2023", "Taught."), job("Account Executive", "Jan 2010 - Dec 2020", "Closed deals.")).years, 11,
+    "the latest field is unknown: Sales has the most months, though teaching is more recent");
   assert.equal(resume(unknown, job("Laboratory Assistant", "Jan 2020 - Dec 2023", "Kept inventory.")).years, 6.5, "no field known: every job");
 });
 
@@ -319,8 +320,8 @@ test("an Executive Summary heading opens the summary", () => {
 
 // ---- Rules ----
 test("every exported rule compiles in JavaScript with no Python-only syntax", () => {
-  assert.ok(rules.levels.length && rules.families.length && rules.backend.length && rules.frontend.length);
-  const patterns = [...rules.levels, ...rules.families].map(([, rx]) => rx);
+  assert.ok(rules.levels.length && rules.families.length && rules.roles.length && rules.segment && rules.backend.length && rules.frontend.length);
+  const patterns = [...rules.levels, ...rules.families, ...rules.roles].map(([, rx]) => rx).concat(rules.segment);
   const aliases = Object.values(keywords).flat().filter(a => a.startsWith("re:")).map(a => a.slice(3));
   for (const rx of [...patterns, ...aliases]) {
     assert.doesNotThrow(() => new RegExp(rx, "i"), rx);
