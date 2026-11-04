@@ -89,7 +89,7 @@ test("a General profile role is no role, not a mismatch", () => {
   assert.equal(part(general, "Role").max, 0);
   assert.equal(general.held, null);
   for (const r of rows.filter(x => x.role !== "General").slice(0, 200)) {
-    assert.ok(!lines(score({ ...old, role: "General" }, r, stats)).some(l => l.includes("General")), r.title);
+    assert.ok(!lines(score({ ...old, role: "General" }, r, stats)).some(l => /\bGeneral\b(?! Ledger)/.test(l)), r.title);  // General Ledger is a skill, not the role
   }
 });
 
