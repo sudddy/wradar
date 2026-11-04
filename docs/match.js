@@ -245,7 +245,7 @@ function buildStats(jobs, rules) {
     n[key] = (n[key] || 0) + 1;
     for (const k of j.must) ((df[key] ||= {})[k] = (df[key][k] || 0) + 1);
   }
-  const stats = { ask, df, n, plans: new Map(), credits: new WeakMap() };
+  const stats = { ask, df, n, shareOf, plans: new Map(), credits: new WeakMap() };
   for (const j of jobs) stats.plans.set(j, planJob(j, { lift, core, fieldCore, fieldOf, shareOf }));
   return stats;
 }
@@ -329,18 +329,21 @@ function score(p, job, stats) {
   const cap = (at, why) => caps.push([at, why]);
   const pct = k => Math.round(100 * (stats.df[plan.share]?.[k] || 0) / stats.n[plan.share]), among = postings(plan.share);
 
-  // 1. Title: same family?
-  const track = p.role === "General" || p.role === "Other" ? null : p.role;  // a resume read as General or Other says nothing about its family
-  const own = plan.role && !plan.role.read && plan.role.name === track;
+  // 1. Title: same family? A resume read as General or Other says nothing about its family, and a job read as General says nothing
+  // about its own, but a field still differs: a plain "Software Engineer" is no role match for an analyst, nor a sales job for an engineer.
+  const track = p.role === "General" || p.role === "Other" ? null : p.role, field = stats.shareOf(p.role);
+  const cross = field && plan.share && field !== plan.share && (!track || !plan.role);
+  const yours = track || (cross ? field : null), theirs = plan.role ? plan.role.name : cross ? plan.share : null, read = plan.role?.read;
+  const own = plan.role && !read && theirs === track;
   const side = plan.sideTrack || !own && plan.sideTopic;
-  const family = plan.role && track ? (plan.role.read ? .85 : 1) * roleFit(track, plan.role.name) : null;
+  const family = yours && theirs ? (read ? .85 : 1) * roleFit(yours, theirs) : null;
   const role = side ? Math.min(family ?? 1, .45) : family;
-  add("Role", role, role != null ? (side ? "Different track" : `${p.role} to ${plan.role.name}${plan.role.read ? " (read from skills)" : ""}`)
+  add("Role", role, role != null ? (side ? "Different track" : `${yours} to ${theirs}${read ? " (read from skills)" : ""}`)
     : !plan.role ? "Title names no family" : "No role found on your resume");
   const offTrack = side ? "This is a different track: customer-facing, or a specialty your resume doesn't show."
-    : plan.role && `${plan.role.read ? "Its skills read like" : "This is"} ${plan.role.name === "Specialist" ? "a specialist" : `${article(plan.role.name)} ${plan.role.name}`} role${plan.role.read ? "," : ""} and your track is ${p.role}.`;
-  if (role != null && role >= .85) fits.push(`Your ${p.role} background fits this role.`);
-  else if (role != null && role >= .5) next.push(`Describe your ${p.role} work in ${plan.role.name} terms in your opening lines.`);
+    : theirs && `${read ? "Its skills read like" : "This is"} ${theirs === "Specialist" ? "a specialist" : `${article(theirs)} ${theirs}`} role${read ? "," : ""} and your track is ${yours}.`;
+  if (role != null && role >= .85) fits.push(`Your ${yours} background fits this role.`);
+  else if (role != null && role >= .5) next.push(`Describe your ${yours} work in ${theirs} terms in your opening lines.`);
   else if (role != null) gaps.push(offTrack);
   if (role != null && role < .3) cap(50, offTrack);
   else if (role != null && role < .5) cap(65, offTrack);

@@ -17,7 +17,7 @@ const full = { ...old, name: "PDF resume", role: "Backend", level: "Senior", deg
 const ENG = ["Backend", "Frontend", "Full stack", "Mobile", "Security", "ML / AI", "Data", "DevOps / SRE", "QA / Test", "Embedded", "General", "Hardware"];
 const RULES = { fields: { ...Object.fromEntries(ENG.map(f => [f, "Engineering"])), Sales: "Sales", "Solutions & presales": "Sales",
   "Customer success": "Customer", Marketing: "Marketing", Accounting: "Finance", Finance: "Finance", Recruiting: "People", Clinical: "Healthcare",
-  Cybersecurity: "IT & security", "Revenue operations": "Operations", Other: "Other", "FP&A": "Finance", HR: "People", SDR: "Sales", SEO: "Marketing" } };
+  Cybersecurity: "IT & security", "Revenue operations": "Operations", Analytics: "Data & research", Other: "Other", "FP&A": "Finance", HR: "People", SDR: "Sales", SEO: "Marketing" } };
 const onAll = (p, j, others = []) => score(p, j, buildStats([j, ...others], RULES));
 const person = (role, level, years, skills, over = {}) => ({ name: "PDF resume", role, level, years, degree: "Bachelor's", skills,
   evidence: Object.fromEntries(skills.map(k => [k, ev(3, 0)])), ...over });

@@ -54,6 +54,18 @@ test("a nurse's licence counts in full, and Healthcare is the job, not backgroun
   assert.ok(!lines(r).some(l => l.includes("only listed")), JSON.stringify(lines(r)));
 });
 
+test("a General job is no role match for someone from another field, nor a job in another field for a General resume", () => {
+  const must = ["SQL", "Python", "Tableau"], swe = job({ title: "Software Engineer", role: "General", level: "Mid", must, years_required: 3 });
+  const analyst = person("Analytics", "Mid", 4, must), r = onAll(analyst, swe);
+  assert.equal(part(r, "Role").note, "Analytics to Engineering");
+  assert.deepEqual(r.held, { at: 50, why: "This is an Engineering role and your track is Analytics." });
+  assert.equal(part(onAll({ ...full, skills: must }, swe), "Role").max, 0);  // an engineer: the family is unknown, the field is the same
+  assert.equal(part(on(analyst, swe), "Role").max, 0);  // data without fields
+  const ae = onAll(person("General", "Mid", 4, ["Salesforce", "Prospecting"]), job({ title: "Account Executive", role: "Sales", level: "Mid", must: ["Salesforce", "Prospecting"] }));
+  assert.equal(part(ae, "Role").note, "Engineering to Sales");
+  assert.ok(ae.gaps.includes("This is a Sales role and your track is Engineering."), JSON.stringify(ae.gaps));
+});
+
 test("a Director of Marketing moving to VP is one step up, and so is each manager step", () => {
   const skills = ["Demand Generation", "Brand Strategy", "Marketing Automation", "Performance Marketing", "People Management"];
   const dir = person("Marketing", "Director", 14, skills), at = (title, level) => job({ title, role: "Marketing", level, must: skills, years_required: 12 });
