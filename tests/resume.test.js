@@ -292,6 +292,7 @@ test("professional, law and associate degrees", () => {
   assert.equal(degree("JD Edwards EnterpriseOne training"), null);
   assert.equal(degree("Skills: Python, LLM, RAG"), null, "a large language model is not a law degree");
   assert.equal(degree("J.D. Candidate, Harvard Law School\nB.A., Political Science, Tufts"), "Bachelor's");
+  assert.equal(degree("B.S. Computer Science, MIT, 2018\nM.S. Computer Science (in progress), Stanford"), "Bachelor's", "a degree over one in progress is held");
 });
 
 test("a credential not yet held names no skill", () => {
@@ -299,6 +300,7 @@ test("a credential not yet held names no skill", () => {
   assert.ok(skills("Certified Public Accountant (CPA), Illinois, 2018").includes("CPA"));
   for (const t of ["CPA Candidate, passed FAR and AUD", "CFA Level II Candidate", "PMP (in progress)", "Project Management Professional, expected 2027"])
     assert.ok(!skills(t).some(k => ["CPA", "CFA", "PMP"].includes(k)), t);
+  assert.deepEqual(skills("Certified Public Accountant (CPA), 2018\nCFA Level II Candidate\nPMP\nExpected 2027").filter(k => ["CPA", "CFA", "PMP"].includes(k)), ["CPA"]);
   assert.ok(!read("EDUCATION\nJ.D. Candidate, Harvard Law School, 2027").skills.includes("Law Degree & Bar"));
 });
 

@@ -277,13 +277,16 @@ const DEGREES = [
   ["Associate", /\bassociate(?:['’]?s)?\s+(?:of|in|degree)\b/i, /\b(?:A\.A\.S|A\.S|A\.A|AAS|ADN)\b/],
 ];
 const NOT_HELD = /\b(?:expected|anticipated|in progress|candidate|pursuing|ongoing|incomplete|abd|not completed)\b/i;
-const held = (l, i, all) => !NOT_HELD.test(l) && !NOT_HELD.test(all[i + 1] || "");  // "MBA, Wharton" over "Expected May 2027"
+// A line held: not one not yet held, nor over a line that only says so. "MBA, Wharton" over "Expected May 2027" isn't held;
+// "CPA, 2018" over "CFA Level II Candidate" is, since that line names its own credential. names: whether a line does.
+const held = names => (l, i, all) => !NOT_HELD.test(l) && !(NOT_HELD.test(all[i + 1] || "") && !names(all[i + 1]));
 // The place that ends "Boston, MA", "Baltimore, MD, USA" or "Oxford, MS 38655, 2018". M.D. Anderson is a cancer centre.
 const STATE = /,\s*M[ADS](?=\s*,?\s*(?:\d|[|(]|$|USA?\b|United States\b))/g;
+const degreeIn = l => { l = l.replace(STATE, ""); return DEGREES.find(([, word, abbr]) => word.test(l) || abbr.test(l))?.[0] ?? null; };
 
 function degreeOf(lines) {
-  lines = lines.map(l => l.replace(STATE, "")).filter(held);
-  return DEGREES.find(([, word, abbr]) => lines.some(l => word.test(l) || abbr.test(l)))?.[0] ?? null;
+  const found = lines.filter(held(degreeIn)).map(degreeIn);
+  return DEGREES.find(([name]) => found.includes(name))?.[0] ?? null;
 }
 
 // ---- Role and level: level() and family() in rules.py, over the rules jobs.js exports ----
@@ -345,7 +348,8 @@ function parseResume(text, skills, rules, now = new Date()) {
   projects.forEach(b => { b.found = foundIn(b.body, skills); });
 
   // A degree or credential not yet held ("CFA Level II Candidate", "J.D. expected 2027") names no skill.
-  const listed = foundIn([...intro, ...sec.summary, ...sec.skills, ...sec.education.filter(held), ...sec.certifications.filter(held), ...sec.other, ...rest.filter(notContact)], skills);
+  const own = held(l => degreeIn(l) || foundIn([l], skills).length);
+  const listed = foundIn([...intro, ...sec.summary, ...sec.skills, ...sec.education.filter(own), ...sec.certifications.filter(own), ...sec.other, ...rest.filter(notContact)], skills);
   const ev = evidence([...jobs, ...projects], listed, today);
   const names = skills.map(([n]) => n).filter(k => ev[k]);
 
