@@ -66,6 +66,22 @@ test("a General job is no role match for someone from another field, nor a job i
   assert.ok(ae.gaps.includes("This is a Sales role and your track is Engineering."), JSON.stringify(ae.gaps));
 });
 
+test("an intern's next job is Junior, and early in a career a year short is internships, not a hold", () => {
+  const intern = { ...full, level: "Intern", years: 0.3 }, grad = (years_required, level = "Junior") => job({ title: "Software Engineer, New Grad", level, years_required });
+  const r = on(intern, grad(null));
+  assert.equal(part(r, "Seniority").note, "Intern to Junior");
+  assert.equal(part(r, "Seniority").got, 12);
+  assert.equal(r.held, null);
+  assert.ok(r.next.includes("Say when you graduate, so they know when you can start."), JSON.stringify(r.next));
+  assert.ok(!lines(r).some(l => l.includes("step up")), JSON.stringify(lines(r)));
+  const year = on(intern, grad(1));
+  assert.equal(year.held, null, JSON.stringify(year.held));
+  assert.ok(year.next.includes("You are 0.7 years short: apply anyway and open with your biggest result, with its numbers."), JSON.stringify(year.next));
+  assert.equal(on(intern, grad(2)).held.why, "It asks for 2+ years and you have 0.3.");
+  assert.equal(on({ ...full, level: "Junior", years: 0.5 }, grad(1)).held, null);
+  assert.equal(on({ ...full, level: "Mid", years: 1 }, grad(3, "Mid")).held.why, "It asks for 3+ years and you have 1.");  // later on, a ratio as before
+});
+
 test("a Director of Marketing moving to VP is one step up, and so is each manager step", () => {
   const skills = ["Demand Generation", "Brand Strategy", "Marketing Automation", "Performance Marketing", "People Management"];
   const dir = person("Marketing", "Director", 14, skills), at = (title, level) => job({ title, role: "Marketing", level, must: skills, years_required: 12 });

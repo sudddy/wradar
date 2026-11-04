@@ -286,9 +286,10 @@ function meet(req, c) {
 const reqLabel = r => (r.names.length > 1 ? r.names.slice(0, 3).join(" or ") : r.names[0]);
 
 // The step on the ladder, times the track: managing people is a change of track, easier with people managed on the resume.
+// From Intern, Junior is the job after graduating, so that step needs no years.
 function levelFit(mine, job, years, stats, people) {
   const d = RANK[job] - RANK[mine];
-  const step = !d ? 1 : d === 1 ? (years != null && years >= (stats.ask[job] ?? 99) ? .8 : .5)
+  const step = !d ? 1 : d === 1 ? (mine === "Intern" || years != null && years >= (stats.ask[job] ?? 99) ? .8 : .5)
     : d === -1 ? (RANK[mine] >= 4 ? .8 : .65) : d === 2 ? .1 : d === -2 ? .3 : 0;
   return step * (BOSS.has(job) === BOSS.has(mine) ? 1 : BOSS.has(job) ? (people ? .85 : .6) : .85);
 }
@@ -348,9 +349,10 @@ function score(p, job, stats) {
   if (role != null && role < .3) cap(50, offTrack);
   else if (role != null && role < .5) cap(65, offTrack);
 
-  // 2. Seniority, both directions, and the track. A level guessed from the years bar counts half.
+  // 2. Seniority, both directions, and the track. A level guessed from the years bar counts half. An intern's next job is Junior.
   const mine = levelOf(p), lv = plan.level || (RANK[mine] <= 1 ? UNSTATED : null);
   const people = p.evidence?.["People Management"]?.strength >= 2;
+  const graduating = mine === "Intern" && lv?.name === "Junior", early = !lv?.unstated && RANK[mine] <= 1 && RANK[lv?.name] <= 1;
   let level = lv && mine ? levelFit(mine, lv.name, p.years, stats, people) : null;
   if (level != null && lv.soft) level = 1 - (1 - level) / 2;
   add("Seniority", level, level != null ? `${mine} to ${lv.name}${lv.soft ? " (read from years)" : ""}` : !lv ? "Level not stated" : "No level found on your resume");
@@ -358,6 +360,7 @@ function score(p, job, stats) {
     const d = RANK[lv.name] - RANK[mine], turn = BOSS.has(lv.name) !== BOSS.has(mine);
     if (lv.unstated) cap(69, "It states no level, and most postings like this ask for 2 or more years.");
     else if (!d && !turn) fits.push(`The level matches your ${mine} experience.`);
+    else if (graduating) next.push("Say when you graduate, so they know when you can start.");
     else if (d === 1) next.push(`This is a step up: show ${lv.name} scope, such as what you led and decided.`);
     else if (d === -1) next.push("This sits below your level: say why it suits you, so you don't read as a flight risk.");
     else if (d) gaps.push(`${lv.name} is ${plural(Math.abs(d), "level")} ${d > 0 ? "above" : "below"} your ${mine} experience.`);
@@ -366,23 +369,23 @@ function score(p, job, stats) {
       cap(74, NO_TEAM);
     } else if (BOSS.has(lv.name)) next.push("Open with the team you led, its size and what it delivered.");
     if (turn && BOSS.has(mine)) next.push("Lead with work you did yourself.");
-    if (d === 1 && !lv.soft) cap(74, `This is a step up from your ${mine} experience.`);
+    if (d === 1 && !lv.soft && !graduating) cap(74, `This is a step up from your ${mine} experience.`);
     if (d === -1 && !lv.soft) cap(85, `This sits one level below your ${mine} experience.`);
     if (Math.abs(d) >= 2) cap(lv.soft ? 74 : d > 0 ? 45 : 60, `${lv.name} is ${plural(Math.abs(d), "level")} ${d > 0 ? "above" : "below"} your ${mine} experience.`);
   }
   if (lv?.grad && p.years >= 3) cap(49, "This is an early-career program, and your experience is past it.");
 
-  // 3. Years, as a ratio: one year short means more at 3 than at 10.
+  // 3. Years, as a ratio: one year short means more at 3 than at 10. Early in a career a year's gap is internships and projects.
   const bar = job.years_required, ratio = bar != null && p.years != null ? p.years / bar : null;
   const years = ratio == null ? null : ratio >= 1 ? 1 : Math.max(0, (ratio - .4) / .6);
   add("Years", years, ratio != null ? `${p.years} against ${bar}+` : bar == null ? "No years stated" : "No years found on your resume");
   if (ratio != null && ratio >= 1) fits.push(`You have ${plural(p.years, "year")}; it asks for ${bar}+.`);
   else if (ratio != null) {
-    const short = +(bar - p.years).toFixed(1), why = `It asks for ${bar}+ years and you have ${p.years}.`;
+    const short = +(bar - p.years).toFixed(1), why = `It asks for ${bar}+ years and you have ${p.years}.`, near = ratio >= .8 || early && short <= 1;
     gaps.push(why);
-    next.push(`You are ${plural(short, "year")} short: ${ratio >= .8 ? "apply anyway and open with your biggest result, with its numbers" : "go in through a referral if you can"}.`);
-    if (ratio < .5) cap(50, why);
-    if (lv && mine && RANK[lv.name] > RANK[mine]) cap(74, `It's a step up and ${why.toLowerCase()}`);
+    next.push(`You are ${plural(short, "year")} short: ${near ? "apply anyway and open with your biggest result, with its numbers" : "go in through a referral if you can"}.`);
+    if (ratio < .5 && !near) cap(50, why);
+    if (lv && mine && RANK[lv.name] > RANK[mine] && !graduating) cap(74, `It's a step up and ${why.toLowerCase()}`);
   }
 
   // 4. Top must-haves, then the whole list by information.
