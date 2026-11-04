@@ -138,6 +138,26 @@ class Classify(unittest.TestCase):
                             "Executive Assistant": "Administrative", "Teacher": "Education"}.items():
             self.assertEqual(rules.family(title, set()), want, title)
 
+    def test_family_for_titles_first_read_as_other(self):  # from a full scan; the late entries yield to a field's own noun
+        for title, want in {"SDET Intern": "QA / Test", "SDET Manager": "QA / Test", "Senior Full Stack": "Full stack",
+                            "Sr REACT NATIVE": "Mobile", "Web Development Intern": "Frontend",
+                            "PhD Machine Learning Internship 2027": "ML / AI", "Head of Technology and AI Innovation": "ML / AI",
+                            "Software Development Manager, AI Foundations": "ML / AI", "Tech Lead": "General",
+                            "Software Development Project Manager": "Program management",
+                            "Machine Learning Research Intern (Summer 2027)": "Research", "UX Research Intern": "Design",
+                            "Sr Manager, Applied Science, Search": "Research", "Sr. Manager, Data Analysis": "Analytics",
+                            "Développeur Logiciels (Stagiaire), Backend": "Backend", "Ingénieur Logiciel Android": "Mobile",
+                            "Senior Business Systems Analyst": "IT", "Finance Systems Analyst": "Finance", "Senior DB2 DBA": "IT",
+                            "Senior Director, GTM People Business Partner": "People & HR", "Senior Director, GTM Finance": "Finance",
+                            "GTM Lead": "Sales", "Manager, Mid Market (East)": "Sales",
+                            "Mid-Market Customer Success Manager": "Customer success", "Technical Success Manager": "Customer success",
+                            "Neuropsychologist - Contract (1099)": "Clinical", "Talent Partner, Technical": "Recruiting",
+                            "Client Service Associate": "Support", "Personal Banking Associate": "Finance",
+                            "Manager, SEC Reporting": "Accounting", "Vice President, Global Affairs": "Communications",
+                            "Data Entry Clerk": "Administrative", "Head of PR": "Communications",
+                            "Vice-président(e) exécutif(ve)": "Other"}.items():  # "pr" before "é" is not PR, in JavaScript too
+            self.assertEqual(rules.family(title, set()), want, title)
+
     def test_department_fallback_and_fields(self):
         self.assertEqual([rules.family("Associate", set(), d) for d in ("Sales & Partnerships", "")], ["Sales", "Other"])
         self.assertEqual(rules.family("Senior Backend Engineer", set(), "Sales"), "Backend")  # the title wins

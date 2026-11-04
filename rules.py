@@ -96,7 +96,7 @@ LADDER = ["Intern", "Junior", "Mid", "Senior", "Staff+", "Manager", "Senior Mana
           "C-level"]
 FAMILIES = [("Full stack", r"full[- ]?stack"),
             ("Backend", r"back[- ]?end|server[- ]side|\bapi\b|distributed systems|\bpayments?\b|ledger|integrations?\b"),
-            ("Frontend", r"front[- ]?end|\bui\b|\bweb developer"),
+            ("Frontend", r"front[- ]?end|\bui\b|\bweb develop(?:er|ment)"),
             ("Mobile", r"\b(ios|android|mobile|react native)\b"),
             ("Security", r"security"),
             ("ML / AI", r"machine learning|\bml\b|\bai\b|\bllms?\b|deep learning|\bnlp\b"),
@@ -114,23 +114,25 @@ ROLES = [
     ("Sales", r"\b(?:account|sales) exec\w*|\bsales (?:representative|director|manager|lead|specialist|development)"
               r"|\b(?:sdr|bdr|ae)\b|\b(?:business|account) development representative\b", "Sales"),
     ("IT", r"\bit\b|\binformation technology\b|\bhelp ?desk\b|\bservice desk\b|\bdesktop support\b|\bsysadmin\b"
-           r"|\bsystems? administrator\b|\bnetwork administrator\b|\bend[- ]user\b|\bdata center technician\b", "IT & security"),
-    ("Support", r"\bsupport\b|\bcustomer (?:service|care|operations)\b|\bmember (?:services|support)\b|\bescalations?\b",
-     "Customer"),
+           r"|\bsystems? administrator\b|\bnetwork administrator\b|\bend[- ]user\b|\bdata center technician\b"
+           r"|\bdba\b|\bdatabase administrator\b", "IT & security"),
+    ("Support", r"\bsupport\b|\b(?:customer|client) (?:service|care|operations)\b|\bmember (?:services|support)\b"
+                r"|\bescalations?\b", "Customer"),
     ("Developer relations", r"\bdeveloper (?:relations|advocate|advocacy|evangelist)|\bdevrel\b|\btechnical marketing engineer",
      "Marketing"),
     ("Hardware", r"\b(?:hardware|electrical|mechanical|asic|fpga|silicon|pcb|rf|analog|mixed[- ]signal|optical|photonics"
                  r"|thermal|power|manufacturing|controls?|process|chemical|civil|structural|facilities|commissioning)\s+"
                  r"engineer|\bdesign verification\b|\bphysical design\b|\btechnician\b", "Engineering"),
-    ("Engineering", r"engineer\w*|developer|programmer|\bswe\b|\bsde\b|\bsre\b|devops|architect|technical staff|\bmts\b"
-                    r"|\bcto\b", "Engineering"),
+    ("Engineering", r"engineer\w*|developer|programmer|\bswe\b|\bsde\b|\bsre\b|devops|architect|technical staff|\b[slp]?mts\b"
+                    r"|\bcto\b|\bsdet\b|\bfde\b|ing[ée]nieur|d[ée]veloppeu[rs]|programmeu[rs]|desarrollador", "Engineering"),
     ("Data science", r"\bdata scien\w*|\bquantitative\b|\bstatistic\w*|\beconomist\b|\bdecision scien\w*", "Data & research"),
-    ("Research", r"\bresearch scientist|\bapplied scientist\b|\bresearcher\b|\bscientist\b|\bpostdoc", "Data & research"),
+    ("Research", r"\bresearch scientist|\bapplied scien\w*|\bresearcher\b|\bscientist\b|\bpostdoc|\bhead of research\b"
+                 r"|(?<!ux )(?<!user )\bresearch (?:intern|fellow)\w*", "Data & research"),
     ("Analytics", r"\b(?:data|business|product|marketing|sales|people|operations|revenue|bi|insights?|reporting|growth)\s+"
-                  r"(?:analyst|analytics|intelligence)\b|\banalytics\b|\bbusiness intelligence\b|\bbi\b", "Data & research"),
+                  r"(?:analyst|analytics|analysis|intelligence)\b|\banalytics\b|\bbusiness intelligence\b|\bbi\b", "Data & research"),
     ("Cybersecurity", r"security|\bgrc\b|\bsoc\b|cyber|infosec|\bthreat|vulnerab|penetration|\bred team|\bdetection",
      "IT & security"),
-    ("Clinical", r"\b(?:physician|nurse|nursing|rn|np|pa-c|lcsw|lpc|md|do|psychiatr\w*|psycholog\w*|therapist|therapy"
+    ("Clinical", r"\b(?:physician|nurse|nursing|rn|np|pa-c|lcsw|lpc|md|do|psychiatr\w*|(?:neuro)?psycholog\w*|therapist|therapy"
                  r"|clinician|clinical|counselor|phlebotomist|pharmac\w*|dentist|dental|medical|dietitian|midwife|doula"
                  r"|care (?:coordinator|navigator|manager|partner)|health coach|behavioral health|mental health"
                  r"|psychotherapist|optometrist|radiolog\w*|sonographer|paramedic|emt)\b", "Healthcare"),
@@ -142,27 +144,30 @@ ROLES = [
                r"|\billustrat|\bcreative\b|\bartist\b|\banimat|\bart director\b|\bvfx\b|\bmotion\b|\bart\b", "Design"),
     ("Sales", r"\baccount (?:director|manager)\b|\bsales\b|\bbusiness development\b|\bterritory\b|\bclient partner\b"
               r"|\baccount partner\b|\bcommercial (?:lead|director)\b|\bpartner (?:manager|development|account)"
-              r"|\bpartnerships?\b|\balliances?\b|\bchannel\b|\bagent\b|\bseller\b|\bgtm\b", "Sales"),
+              r"|\bpartnerships?\b|\balliances?\b|\bchannel\b|\bagent\b|\bseller\b|\bwholesaler\b", "Sales"),
     ("Customer success", r"\b(?:customer|client) success\b|\bcsm\b|\btechnical account manager\b|\btam\b|\baccount management\b"
                          r"|\bcustomer (?:engagement|onboarding|advocate|experience)\b|\bonboarding\b|\brenewals?\b|\bcx\b"
-                         r"|\bclient services\b", "Customer"),
+                         r"|\bclient services\b|\bsuccess manager\b", "Customer"),
     ("Marketing", r"marketing|\bgrowth\b|\bbrand\b|\bdemand gen|\bseo\b|\bsem\b|\bsocial media\b|\bevents?\b|\bcommunity\b"
                   r"|\badvocate\b|\bcampaigns?\b|\blifecycle\b|\bcopywrit|\binfluencer\b|\bpaid (?:social|search|media)\b"
                   r"|\banalyst relations\b", "Marketing"),
-    ("Communications", r"communications?\b|\bpublic relations\b|\bpr\b|\bcontent\b|\bwriter\b|\beditor\b|\beditorial\b"
-                       r"|\bjournalist\b|\bspeechwriter\b|\blocali[sz]ation\b|\btranslator\b|\bvideo\b|\bproducer\b"
-                       r"|\bmoderator\b|\bgovernment affairs\b|\bpublic policy\b", "Marketing"),
-    ("Recruiting", r"recruit\w*|\btalent acquisition\b|\bsourcer\b|\bsourcing (?:lead|partner|specialist)\b|\bta partner\b",
-     "People"),
+    ("Communications", r"communications?\b|\bpublic relations\b|\bpr(?![^\s/&])|\bcontent\b|\bwriter\b|\beditor\b"
+                       r"|\beditorial\b|\bjournalist\b|\bspeechwriter\b|\blocali[sz]ation\b|\btranslator\b|\bvideo\b"
+                       r"|\bproducer\b|\bmoderator\b|\b(?:government|corporate|global|public|media) (?:affairs|relations)\b"
+                       r"|\bpublic policy\b", "Marketing"),  # "pr" not before "é": JavaScript's \b would match "président"
+    ("Recruiting", r"recruit\w*|\btalent acquisition\b|\bsourcer\b|\bsourcing (?:lead|partner|specialist)\b|\bta partner\b"
+                   r"|\btalent (?:advisor|partner)\b", "People"),
     ("People & HR", r"\bpeople\b|\bhuman resources\b|\bhr\b|\bhrbp\b|\bcompensation\b|\bbenefits\b|\btotal rewards\b"
                     r"|\blearning (?:and|&) development\b|\bl&d\b|\btalent (?:management|development)\b|\bemployee\b"
                     r"|\bpayroll\b|\bdei\b|\bdiversity\b|\bworkforce\b|\borganizational\b", "People"),
     ("Accounting", r"accountant|accounting|\bcontroller\b|\bcomptroller\b|\btax\b|\baccounts (?:payable|receivable)\b"
-                   r"|\bbookkeep|\baudit\w*|\bsox\b|\brevenue (?:recognition|accountant)\b|\bbilling\b|\bcollections?\b",
+                   r"|\bbookkeep|\baudit\w*|\bsox\b|\brevenue (?:recognition|accountant)\b|\bbilling\b|\bcollections?\b"
+                   r"|\bconsolidations?\b|\bsec reporting\b",
      "Finance"),
     ("Finance", r"financ\w*|\bfp&a\b|\btreasury\b|\binvestor relations\b|\bcorporate development\b|\bcorp dev\b|\bm&a\b"
                 r"|\bactuar\w*|\bunderwrit\w*|\bcredit\b|\binvestment\w*|\bcapital markets\b|\bprocurement\b"
-                r"|\bpricing\b|\bbanker\b|\btrader\b|\btrading\b|\bportfolio\b", "Finance"),
+                r"|\bpricing\b|\bbanker\b|\btrader\b|\btrading\b|\bportfolio\b|\btreasurer\b|\bbanking\b|\bmortgage\b"
+                r"|\bloan officer\b|\bequity research\b", "Finance"),
     ("Legal", r"\blegal\b|\bcounsel\b|\battorney\b|\blawyer\b|\bparalegal\b|\bcontracts? (?:manager|specialist|administrator)"
               r"|\bprivacy\b|\bintellectual property\b|\bpatent\b|\blitigation\b", "Legal & compliance"),
     ("Risk & compliance", r"\bcompliance\b|\brisk\b|\baml\b|\bkyc\b|\bbsa\b|\bfraud\b|\bregulatory\b|\bfinancial crimes\b"
@@ -175,7 +180,8 @@ ROLES = [
                      r"|\bwarehouse\b|\binventory\b|\bdemand planning\b|\bplanner\b|\bvendor\b|\bfleet\b|\bdriver\b"
                      r"|\breceiving\b|\bshipping\b|\bcapacity\b", "Operations"),
     ("Administrative", r"\b(?:executive|administrative|admin|office|personal)\s+(?:assistant|coordinator|manager|business partner)\b"
-                       r"|\breceptionist\b|\bexecutive business partner\b|\badministrat\w*|\bconcierge\b", "Operations"),
+                       r"|\breceptionist\b|\bexecutive business partner\b|\badministrat\w*|\bconcierge\b|\bvirtual assistant\b"
+                       r"|\bdata entry\b|\bclerk\b", "Operations"),
     ("Facilities & workplace", r"\bfacilit\w*|\bworkplace\b|\breal estate\b|\bconstruction\b|\bsite (?:manager|lead|operations)\b"
                                r"|\bhvac\b|\bmaintenance\b|\bsecurity officer\b|\bcritical (?:facility|environment)"
                                r"|\bforeman\b|\bpipefitter\b|\belectrician\b|\bdata center\b|\benergy\b", "Operations"),
@@ -184,6 +190,12 @@ ROLES = [
     ("Business operations", r"\boperations?\b|\bops\b|\bstrategy\b|\bstrategist\b|\bstrategic\b|\bbusiness (?:analyst|partner)\b"
                             r"|\bchief of staff\b|\bconsultant\b|\btransformation\b|\bplanning\b|\bgeneral manager\b"
                             r"|\bprograms?\b|\bengagement\b|\bexpert\b", "Operations"),
+    # Last, so a field's own noun wins: "GTM Finance" is Finance, "Finance Systems Analyst" Finance, "Software Development
+    # Project Manager" a program manager.
+    ("Engineering", r"\bsoftware development\b|\bsw development\b|\bweb development\b|full[- ]?stack|\breact native\b"
+                    r"|\bmachine learning\b|\btech(?:nical)? lead\b|\bhead of technology\b", "Engineering"),
+    ("IT", r"\bbusiness systems\b|\bsystems analyst\b", "IT & security"),
+    ("Sales", r"\bgtm\b|\bgo-to-market\b|\bmid[- ]market\b", "Sales"),
 ]
 SEGMENT = r"\s*(?:,|\(|\)|\[|\]|\||:|;|\s[-–—]\s|–|—)\s*"
 FIELDS = ({name: "Engineering" for name, _ in FAMILIES} | {"General": "Engineering"}
