@@ -46,12 +46,29 @@ test("a Recruiter matches a recruiting job, where Recruiting is a requirement", 
 });
 
 test("a nurse's licence counts in full, and Healthcare is the job, not background", () => {
-  const skills = ["Clinical Licensure", "EHR Systems", "Healthcare", "Utilization Management"];
-  const rn = person("Clinical", "Mid", 5, skills, { evidence: { ...Object.fromEntries(skills.map(k => [k, ev(3, 0)])), "Clinical Licensure": ev(1, null) } });
+  const skills = ["RN License", "EHR Systems", "Healthcare", "Utilization Management"];
+  const rn = person("Clinical", "Mid", 5, skills, { evidence: { ...Object.fromEntries(skills.map(k => [k, ev(3, 0)])), "RN License": ev(1, null) } });
   const r = onAll(rn, job({ title: "Registered Nurse, Care Management", role: "Clinical", level: "Mid", must: skills, years_required: 3 }));
   assert.equal(r.tier, "Hot");
   assert.match(part(r, "Top must-haves").note, /^4 of 4: .*Healthcare/);
   assert.ok(!lines(r).some(l => l.includes("only listed")), JSON.stringify(lines(r)));
+});
+
+test("a licence the posting requires is the screen: held, it carries a posting that names only it, and no other licence stands in", () => {
+  const clinic = (title, must) => job({ title, role: "Clinical", level: "Mid", must, years_required: 2 });
+  const np = person("Clinical", "Mid", 4, ["Nurse Practitioner License", "EHR Systems"]), rn = person("Clinical", "Mid", 6, ["RN License", "EHR Systems"]);
+  const own = onAll(np, clinic("Nurse Practitioner, Primary Care", ["Nurse Practitioner License"]));
+  assert.equal(own.tier, "Hot", JSON.stringify(own.held));
+  assert.equal(part(own, "Top must-haves").note, "1 of 1: Nurse Practitioner License");
+  const either = onAll(np, clinic("Nurse Practitioner or Physician Assistant", ["Nurse Practitioner License", "Physician Assistant License"]));
+  assert.equal(part(either, "Top must-haves").note, "1 of 1: Nurse Practitioner License or Physician Assistant License");
+  assert.equal(either.tier, "Hot");
+  const md = onAll(rn, clinic("Primary Care Physician", ["Medical License"]));
+  assert.deepEqual(md.held, { at: 54, why: "Most of its top must-haves are not on your resume." });
+  assert.ok(!lines(md).some(l => l.includes("closest match")), JSON.stringify(lines(md)));
+  const ward = onAll(np, clinic("Registered Nurse, Telehealth", ["RN License", "EHR Systems"]));  // an NP holds an RN licence
+  assert.equal(part(ward, "Top must-haves").note, "2 of 2: RN License, EHR Systems");
+  assert.ok(!ward.gaps.some(g => g.includes("RN License")), JSON.stringify(ward.gaps));
 });
 
 test("a General job is no role match for someone from another field, nor a job in another field for a General resume", () => {

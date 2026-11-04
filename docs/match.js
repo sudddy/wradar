@@ -53,6 +53,7 @@ const KINDS = {
   "device management tool": ["Jamf", "Microsoft Intune", "MDM"],
   "automation tool": ["Workato", "Zapier", "Workflow Automation"],
   "advisory background": ["Investment Banking", "Management Consulting", "Private Equity / VC"],
+  "clinical licence": ["RN License", "Nurse Practitioner License", "Physician Assistant License", "Medical License", "Pharmacist License", "Social Work License"],
 };
 const KIND_OF = Object.fromEntries(Object.entries(KINDS).flatMap(([kind, names]) => names.map(n => [n, kind])));
 // Practices and office tools say little in any posting. Industry and domain words are background in an engineering posting,
@@ -65,8 +66,10 @@ const DOMAIN = new Set(["SaaS", "B2B", "Payments", "Fintech", "Banking", "Billin
   "DEI Programs", "Troubleshooting", "Data Analysis", "Project Management", "Program Management", "Recruiting", "Customer Success", "Business Operations",
   "Strategic Planning"]);
 const isSoft = (k, eng) => PRACTICE.has(k) || eng && DOMAIN.has(k);
-// A licence or certificate is held or not: listed under Certifications, it proves as much as a job bullet does.
-const CREDENTIALS = new Set(["CPA", "CFA", "PMP", "HR Certification", "FINRA Licenses", "Law Degree & Bar", "Clinical Licensure", "Insurance License"]);
+// A licence or certificate is held or not: listed under Certifications, it proves as much as a job bullet does. A posting that
+// requires one screens on it first, and one licence never stands in for another: an RN is no near match for a physician job.
+const CREDENTIALS = new Set(["CPA", "CFA", "PMP", "HR Certification", "FINRA Licenses", "Law Degree & Bar", "Insurance License", "RN License",
+  "Nurse Practitioner License", "Physician Assistant License", "Medical License", "Pharmacist License", "Social Work License", "Case Manager Certification"]);
 
 // Having the first skill shows the second, even if the resume never names it.
 const IMPLIES = {
@@ -88,7 +91,7 @@ const IMPLIES = {
   "Zuora / Chargebee": ["Billing"], Coupa: ["Procurement"], "SAP Ariba": ["Procurement"], Zip: ["Procurement"],
   "Customer Success Platforms": ["Customer Success"], PMP: ["Project Management"], "Lean Six Sigma": ["Process Improvement"], CPA: ["GAAP"],
   "Revenue Recognition": ["GAAP"], "FINRA Licenses": ["Financial Services Regulation"], Okta: ["SAML / SSO"], Shopify: ["E-commerce"],
-  MEDDICC: ["Sales Methodology"],
+  MEDDICC: ["Sales Methodology"], "Nurse Practitioner License": ["RN License"],
 };
 
 const pair = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -195,13 +198,14 @@ function planJob(job, ctx) {
     const titled = named.has(k), notStack = isSoft(k, eng);
     if (notStack && !titled) { soft.push(k); continue; }
     const key = anyOf.has(k) ? `title ${KIND_OF[k]}` : titled || !KIND_OF[k] ? k : KIND_OF[k];
-    const g = groups.get(key) || { key, kind: KIND_OF[k] || null, names: [], titled: false, rank: 0, stack: !notStack };
+    const g = groups.get(key) || { key, kind: KIND_OF[k] || null, names: [], titled: false, gate: false, rank: 0, stack: !notStack };
     g.names.push(k);
     g.titled ||= titled;
+    g.gate ||= CREDENTIALS.has(k);
     g.rank = Math.max(g.rank, core[k] || 0);
     groups.set(key, g);
   }
-  const reqs = [...groups.values()].sort((a, b) => b.titled - a.titled || b.rank - a.rank);
+  const reqs = [...groups.values()].sort((a, b) => b.titled - a.titled || b.gate - a.gate || b.rank - a.rank);
   return { split, role, level: readLevel(job), top: reqs.slice(0, TOP_N), more: reqs.slice(TOP_N), soft, nice: job.nice, plain: split ? others : [],
     share: ctx.shareOf(job.role), sideTrack: sw && SIDE_TRACK.test(job.title), sideTopic: sw && SIDE_TOPIC.test(job.title),
     stackless: job.nice.some(k => !isSoft(k, eng)) ? NO_LIST : NO_STACK };  // with nice-to-haves named, "names none" isn't true
@@ -280,7 +284,7 @@ function meet(req, c) {
   let best = 0, name = null;
   for (const k of req.names) if ((c.skill[k] || 0) > best) { best = c.skill[k]; name = k; }
   if (best) return { credit: best, name, near: null };
-  const near = req.kind && c.kind[req.kind];
+  const near = req.kind && !CREDENTIALS.has(c.kind[req.kind]) && c.kind[req.kind];
   return { credit: near ? (req.kind === "language" ? .2 : .35) : 0, name: null, near: near || null };
 }
 
@@ -296,17 +300,17 @@ function levelFit(mine, job, years, stats, people) {
 }
 
 function coverage(plan, c) {
-  let sum = 0, weight = 0, confirmed = 0;
+  let sum = 0, weight = 0, confirmed = 0, gates = 0;
   const met = [], missed = [], weak = [];
   plan.top.forEach((r, i) => {
-    const w = r.titled ? TITLE_WEIGHT : TOP_WEIGHT[i], m = meet(r, c);
+    const w = r.titled || r.gate ? TITLE_WEIGHT : TOP_WEIGHT[i], m = meet(r, c);
     sum += w * m.credit;
     weight += w;
-    if (m.credit >= .5) { confirmed++; m.credit < .7 ? weak.push(c.via[m.name] || m.name) : met.push(m.name); }  // a weak implied skill is weak for the one the resume names
+    if (m.credit >= .5) { confirmed++; gates += r.gate; m.credit < .7 ? weak.push(c.via[m.name] || m.name) : met.push(m.name); }  // a weak implied skill is weak for the one the resume names
     else missed.push({ req: r, near: m.near });
   });
   const pad = (TOP_N - plan.top.length) * 1.25;  // each empty slot pulls toward .5: few named skills prove little either way
-  return { value: (sum + pad * .5) / (weight + pad), confirmed, met, weak, missed };
+  return { value: (sum + pad * .5) / (weight + pad), confirmed, gates, met, weak, missed };
 }
 
 function everythingElse(plan, c) {
@@ -442,11 +446,12 @@ function score(p, job, stats) {
   add("Degree", degree, !job.degree ? "No degree stated" : !p.degree ? "No degree found on your resume" : `${wanted} ${job.degree.req}`);
   if (degree === 0) gaps.push(`It lists ${article(wanted)} ${wanted} as required.`);
 
-  // Hot needs evidence, not just silence.
+  // Hot needs evidence, not just silence. A licence the posting requires, held, proves the profession as well as a second skill would.
   const known = (role != null) + (level != null) + (years != null), stated = (plan.role != null) + (plan.level != null) + (bar != null);
+  const proof = cov.confirmed + cov.gates;
   if (!cov.confirmed) cap(60, n ? "None of its top must-haves are confirmed by your resume." : stackless);
-  else if (cov.confirmed < 2) cap(65, n > 1 ? "Only one of its top must-haves is confirmed by your resume." : onlyLine);
-  else if (cov.confirmed < 3 && cov.missed.length) cap(74, "Fewer than three of its top must-haves are confirmed by your resume.");
+  else if (proof < 2) cap(65, n > 1 ? "Only one of its top must-haves is confirmed by your resume." : onlyLine);
+  else if (proof < 3 && cov.missed.length) cap(74, "Fewer than three of its top must-haves are confirmed by your resume.");
   else if (known < 2) cap(74, stated < 2 ? "It says too little about the role or level, so check the posting yourself."
     : "Your resume shows too little about your role or level, so check the posting yourself.");
   if (role == null && cov.missed.length) cap(74, !plan.role ? "Its title names no family, so check the posting yourself." : "Your resume shows no role family, so check the posting yourself.");
