@@ -192,6 +192,7 @@ const SOFT = new Set(["Agile", "Mentoring", "Cross-functional", "Technical Leade
   "Healthcare", "Telehealth", "Insurance", "Public Sector", "Restaurant & Hospitality", "Retail Operations", "Point of Sale", "Fleet & Telematics", "Payroll",
   "DEI Programs", "Troubleshooting", "Data Analysis", "Project Management", "Program Management", "Recruiting", "Customer Success", "Business Operations",
   "Strategic Planning"]);
+const hard = found => found.filter(k => !SOFT.has(k));
 
 const headerLike = l => {
   if (BULLET.test(l) || l.length > 75 || l.includes(":") || /(?<!\b(?:Inc|Ltd|Corp|Co|LLC))[.;]$/.test(l.trim())) return false;
@@ -336,7 +337,7 @@ function parseResume(text, skills, rules, now = new Date()) {
   if (headed && !jobs.length && expLines.length) { jobs = [{ kind: "job", start: null, end: null, title: null, body: expLines.filter(l => !headerLike(l)) }]; rest = []; }
   jobs.forEach(b => {
     b.found = foundIn([b.title || "", ...b.body], skills);
-    b.work = !!b.title || b.found.filter(k => !SOFT.has(k)).length >= 3;
+    b.work = !!b.title || hard(b.found).length >= 3;
   });
   const projects = projectBlocks(sec.projects, today);
   projects.forEach(b => { b.found = foundIn(b.body, skills); });
@@ -350,7 +351,8 @@ function parseResume(text, skills, rules, now = new Date()) {
   // until the same month, the field with the most months counts: an engineer who also teaches or consults stays an engineer.
   // A latest job with no known field takes the field with the most months; with no field known at all, every job counts. A
   // job whose title names no field joins the counted one when a skill it names, other than a soft one, is in that field's
-  // jobs too: a "Web Development Intern" who wrote React before a Frontend job. A "Laboratory Assistant" shares none.
+  // jobs too, and it is an internship or names three such skills: a "Web Development Intern" who wrote React before a
+  // Frontend job joins, a "Store Manager" who kept sales in Excel before a Data Analyst job doesn't.
   const span = list => merged(list.map(b => [b.start, b.end]));
   const worked = jobs.filter(b => b.work && b.end != null), byField = {};
   for (const b of worked) {
@@ -363,7 +365,7 @@ function parseResume(text, skills, rules, now = new Date()) {
   // The latest job in that field names the title, so a club officer or a side business ("Co-Founder") doesn't.
   const cur = [...field ? byField[field] : worked].sort((a, b) => b.end - a.end || b.start - a.start)[0];
   const ownSkills = new Set(field ? byField[field].flatMap(b => b.found) : []);
-  const joins = b => !b.field && b.found.some(k => !SOFT.has(k) && ownSkills.has(k));
+  const joins = b => !b.field && hard(b.found).some(k => ownSkills.has(k)) && (hard(b.found).length >= 3 || tr.level(b.title || "") === "Intern");
   const counted = field ? [...byField[field], ...worked.filter(joins)] : worked, months = span(counted);
   const stated = statedYears(scanText(headed ? [...intro, ...sec.summary] : lines));
   const leftOut = jobs.some(b => b.end != null && !counted.includes(b));  // stated years may count work outside the field

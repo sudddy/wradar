@@ -182,6 +182,9 @@ test("a job whose title names no field counts toward the field its skills share"
   assert.equal(resume(front, job("Web Development Intern", "Jun 2023 - Aug 2023", "Moved pages to React.")).years, 3);
   assert.equal(resume(front, job("Laboratory Assistant", "Jun 2023 - Aug 2023", "Prepared reagents.")).years, 2.5);
   assert.equal(resume(front, job("Laboratory Assistant", "Jun 2023 - Aug 2023", "Kept the Agile board in Jira.")).years, 2.5, "a soft skill shared isn't enough");
+  const analyst = job("Data Analyst", "Jan 2024 - Present", "Built dashboards in SQL and Tableau; modelled churn in Excel.");
+  assert.equal(resume(analyst, job("Store Manager", "Jan 2014 - Dec 2023", "Tracked weekly sales in Excel.")).years, 2.5, "one skill shared isn't enough outside an internship");
+  assert.equal(resume(analyst, job("Store Manager", "Jan 2014 - Dec 2023", "Built weekly reports in Excel, SQL and Tableau.")).years, 12.5);
 });
 
 test("an individual Manager title is a manager when the latest job shows the people managed", () => {
