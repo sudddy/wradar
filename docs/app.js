@@ -379,8 +379,9 @@ function init() {
     renderBoard();
   };
   const set = (k, v) => { state[k] = v; changed(); };
-  const search = later(v => set("q", v));
-  $("#q").addEventListener("input", e => search(e.target.value));
+  // The box as it reads when the pause ends, since Clear filters may have emptied it; the page may no longer be a list.
+  const search = later(() => { state.q = $("#q").value; if (BOARDS.includes(page)) changed(); });
+  $("#q").addEventListener("input", search);
   ["role", "level", "type", "src", "sort", "work"].forEach(k => $("#" + k).addEventListener("change", e => set(k, e.target.value)));
   $("#pay").addEventListener("change", e => set("pay", +e.target.value));
   $("#min").addEventListener("input", e => { $("#minv").textContent = e.target.value; set("min", +e.target.value); });

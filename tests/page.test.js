@@ -7,6 +7,7 @@ const { DAY, daysAgo, read, row, pageData, openPage, withResume } = require("./p
 const RESUME = read("tests/fixtures/priya-raman.txt");
 
 const undoButton = page => page.$("#toast").querySelector("button");
+const type = (page, v) => { const q = page.$("#q"); q.value = v; q.fire("input", { target: q }); };  // the browser fills the box, then says so
 
 test("the page loads on the stub", () => {
   const page = openPage();
@@ -301,7 +302,7 @@ test("typing 0 years keeps 0, and an empty box clears it", t => {
 test("search and the years box wait for a pause in typing, and the last value counts", t => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const page = withResume(openPage());
-  for (const v of ["b", "ba", "backend engineer 1"]) page.$("#q").fire("input", { target: { value: v } });
+  for (const v of ["b", "ba", "backend engineer 1"]) type(page, v);
   t.mock.timers.tick(149);
   assert.equal(page.run("state.q"), "");
   t.mock.timers.tick(1);
@@ -310,6 +311,21 @@ test("search and the years box wait for a pause in typing, and the last value co
   for (const v of ["4", "5"]) page.$("#me").fire("change", { target: { id: "years", value: v } });
   t.mock.timers.tick(150);
   assert.equal(page.run("me.years"), 5);
+});
+
+test("a search still waiting keeps to the box after Clear filters, and to the state after leaving the list", t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const page = openPage();
+  type(page, "engineer 1");
+  page.$("#reset").fire("click");
+  t.mock.timers.tick(150);
+  assert.equal(page.run("state.q"), "");
+  assert.equal(page.$("#count").textContent, "4 jobs");
+  type(page, "engineer 1");
+  page.go("#insights");
+  assert.doesNotThrow(() => t.mock.timers.tick(150));
+  page.go("#jobs");
+  assert.equal(page.$("#count").textContent, "1 of 4 jobs");
 });
 
 test("PDF and Word readers load from cdnjs only with an integrity hash", async () => {
