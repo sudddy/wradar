@@ -27,10 +27,15 @@ test("a row read once is read again when its field changes, and a rebuild over m
   const ae = job({ title: "Account Executive", role: "Sales", level: "Mid", must: ["Payments", "Salesforce"], years_required: 3 }), p = person("Sales", "Mid", 5, ["Salesforce"]);
   assert.equal(part(on(p, ae), "Top must-haves").note, "1 of 1: Salesforce");  // data without fields: every role is Engineering
   assert.match(part(onAll(p, ae), "Top must-haves").note, /^1 of 2: .*Payments/);
-  const rows = [ae, job(), job({ title: "Software Engineer", role: "General", level: "Mid", must: ["Java", "Kafka", "AWS"] })], copies = rows.map(j => ({ ...j }));
-  const rules = { fields: { Sales: "Sales", Backend: "Engineering", General: "Engineering" } }, first = buildStats(rows.slice(0, 2), rules);
-  for (const j of rows.slice(0, 2)) score(p, j, first);  // the first paint, before older.js joins
+  // A title with no family word lets its skills vote, and the rows older.js joins change what Java, Kafka and AWS say.
+  const swe = job({ title: "Software Engineer II", level: "Mid", must: ["Java", "Kafka", "AWS"] });
+  const backend = Array.from({ length: 10 }, () => job({ must: ["Go", "PostgreSQL", "Redis"] }));
+  const data = Array.from({ length: 10 }, () => job({ title: "Data Engineer", role: "Data", must: ["Java", "Kafka", "AWS"] }));
+  const rows = [ae, swe, ...backend, ...data], copies = rows.map(j => ({ ...j }));
+  const rules = { fields: { Sales: "Sales", Backend: "Engineering", Data: "Engineering" } }, first = buildStats(rows.slice(0, 12), rules);
+  assert.equal(part(score(full, swe, first), "Role").note, "Backend to Backend (read from skills)");  // the first paint, before older.js joins
   const joined = buildStats(rows, rules), fresh = buildStats(copies, rules);
+  assert.equal(part(score(full, swe, joined), "Role").note, "Backend to Data (read from skills)");
   rows.forEach((j, i) => assert.deepEqual(score(full, j, joined), score(full, copies[i], fresh), j.title));
 });
 
