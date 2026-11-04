@@ -198,13 +198,13 @@ function readJob(job, field) {
   const pool = split ? job.must : others;
   const eng = field === "Engineering", sw = eng && job.role !== "Hardware";  // Hardware names its specialty itself
   const soft = [], reqs = [], kinds = {};
-  const named = new Set(pool.filter(k => inTitle(k, job.title)));
+  const named = new Set(pool.filter(k => inTitle(k, job.title))), also = new Set(pool.flatMap(k => (CREDENTIALS.has(k) && IMPLIES[k]) || []));
   for (const k of named) if (KIND_OF[k]) (kinds[KIND_OF[k]] ||= []).push(k);
   const anyOf = new Set(Object.values(kinds).filter(a => a.length > 1 && orJoined(job.title, a)).flat());
   for (const k of pool) {
     const titled = named.has(k), notStack = isSoft(k, eng);
     if (notStack && !titled) soft.push(k);
-    else reqs.push({ k, titled, stack: !notStack, key: anyOf.has(k) ? `title ${KIND_OF[k]}` : titled || !KIND_OF[k] ? k : KIND_OF[k] });
+    else reqs.push({ k, titled, stack: !notStack, key: anyOf.has(k) ? `title ${KIND_OF[k]}` : titled || !KIND_OF[k] || also.has(k) ? k : KIND_OF[k] });  // an NP posting's RN licence is asked too
   }
   const read = { field, split, pool, reqs, soft, role: titleRole(job, sw), level: readLevel(job), nice: job.nice, plain: split ? others : [],
     sideTrack: sw && SIDE_TRACK.test(job.title), sideTopic: sw && SIDE_TOPIC.test(job.title),

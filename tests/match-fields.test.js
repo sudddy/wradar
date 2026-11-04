@@ -93,6 +93,11 @@ test("a licence the posting requires is the screen: held, it carries a posting t
   const ward = onAll(np, clinic("Registered Nurse, Telehealth", ["RN License", "EHR Systems"]));  // an NP holds an RN licence
   assert.equal(part(ward, "Top must-haves").note, "2 of 2: RN License, EHR Systems");
   assert.ok(!ward.gaps.some(g => g.includes("RN License")), JSON.stringify(ward.gaps));
+  const both = clinic("Nurse Practitioner, Primary Care", ["Nurse Practitioner License", "RN License", "EHR Systems"]);  // an NP needs an RN licence too
+  assert.equal(part(onAll(np, both), "Top must-haves").note, "3 of 3: Nurse Practitioner License, RN License, EHR Systems");
+  assert.deepEqual(onAll(rn, both).held, { at: 74, why: "Not on your resume: Nurse Practitioner License." });
+  const lcsw = person("Clinical", "Mid", 6, ["Social Work License", "EHR Systems"]);  // "RN or LCSW": either licence meets it
+  assert.equal(onAll(lcsw, clinic("Care Manager", ["RN License", "Social Work License", "EHR Systems"])).tier, "Hot");
 });
 
 test("a General job is no role match for someone from another field, nor a job in another field for a General resume", () => {
