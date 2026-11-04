@@ -44,6 +44,22 @@ const PERSONAS = [
     secrets: /nora|haddad|lakeshore|cobalt|north prairie|minneapolis|st\. paul|example\.com/i },
   { file: "samir-sre", years: 11.5, role: "DevOps / SRE", titleLevel: "Staff+", level: "Staff+", degree: "Master's", skills: 18, latest: 8,
     secrets: /samir|qureshi|quillstone|bluefin|ardent|lake erie|pittsburgh|cleveland|example\.com/i },
+  // Outside engineering: written for the all-roles review, before the reader learned other fields.
+  { file: "sam-finance", years: 10, role: "Finance", titleLevel: "Manager", level: "Manager", degree: "Bachelor's", skills: 12, latest: 2,
+    key: ["FP&A", "GAAP", "Month-end Close", "NetSuite", "CPA"],
+    secrets: /\bsam\b|ortiz|harbor freight|lakeview|grant & ruiz|depaul|chicago|example\.com/i },
+  { file: "jordan-marketing", years: 15.5, role: "Marketing", titleLevel: "Director", level: "Director", degree: "Master's", skills: 13, latest: 5,
+    key: ["Demand Generation", "Product Marketing", "HubSpot", "Marketo", "People Management"],
+    secrets: /jordan|\bvale\b|northwind|bluebird|copperline|austin|baylor|university of texas|example\.com/i },
+  { file: "alex-designer", years: 9, role: "Design", titleLevel: "Senior", level: "Senior", degree: "Bachelor's", skills: 6, latest: 3,
+    key: ["Figma", "Design Systems", "User Research"],
+    secrets: /\balex\b|\bkim\b|maple pay|lighthouse|toronto|ocad/i },
+  { file: "riley-recruiter", years: 8, role: "Recruiting", titleLevel: "Senior", level: "Senior", degree: "Bachelor's", skills: 7, latest: 3,
+    key: ["Greenhouse", "Full-cycle Recruiting", "Technical Recruiting", "Candidate Sourcing"],
+    secrets: /riley|\bchen\b|cascade cloud|evergreen|seattle|university of washington/i },
+  { file: "morgan-sales", years: 19.5, role: "Sales", titleLevel: "VP", level: "VP", degree: "Bachelor's", skills: 7, latest: 3,
+    key: ["Salesforce", "Gong", "Enterprise Sales", "Quota Attainment"],
+    secrets: /morgan|blake|ridgeway|pinnacle|summit systems|new york|\bnyu\b/i },
 ];
 
 // ---- PDF.js shaped items ----
@@ -82,6 +98,7 @@ for (const want of PERSONAS) test(`reads the facts of ${want.file}`, () => {
   const p = read(fixture(want.file));
   assert.deepEqual({ years: p.years, role: p.role, titleLevel: p.level, level: levelOf(p), degree: p.degree, skills: p.skills.length, latest: latest(p) },
     { years: want.years, role: want.role, titleLevel: want.titleLevel, level: want.level, degree: want.degree, skills: want.skills, latest: want.latest });
+  for (const k of want.key || []) assert.ok(p.skills.includes(k), k);
 });
 
 test("evidence says where each skill was used and how long ago", () => {
