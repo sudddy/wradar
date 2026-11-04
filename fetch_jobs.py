@@ -13,7 +13,7 @@ from functools import partial
 from pathlib import Path
 from urllib.error import HTTPError
 
-from rules import BACKEND, FAMILIES, FRONTEND, LEVELS, evaluate, load_rules
+from rules import BACKEND, FAMILIES, FIELDS, FRONTEND, LADDER, LEVELS, ROLES, SEGMENT, evaluate, load_rules
 from scan_state import PREFIX, failed_over, held_over, is_slow, job_key, load_previous, merge, same_job, slot_open
 from sources import BOARDS, FEEDS, NOW
 
@@ -73,7 +73,8 @@ def main():
     sources = sorted(ran + held_sources, key=lambda s: (not s["ok"], s["name"].lower()))
     data = dict(generated_at=NOW.isoformat(), slow_fetched_at=NOW.isoformat() if run_slow else prev["slow_fetched_at"],
                 keywords=r["keywords"],  # the dashboard matches uploaded resumes with these
-                rules=dict({k: cfg[k] for k in ("max_age_days", "locations", "scan_url")}, levels=LEVELS, families=FAMILIES,
+                rules=dict({k: cfg[k] for k in ("max_age_days", "locations", "scan_url")}, levels=LEVELS, ladder=LADDER,
+                           families=FAMILIES, roles=ROLES, segment=SEGMENT, fields=FIELDS,
                            backend=sorted(BACKEND), frontend=sorted(FRONTEND)),
                 sources=sources, jobs=jobs)
     OUT.parent.mkdir(exist_ok=True)

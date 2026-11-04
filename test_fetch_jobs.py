@@ -183,8 +183,11 @@ class Main(unittest.TestCase):
         self.assertEqual(scan, {"generated_at": data["generated_at"], "jobs": len(data["jobs"])})
         exported, cfg = data["rules"], rules.load_rules()["cfg"]  # config.json, so setting scan_url keeps scans running
         self.assertEqual((exported["max_age_days"], exported["scan_url"], exported["levels"][0][0], exported["families"][0][0]),
-                         (cfg["max_age_days"], cfg["scan_url"], "Staff+", "Full stack"))
+                         (cfg["max_age_days"], cfg["scan_url"], "C-level", "Full stack"))
         self.assertEqual((exported["backend"], exported["frontend"]), (sorted(rules.BACKEND), sorted(rules.FRONTEND)))
+        self.assertEqual((exported["ladder"][0], exported["ladder"][-1], exported["roles"][0], exported["segment"]),
+                         ("Intern", "C-level", list(rules.ROLES[0]), rules.SEGMENT))
+        self.assertEqual((exported["fields"]["Cybersecurity"], exported["fields"]["Other"]), ("IT & security", "Other"))
 
     def test_closed_slot_skips_slow_sources_and_keeps_their_rows(self):
         prev = dict(slow_fetched_at=days(0), sources=[dict(name="NVIDIA", kind="Workday", url="", ok=True, seen=9, kept=1)],

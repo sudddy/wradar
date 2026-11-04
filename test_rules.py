@@ -67,6 +67,21 @@ class Classify(unittest.TestCase):
                             "Principal Member of Technical Staff": "Staff+"}.items():
             self.assertEqual(rules.level(title), want, title)
 
+    def test_level_on_both_tracks(self):  # a "Manager" after an IC noun is an individual contributor
+        for title, want in {"Chief Executive Officer": "C-level", "Co-Founder & CTO": "C-level",
+                            "Executive Assistant to the CEO": "Mid", "Field CTO": "Mid", "Vice President, Sales": "VP",
+                            "SVP, Marketing": "VP", "Assistant Vice President, Compliance": "Senior Manager",
+                            "Associate Vice President": "Director", "Senior Director, Engineering": "Senior Director",
+                            "Head of Design": "Director", "Associate Director, Clinical Operations": "Director",
+                            "Director, Product Marketing": "Director", "Senior Manager, Accounting": "Senior Manager",
+                            "Engineering Manager, Payments": "Manager", "Supervisor, Warehouse": "Manager",
+                            "Product Manager": "Mid", "Customer Success Manager": "Mid", "Senior Product Manager": "Senior",
+                            "Group Product Manager": "Staff+", "Enterprise Architect": "Staff+", "Solutions Architect": "Mid",
+                            "Staff Accountant": "Mid", "Software Engineering Intern": "Intern",
+                            "New Grad Software Engineer": "Junior"}.items():
+            self.assertEqual(rules.level(title), want, title)
+        self.assertEqual(set(rules.LADDER), {name for name, _ in rules.LEVELS} | {"Mid"})
+
     def test_family(self):  # security is checked before AI and cloud
         for title, found, want in (("Senior Backend Engineer, Data Platform", set(), "Backend"),
                                    ("Software Engineer, Payments", set(), "Backend"),
@@ -77,6 +92,26 @@ class Classify(unittest.TestCase):
                                    ("Cloud Security Engineer", set(), "Security"),
                                    ("Backend Engineer, Security", set(), "Backend")):
             self.assertEqual(rules.family(title, found), want, title)
+
+    def test_family_in_every_field(self):  # technical roles outside software win over "engineer"; the first segment decides
+        for title, want in {"Sales Engineer": "Solutions & presales", "Account Executive": "Sales",
+                            "AI Security Sales Executive": "Sales", "Product Manager, Payments": "Product management",
+                            "Software Engineer, Sales Platform": "DevOps / SRE", "Engineering Manager, Payments": "Backend",
+                            "Mechanical Engineer": "Hardware", "Developer Advocate": "Developer relations",
+                            "IT Support Specialist": "IT", "Security Analyst": "Cybersecurity", "Data Scientist": "Data science",
+                            "Data Analyst": "Analytics", "Registered Nurse": "Clinical", "Product Designer": "Design",
+                            "Customer Success Manager": "Customer success", "Recruiter": "Recruiting",
+                            "Staff Accountant": "Accounting", "Financial Analyst": "Finance", "Corporate Counsel": "Legal",
+                            "Executive Assistant": "Administrative", "Teacher": "Education"}.items():
+            self.assertEqual(rules.family(title, set()), want, title)
+
+    def test_department_fallback_and_fields(self):
+        self.assertEqual([rules.family("Associate", set(), d) for d in ("Sales & Partnerships", "")], ["Sales", "Other"])
+        self.assertEqual(rules.family("Senior Backend Engineer", set(), "Sales"), "Backend")  # the title wins
+        self.assertEqual([rules.FIELDS[n] for n in ("Backend", "General", "Security", "Cybersecurity", "Hardware", "Other")],
+                         ["Engineering", "Engineering", "Engineering", "IT & security", "Engineering", "Other"])
+        self.assertEqual(len(set(rules.FIELDS.values())), 15)
+        self.assertTrue({n for n, _, _ in rules.ROLES} <= set(rules.FIELDS))
 
 
 class Evaluate(unittest.TestCase):
