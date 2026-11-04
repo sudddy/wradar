@@ -72,11 +72,11 @@ const SECTION_WORDS = {
   experience: "experience experiences employment history background positions internship internships",
   projects: "projects project portfolio source",
   education: "education academics academic degrees qualifications",
-  certifications: "certifications certification certificates certificate licenses licences credentials courses coursework training",
+  certifications: "certifications certification certificates certificate licenses licences licensure admission admissions credentials courses coursework training",
   other: "volunteer volunteering interests hobbies references awards honors honours publications patents activities achievements accomplishments memberships affiliations languages talks speaking community leadership teaching extracurricular",
 };
 const SECTION_OF = Object.fromEntries(Object.entries(SECTION_WORDS).flatMap(([s, w]) => w.split(" ").map(x => [x, s])));
-const FILLER = new Set("a and the of my in for me areas area work career professional relevant selected technical tech core key additional other personal recent previous prior related industry software engineering notable side open research programming earlier".split(" "));
+const FILLER = new Set("a and the of my in for me areas area work career professional relevant selected technical tech core key additional other personal recent previous prior related industry software engineering notable side open research programming earlier bar executive".split(" "));
 const BULLET = /^\s*[-*•·▪◦‣●■□○–—>]\s+/;
 
 // colons: whether a line ending in a colon can be a heading here.
@@ -254,19 +254,23 @@ function evidence(blocks, listed, today) {
   return Object.fromEntries(Object.entries(seen).map(([k, e]) => [k, { strength: e.strength, years: half(merged(e.spans)), recent: e.last == null ? null : today - e.last }]));
 }
 
+// A professional doctorate (JD, MD, PharmD...) and an LLB are "Professional"; "Doctor of Medicine" is not a PhD.
+const PRO = "medicine|osteopath\\w*|pharmacy|dental|nursing practice|psychology|physical therapy";
 const DEGREES = [
-  ["PhD", /\bph\.? ?d\b|\bd\.? ?phil\b|\bdoctorate\b|\bdoctor of\b/i, /$^/],
-  ["Master's", /\bmaster(?:\s+of|\s+in|\s+degree|['’]s|s\b)/i, /\b(?:M\.?S(?:c|CS|EE?)?|M\.S|M\.?Eng|M\.?Tech|M\.?B\.?A|M\.?C\.?A|M\.?C\.?S|M\.?Ed|M\.A)\b(?!\s+(?:Office|Excel|Word|Project|SQL|Access|Azure|Teams)\b)|\bMA\b(?=\s+(?:in|of)\b|\s*[,(]|\s*$)/],
-  ["Bachelor's", /\bbachelor(?:\s+of|\s+in|\s+degree|['’]s|s\b)/i, /\b(?:B\.?S(?:c|CS|EE?)?|B\.?Eng|B\.?Tech|B\.?B\.?A|B\.?C\.?A|B\.?C\.?S|B\.?Com|B\.A|B\.E)\b|\b(?:BA|BE)\b(?=\s+(?:in|of)\b|\s*[,(]|\s*$)/],
-  ["Associate", /\bassociate(?:['’]?s)?\s+(?:of|in|degree)\b/i, /\b(?:A\.A\.S|A\.S|A\.A|AAS)\b/],
+  ["PhD", new RegExp(`\\bph\\.? ?d\\b|\\bd\\.? ?phil\\b|\\bdoctorate\\b|\\bdoctor of (?!(?:${PRO})\\b)`, "i"), /$^/],
+  ["Professional", new RegExp(`\\bdoctor of (?:${PRO})\\b|\\bjuris doctor|\\bbachelor of laws\\b`, "i"),
+    /\b(?:J\.D|JD(?!\s+Edwards)|LL\.?B|M\.D|Pharm\.?\s?D|Psy\.?D|D\.?N\.?P|D\.?D\.?S|D\.?M\.?D|D\.O)\b|\b(?:MD|DO)\b(?=\s*[,(]|\s*$)/],
+  ["Master's", /\bmaster(?:\s+of|\s+in|\s+degree|['’]s|s\b)/i, /\b(?:M\.?S(?:c|CS|EE?|N)?|M\.S|M\.?Eng|M\.?Tech|M\.?B\.?A|M\.?C\.?A|M\.?C\.?S|M\.?Ed|M\.A|LL\.M)\b(?!\s+(?:Office|Excel|Word|Project|SQL|Access|Azure|Teams)\b)|\bMA\b(?=\s+(?:in|of)\b|\s*[,(]|\s*$)|\bLLM\b(?=\s+(?:in|of)\b|\s*\()/],
+  ["Bachelor's", /\bbachelor(?:\s+of|\s+in|\s+degree|['’]s|s\b)/i, /\b(?:B\.?S(?:c|CS|EE?|N)?|B\.?Eng|B\.?Tech|B\.?B\.?A|B\.?C\.?A|B\.?C\.?S|B\.?Com|B\.A|B\.E)\b|\b(?:BA|BE)\b(?=\s+(?:in|of)\b|\s*[,(]|\s*$)/],
+  ["Associate", /\bassociate(?:['’]?s)?\s+(?:of|in|degree)\b/i, /\b(?:A\.A\.S|A\.S|A\.A|AAS|ADN)\b/],
 ];
 const NOT_HELD = /\b(?:expected|anticipated|in progress|candidate|pursuing|ongoing|incomplete|abd|not completed)\b/i;
-const STATE = /,\s*M[AS](?=\s*,?\s*(?:\d|[|(]|$))/g;  // the place that ends "Boston, MA" or "Oxford, MS 38655, 2018"
+const held = (l, i, all) => !NOT_HELD.test(l) && !NOT_HELD.test(all[i + 1] || "");  // "MBA, Wharton" over "Expected May 2027"
+const STATE = /,\s*M[ADS](?=\s*,?\s*(?:\d|[|(]|$))/g;  // the place that ends "Boston, MA", "Baltimore, MD" or "Oxford, MS 38655, 2018"
 
 function degreeOf(lines) {
-  lines = lines.map(l => l.replace(STATE, ""));
-  const held = lines.filter((l, i) => !NOT_HELD.test(l) && !NOT_HELD.test(lines[i + 1] || ""));
-  return DEGREES.find(([, word, abbr]) => held.some(l => word.test(l) || abbr.test(l)))?.[0] ?? null;
+  lines = lines.map(l => l.replace(STATE, "")).filter(held);
+  return DEGREES.find(([, word, abbr]) => lines.some(l => word.test(l) || abbr.test(l)))?.[0] ?? null;
 }
 
 // ---- Role and level: level() and family() in rules.py, over the rules jobs.js exports ----
@@ -327,7 +331,8 @@ function parseResume(text, skills, rules, now = new Date()) {
   const projects = projectBlocks(sec.projects, today);
   projects.forEach(b => { b.found = foundIn(b.body, skills); });
 
-  const listed = foundIn([...intro, ...sec.summary, ...sec.skills, ...sec.education, ...sec.certifications, ...sec.other, ...rest.filter(notContact)], skills);
+  // A degree or credential not yet held ("CFA Level II Candidate", "J.D. expected 2027") names no skill.
+  const listed = foundIn([...intro, ...sec.summary, ...sec.skills, ...sec.education.filter(held), ...sec.certifications.filter(held), ...sec.other, ...rest.filter(notContact)], skills);
   const ev = evidence([...jobs, ...projects], listed, today);
   const names = skills.map(([n]) => n).filter(k => ev[k]);
 

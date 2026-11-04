@@ -236,6 +236,43 @@ test("a state code is not a degree, and joined abbreviations are", () => {
   for (const t of ["MSE, Johns Hopkins", "MS in Computer Science, Georgia Tech", "Georgia Tech, MS Computer Science", "MA, Economics"]) assert.equal(degree(t), "Master's", t);
 });
 
+test("professional, law and associate degrees", () => {
+  const degree = text => read(`EDUCATION\n${text}`).degree;
+  for (const t of ["J.D., Osgoode Hall Law School", "JD, Georgetown Law, 2014", "Juris Doctor, University of Michigan", "LL.B., McGill University",
+    "Bachelor of Laws, University of Toronto", "M.D., Johns Hopkins University", "MD, University of Toronto", "Doctor of Medicine, McMaster University",
+    "D.O., Kansas City University", "Doctor of Osteopathic Medicine, KCU", "PharmD, University of Florida", "Psy.D., Clinical Psychology, Rutgers",
+    "DNP, Duke University", "Doctor of Nursing Practice, Duke", "DDS, NYU College of Dentistry", "DMD, Tufts"]) assert.equal(degree(t), "Professional", t);
+  assert.equal(degree("JD, Georgetown Law\nPh.D., Economics, Yale"), "PhD");
+  assert.equal(degree("JD, Georgetown Law\nMBA, Wharton"), "Professional");
+  for (const t of ["LL.M., Taxation, NYU School of Law", "LLM in International Law, Columbia", "Master of Laws, Osgoode Hall"]) assert.equal(degree(t), "Master's", t);
+  for (const t of ["Associate of Applied Science, Nursing", "Associate Degree in Accounting, Valencia College", "ADN, Miami Dade College"]) assert.equal(degree(t), "Associate", t);
+  for (const t of ["BSN, University of Iowa", "MSN, Vanderbilt"]) assert.equal(degree(t), t.startsWith("B") ? "Bachelor's" : "Master's", t);
+  assert.equal(degree("B.S. Biology, Johns Hopkins University, Baltimore, MD"), "Bachelor's", "a Maryland address is not a medical degree");
+  assert.equal(degree("JD Edwards EnterpriseOne training"), null);
+  assert.equal(degree("Skills: Python, LLM, RAG"), null, "a large language model is not a law degree");
+  assert.equal(degree("J.D. Candidate, Harvard Law School\nB.A., Political Science, Tufts"), "Bachelor's");
+});
+
+test("a credential not yet held names no skill", () => {
+  const skills = text => read(`EXPERIENCE\nStaff Accountant    2021 - Present\n- Closed the books.\nCERTIFICATIONS\n${text}`).skills;
+  assert.ok(skills("Certified Public Accountant (CPA), Illinois, 2018").includes("CPA"));
+  for (const t of ["CPA Candidate, passed FAR and AUD", "CFA Level II Candidate", "PMP (in progress)", "Project Management Professional, expected 2027"])
+    assert.ok(!skills(t).some(k => ["CPA", "CFA", "PMP"].includes(k)), t);
+  assert.ok(!read("EDUCATION\nJ.D. Candidate, Harvard Law School, 2027").skills.includes("Law Degree & Bar"));
+});
+
+test("bar admissions and licensure are their own sections", () => {
+  const attorney = h => read(["EXPERIENCE", "Associate Attorney    2015 - Present", "- Drafted commercial contracts.", h, "Admitted to the bar in New York and New Jersey"].join("\n"));
+  assert.equal(attorney("BAR ADMISSIONS").evidence["Law Degree & Bar"].strength, 1);
+  assert.equal(attorney("Bar Admission").evidence["Law Degree & Bar"].strength, 1);
+  const nurse = read(["EXPERIENCE", "Charge Nurse    2018 - Present", "- Ran a 30-bed surgical unit.", "LICENSURE", "Compact license, Texas Board of Nursing"].join("\n"));
+  assert.equal(nurse.evidence["Clinical Licensure"].strength, 1);
+});
+
+test("an Executive Summary heading opens the summary", () => {
+  assert.equal(read("EXECUTIVE SUMMARY\nVP of Sales with 18 years building teams.\nSKILLS\nSalesforce").years, 18);
+});
+
 // ---- Rules ----
 test("every exported rule compiles in JavaScript with no Python-only syntax", () => {
   assert.ok(rules.levels.length && rules.families.length && rules.backend.length && rules.frontend.length);
