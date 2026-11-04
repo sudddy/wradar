@@ -27,11 +27,11 @@ const fixture = name => fs.readFileSync(path.join(__dirname, "fixtures", `${name
 const latest = p => Object.values(p.evidence).filter(e => e.strength === 3).length;
 
 const PERSONAS = [
-  { file: "daniel-okafor", years: 9, role: "Backend", titleLevel: "Senior", level: "Senior", degree: "Master's", skills: 32, latest: 13,
+  { file: "daniel-okafor", years: 9, role: "Backend", titleLevel: "Senior", level: "Senior", degree: "Master's", skills: 33, latest: 13,
     secrets: /daniel|okafor|harborline|sentry|kestrel|lakeshore|toronto|example\.com/i },
   { file: "priya-raman", years: 1.5, role: "Frontend", titleLevel: null, level: "Junior", degree: "Bachelor's", skills: 15, latest: 5,
     secrets: /priya|raman|mosaic|hill country|austin|example\./i },
-  { file: "marta-lindqvist", years: 12, role: "ML / AI", titleLevel: "Staff+", level: "Staff+", degree: "PhD", skills: 18, latest: 9,
+  { file: "marta-lindqvist", years: 12, role: "ML / AI", titleLevel: "Staff+", level: "Staff+", degree: "PhD", skills: 20, latest: 9,
     secrets: /marta|lindqvist|aurora|cedar|cascade|seattle|example\.com/i },
   { file: "cassandra-reyes", years: 6, role: "DevOps / SRE", titleLevel: null, level: "Senior", degree: "Bachelor's", skills: 21, latest: 9,
     secrets: /cassandra|reyes|northgate|pinecrest|front range|denver|boulder|example\.com/i },
@@ -40,7 +40,7 @@ const PERSONAS = [
   // Held out: written before the parser was tuned, and not changed to suit it.
   { file: "ivan-ios", years: 4, role: "Mobile", titleLevel: null, level: "Mid", degree: "Bachelor's", skills: 7, latest: 4,
     secrets: /ivan|kovalenko|pinecrest|harbor lane|tar river|raleigh|durham|example\.com/i },
-  { file: "nora-data", years: 6, role: "Data", titleLevel: "Senior", level: "Senior", degree: "Bachelor's", skills: 13, latest: 5,
+  { file: "nora-data", years: 6, role: "Data", titleLevel: "Senior", level: "Senior", degree: "Bachelor's", skills: 17, latest: 5,
     secrets: /nora|haddad|lakeshore|cobalt|north prairie|minneapolis|st\. paul|example\.com/i },
   { file: "samir-sre", years: 11.5, role: "DevOps / SRE", titleLevel: "Staff+", level: "Staff+", degree: "Master's", skills: 18, latest: 8,
     secrets: /samir|qureshi|quillstone|bluefin|ardent|lake erie|pittsburgh|cleveland|example\.com/i },
@@ -92,10 +92,77 @@ test("evidence says where each skill was used and how long ago", () => {
   assert.equal(read(fixture("priya-raman")).evidence["Next.js"].strength, 2, "a project counts as older work");
 });
 
-test("years count tech jobs only, and stated years don't override that", () => {
+test("years count the field of the latest job, and stated years don't override that", () => {
   const p = read(fixture("elena-marsh"));
   assert.equal(p.years, 4);
   assert.match(fixture("elena-marsh"), /11 years of professional experience/);
+  assert.equal(read(fixture("elena-marsh").replace("Chemistry Teacher", "Software Engineer")).years, 11, "the teaching years count once they are engineering");
+});
+
+// ---- Any field ----
+const job = (title, dates, ...work) => [title + "    " + dates, ...work.map(w => `- ${w}`)];
+const resume = (...jobs) => read(["EXPERIENCE", ...jobs.flat()].join("\n"));
+
+test("a job title in any field names the job", () => {
+  for (const [title, role, level] of [["Chemistry Teacher", "Education", null], ["Staff Accountant", "Accounting", null], ["Paralegal", "Legal", null],
+    ["Registered Nurse", "Clinical", null], ["Senior Technical Recruiter", "Recruiting", "Senior"], ["VP of Sales", "Sales", "VP"],
+    ["Account Executive", "Sales", null], ["Executive Assistant", "Administrative", null], ["Marketing Intern", "Marketing", "Intern"]]) {
+    const p = resume(job(title, "Jan 2021 - Present", "Kept the weekly plan."));
+    assert.deepEqual([p.years, p.role, p.level], [5.5, role, level], title);
+  }
+});
+
+test("a short tail after the title names its role, and the first segment its level", () => {
+  assert.deepEqual(["role", "level"].map(k => resume(job("Manager, Customer Success", "2021 - Present", "Ran renewals."))[k]), ["Customer success", "Manager"]);
+  assert.deepEqual(["role", "level"].map(k => resume(job("Director, Product Marketing", "2021 - Present", "Ran launches."))[k]), ["Marketing", "Director"]);
+});
+
+test("a title that names no role leaves the role empty", () => {
+  assert.equal(resume(job("Laboratory Assistant", "2021 - Present", "Prepared reagents.")).role, null);
+});
+
+test("a letter outside ASCII is part of its word, as in Python", () => {
+  assert.equal(resume(job("Coordinator, Prévoyance", "2021 - Present", "Kept the files.")).role, null, "not PR, so not Communications");
+});
+
+test("a job with no title counts when it names three skills that aren't soft", () => {
+  assert.equal(resume(["Jan 2020 - Present", "- Built Java, Kafka and PostgreSQL services."]).years, 6.5);
+  assert.equal(resume(["Jan 2020 - Present", "- Ran Agile ceremonies in Jira for a SaaS team."]).years, null);
+});
+
+test("years come from the latest job's field, else the field with the most months, else every job", () => {
+  const sales = job("Account Executive", "Jan 2020 - Present", "Closed enterprise deals."), teach = job("Chemistry Teacher", "Jan 2010 - Dec 2019", "Taught chemistry.");
+  assert.equal(resume(sales, teach).years, 6.5);
+  const unknown = job("Laboratory Assistant", "Jan 2024 - Present", "Prepared reagents.");
+  assert.equal(resume(unknown, sales.map(l => l.replace("Present", "Dec 2023")), teach.map(l => l.replace("2010", "2019"))).years, 4, "the latest field is unknown: Sales has the most months");
+  assert.equal(resume(unknown, job("Laboratory Assistant", "Jan 2020 - Dec 2023", "Kept inventory.")).years, 6.5, "no field known: every job");
+});
+
+test("data and research years count with engineering years", () => {
+  const p = resume(job("Machine Learning Engineer", "Jan 2022 - Present", "Built Python services."), job("Data Scientist", "Jan 2018 - Dec 2021", "Trained models in Python."));
+  assert.equal(p.years, 8.5);
+});
+
+test("a job whose title names no field counts toward the field its skills share", () => {
+  const front = job("Frontend Developer", "Jan 2024 - Present", "Built React pages and tracked them in Jira.");
+  assert.equal(resume(front, job("Web Development Intern", "Jun 2023 - Aug 2023", "Moved pages to React.")).years, 3);
+  assert.equal(resume(front, job("Laboratory Assistant", "Jun 2023 - Aug 2023", "Prepared reagents.")).years, 2.5);
+  assert.equal(resume(front, job("Laboratory Assistant", "Jun 2023 - Aug 2023", "Kept the Agile board in Jira.")).years, 2.5, "a soft skill shared isn't enough");
+});
+
+test("an individual Manager title is a manager when the latest job shows the people managed", () => {
+  const pm = (...work) => resume(job("Product Manager", "Jan 2021 - Present", "Owned the checkout roadmap.", ...work)).level;
+  assert.equal(pm(), null);
+  for (const w of ["Managed a team of 6 product managers.", "Coached four direct reports.", "Led a team of 5 analysts."]) assert.equal(pm(w), "Manager", w);
+  assert.equal(resume(job("Senior Product Manager", "Jan 2021 - Present", "Managed a team of 6.")).level, "Senior", "a level the title states stays");
+  assert.equal(resume(job("Product Manager", "Jan 2021 - Present", "Built the roadmap."), job("Engineering Lead", "2015 - 2020", "Managed a team of 6.")).level, null,
+    "people managed in an earlier job don't make the latest a manager job");
+});
+
+test("a current internship reads as Intern, and one that has ended as Junior", () => {
+  assert.equal(resume(job("Software Engineering Intern", "Jun 2026 - Present", "Built Java services.")).level, "Intern");
+  const ended = resume(job("Software Engineering Intern", "Jun 2026 - Aug 2026", "Built Java services."));
+  assert.deepEqual([ended.level, levelOf(ended)], ["Junior", "Junior"]);
 });
 
 test("a title line that starts with a dot still names the job", () => {
@@ -105,6 +172,9 @@ test("a title line that starts with a dot still names the job", () => {
 
 test("a resume with no dates falls back on the stated years", () => {
   assert.equal(read("SUMMARY\nBackend engineer with 7+ years of experience in Java.\nSKILLS\nJava, Kafka\n").years, 7);
+  assert.equal(read("SUMMARY\nSales executive with 18 years building enterprise sales teams.\nSKILLS\nSalesforce\n").years, 18);
+  assert.equal(read("SUMMARY\nCPA and finance manager with 9 years in FP&A and accounting.\nSKILLS\nNetSuite\n").years, 9);
+  assert.equal(read("SUMMARY\nRecruiter with 6 years leading technical hiring.\nSKILLS\nGreenhouse\n").years, 6);
 });
 
 test("empty text gives an empty profile", () => {
@@ -190,6 +260,16 @@ test("a jobs.js from before the rules were exported still reads resumes", () => 
   assert.equal(p.years, 9);
   assert.equal(p.level, null);
   assert.equal(p.role, "General");
+});
+
+// The rules jobs.js held before roles, segments, fields and the ladder were exported.
+const OLD_LEVELS = [["Staff+", "(?<!technical )\\bstaff\\b|\\b(principal|distinguished|architect|fellow)\\b"],
+  ["Senior", "\\b(senior|sr\\.?|lead|iii|iv)\\b"], ["Junior", "\\b(junior|jr\\.?|entry|associate|i)\\b"]];
+test("a jobs.js from before roles were exported reads every role as engineering, with the old levels", () => {
+  const old = { levels: OLD_LEVELS, families: rules.families, backend: rules.backend, frontend: rules.frontend };
+  const facts = name => { const p = parseResume(fixture(name), SKILLS, old, NOW); return [p.role, p.level]; };
+  assert.deepEqual(facts("daniel-okafor"), ["Backend", "Senior"]);
+  assert.deepEqual(facts("marta-lindqvist"), ["ML / AI", "Staff+"]);
 });
 
 // ---- PDF ----

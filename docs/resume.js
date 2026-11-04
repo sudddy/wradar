@@ -165,11 +165,28 @@ function merged(spans) {
   return total;
 }
 const half = months => Math.floor(months / 6) / 2;  // rounds down: postings ask for "N+ years"
+// Data and research years count as engineering years, as both counted as tech before every field was read.
+const YEARS_FIELD = { "Data & research": "Engineering" };
 
 // ---- Experience entries ----
-const TECH_TITLE = /\b(?:engineer|developer|programmer|swe|sde|sre|devops|architect|scientist|technical staff|tech lead|technical lead|engineering (?:manager|lead|director)|(?:director|head|vp) of engineering|cto)\b|\b(?:software|web|data|engineering|development|machine learning|ml|ai)\b[\w\s/-]*\bintern(?:ship)?\b/i;
-const NOT_TECH = /\b(?:mechanical|civil|electrical|chemical|structural|industrial|process|manufacturing|sales|field|biomedical|environmental|aerospace|stationary|sound|audio)\b/i;
-const SOFT = /^(?:Agile|Mentoring|Cross-functional|Technical Leadership|Code Review|Jira|Payments|Fintech|Banking|Billing|SaaS|B2B|Fraud \/ Risk|On-call|Ledgers|KYC \/ AML)$/;
+// A job title in any field. The job's field, not this test, decides whether its years count.
+const TITLE = new RegExp(`\\b(?:${["engineer", "developer", "programmer", "swe", "sde", "sre", "devops", "architect", "scientist", "technical staff",
+  "lead", "manager", "director", "head of", "vp", "svp", "evp", "vice president", "chief", "ceo", "cfo", "coo", "cmo", "cio", "cto", "ciso",
+  "officer", "president", "founder", "owner", "partner", "executive", "analyst", "associate", "specialist", "generalist",
+  "coordinator", "consultant", "representative", "rep", "agent", "advocate", "designer", "researcher", "recruiter", "sourcer", "accountant",
+  "controller", "bookkeeper", "auditor", "actuary", "underwriter", "economist", "statistician", "banker", "trader", "broker", "counsel",
+  "attorney", "lawyer", "paralegal", "strategist", "marketer", "writer", "copywriter", "editor", "producer", "planner", "buyer",
+  "administrator", "assistant", "receptionist", "supervisor", "advisor", "adviser", "teacher", "tutor", "instructor", "professor",
+  "lecturer", "trainer", "coach", "nurse", "physician", "therapist", "counselor", "pharmacist", "technician", "clinician", "dentist",
+  "paramedic", "artist", "illustrator", "animator", "intern", "internship", "co-op"].join("|")})\\b`, "i");
+// Skills that alone don't make a block of text a job. A copy of PRACTICE and DOMAIN in match.js, its not-stack words: keep them in step.
+const SOFT = new Set(["Agile", "Mentoring", "Cross-functional", "Technical Leadership", "Code Review", "Jira", "Git", "On-call", "AI Coding Tools",
+  "Generative AI Tools", "Stakeholder Management", "Executive Presence", "Presentation Skills", "Facilitation", "Negotiation", "Design Thinking",
+  "Microsoft Office", "Google Workspace", "PowerPoint", "Work Management Tools",
+  "SaaS", "B2B", "Payments", "Fintech", "Banking", "Billing", "Fraud / Risk", "Ledgers", "KYC / AML", "Go-to-Market", "E-commerce",
+  "Healthcare", "Telehealth", "Insurance", "Public Sector", "Restaurant & Hospitality", "Retail Operations", "Point of Sale", "Fleet & Telematics", "Payroll",
+  "DEI Programs", "Troubleshooting", "Data Analysis", "Project Management", "Program Management", "Recruiting", "Customer Success", "Business Operations",
+  "Strategic Planning"]);
 
 const headerLike = l => {
   if (BULLET.test(l) || l.length > 75 || l.includes(":") || /(?<!\b(?:Inc|Ltd|Corp|Co|LLC))[.;]$/.test(l.trim())) return false;
@@ -179,9 +196,9 @@ const headerLike = l => {
 
 function findTitle(s, fam) {
   for (const part of s.split(/\s*[|•·@]\s*|\s+[-–—]\s+|\s{2,}|\s+at\s+/)) {
-    const bits = part.split(/,\s+/), i = bits.findIndex(b => TECH_TITLE.test(b) && !NOT_TECH.test(b));
+    const bits = part.split(/,\s+/), i = bits.findIndex(b => TITLE.test(b));
     if (i < 0) continue;
-    const tail = bits[i + 1];  // "Software Engineer, Backend"; a one or two word tail that names a family belongs to the title
+    const tail = bits[i + 1];  // "Software Engineer, Backend", "Manager, Customer Success": a one or two word tail that names a family or role
     return bits[i].trim() + (tail && tail.split(/\s+/).length <= 2 && fam.some(([, rx]) => rx.test(tail)) ? `, ${tail.trim()}` : "");
   }
   return null;
@@ -217,18 +234,19 @@ function projectBlocks(lines, today) {
 // ---- Facts ----
 const scanText = lines => lines.map(l => undated(l).replace(BULLET, "").replace(/\s*[|•·;:]\s*/g, ", ")).join(" ");
 const foundIn = (lines, skills) => { const t = scanText(lines); return skills.filter(([, rxs]) => rxs.some(r => r.test(t))).map(([n]) => n); };
-const statedYears = t => { const m = t.match(/(\d{1,2})\s*\+?\s*years?(?:\s+of)?(?:\s+[\w\/&-]+){0,5}?\s+experience/i); return m ? +m[1] : null; };
+// "7+ years of experience", "9 years in FP&A", "18 years building sales teams"
+const statedYears = t => { const m = t.match(/(\d{1,2})\s*\+?\s*years?(?:(?:\s+of)?(?:\s+[\w\/&-]+){0,5}?\s+experience|\s+(?:of|in|building|leading)\b)/i); return m ? +m[1] : null; };
 const CONTACT = /@|https?:|www\.|\.com\b/i;
 // With no headings the lines before the first job still hold the name and contact details, and a name can read as a skill.
 const notContact = (l, i, all) => all.length === 1 || !CONTACT.test(l) && (i > 0 || l.split(/\s+/).length > 4 || /[\d,:]/.test(l));
 
 function evidence(blocks, listed, today) {
-  const newest = Math.max(...blocks.filter(b => b.tech && b.end != null).map(b => b.end));
+  const newest = Math.max(...blocks.filter(b => b.work && b.end != null).map(b => b.end));
   const seen = {};
   const at = k => seen[k] ||= { strength: 1, spans: [], last: null };
   for (const b of blocks) for (const k of b.found) {
     const e = at(k), dated = b.end != null, job = b.kind === "job";
-    e.strength = Math.max(e.strength, job && b.tech && dated && b.end >= newest - 3 ? 3 : 2);
+    e.strength = Math.max(e.strength, job && b.work && dated && b.end >= newest - 3 ? 3 : 2);
     if (job && dated) e.spans.push([b.start, b.end]);
     if (dated) e.last = Math.max(e.last ?? -1, b.end);
   }
@@ -251,23 +269,49 @@ function degreeOf(lines) {
   return DEGREES.find(([, word, abbr]) => held.some(l => word.test(l) || abbr.test(l)))?.[0] ?? null;
 }
 
-function familyOf(title, found, fam, rules) {
-  const hit = fam.find(([, rx]) => rx.test(title));
-  if (hit) return hit[0];
-  const count = set => found.filter(k => set.includes(k)).length;
-  const be = count(rules.backend) >= 2, fe = count(rules.frontend) >= 2;
-  return be && fe ? "Full stack" : be ? "Backend" : fe ? "Frontend" : "General";
-}
+// ---- Role and level: level() and family() in rules.py, over the rules jobs.js exports ----
+const first = (table, text) => table.find(([, rx]) => rx.test(text))?.[0] ?? null;
+// Python's \b and \w count every letter and digit, JavaScript's ASCII ones only: "pr" in "Vice-président" is no word in
+// Python. The rules are ASCII, so a title with each other letter and digit read as "_", a word character in both, matches alike.
+const asWords = title => title.replace(/(?![\0-\x7f])[\p{L}\p{N}]/gu, "_");
 
-// A title with no level word leaves level null; levelOf in match.js fills it from years, so edits to years and old profiles both work.
-function levelFromTitle(title, rules) {
-  return rules.levels.find(([, rx]) => new RegExp(rx, "i").test(title))?.[0] ?? null;
+function titleRules(rules) {
+  const compile = table => table.map(([n, rx]) => [n, new RegExp(rx, "i")]);  // Python reads these with re.I
+  const fam = compile(rules.families), roles = rules.roles && compile(rules.roles), levels = compile(rules.levels);
+  const split = rules.segment ? new RegExp(rules.segment) : null;
+  const segments = title => (split ? title.split(split).filter(Boolean) : [title]);
+  const bySkills = found => {
+    const count = set => found.filter(k => set.includes(k)).length;
+    const be = count(rules.backend) >= 2, fe = count(rules.frontend) >= 2;
+    return be && fe ? "Full stack" : be ? "Backend" : fe ? "Frontend" : "General";
+  };
+  return {
+    named: [...fam, ...roles || []],  // what a short tail after a comma may name: "Manager, Customer Success"
+    // The first title segment that names a role decides; "Engineering" hands the title to the families, then the skills.
+    // A jobs.js from before roles were exported reads every title as engineering.
+    family(title, found) {
+      title = asWords(title);
+      for (const text of roles ? segments(title) : []) {
+        const name = first(roles, text);
+        if (name === "Engineering") return first(fam, title) || bySkills(found);
+        if (name) return name;
+      }
+      return roles ? "Other" : first(fam, title) || bySkills(found);
+    },
+    // The first segment decides ("Director, Product Marketing"), else the whole title. Python's default is Mid; null here
+    // lets levelOf in match.js fill it from years, so edits to years and old profiles both work.
+    level(title) {
+      title = asWords(title);
+      return first(levels, segments(title)[0] ?? title) ?? first(levels, title);
+    },
+    field: role => (rules.fields ? rules.fields[role] : "Engineering"),  // before fields were exported, every role was engineering
+  };
 }
 
 function parseResume(text, skills, rules, now = new Date()) {
   rules = { levels: [], families: [], backend: [], frontend: [], ...rules };  // a jobs.js from before these were exported has none
   const today = now.getFullYear() * 12 + now.getMonth();
-  const fam = rules.families.map(([n, rx]) => [n, new RegExp(rx, "i")]);  // Python reads these with re.I
+  const tr = titleRules(rules), fam = tr.named;
   const lines = splitColumns(toLines(text)).map(l => l.trim()).filter(Boolean);
   const sec = sections(lines, today, fam);
   const headed = sec.head.length < lines.length;
@@ -278,7 +322,7 @@ function parseResume(text, skills, rules, now = new Date()) {
   if (headed && !jobs.length && expLines.length) { jobs = [{ kind: "job", start: null, end: null, title: null, body: expLines.filter(l => !headerLike(l)) }]; rest = []; }
   jobs.forEach(b => {
     b.found = foundIn([b.title || "", ...b.body], skills);
-    b.tech = !!b.title || b.found.filter(k => !SOFT.test(k)).length >= 3;
+    b.work = !!b.title || b.found.filter(k => !SOFT.has(k)).length >= 3;
   });
   const projects = projectBlocks(sec.projects, today);
   projects.forEach(b => { b.found = foundIn(b.body, skills); });
@@ -287,18 +331,37 @@ function parseResume(text, skills, rules, now = new Date()) {
   const ev = evidence([...jobs, ...projects], listed, today);
   const names = skills.map(([n]) => n).filter(k => ev[k]);
 
-  const worked = jobs.filter(b => b.tech && b.end != null);
-  const months = merged(worked.map(b => [b.start, b.end]));
+  // Years are years in the field of the latest job, so a teacher turned engineer counts the engineering years. A latest job
+  // with no known field takes the field with the most months; with no field known at all, every job counts. A job whose
+  // title names no field joins the counted one when a skill it names, other than a soft one, is in that field's jobs too:
+  // a "Web Development Intern" who wrote React before a Frontend job. A "Laboratory Assistant" shares none.
+  const span = list => merged(list.map(b => [b.start, b.end]));
+  const worked = jobs.filter(b => b.work && b.end != null), byField = {};
+  for (const b of worked) {
+    const f = b.title && tr.field(tr.family(b.title, b.found));
+    b.field = f && f !== "Other" ? YEARS_FIELD[f] || f : null;
+    if (b.field) (byField[b.field] ||= []).push(b);
+  }
+  const cur = [...worked].sort((a, b) => b.end - a.end || b.start - a.start)[0];
+  const field = cur?.field || Object.keys(byField).sort((a, b) => span(byField[b]) - span(byField[a]))[0];
+  const ownSkills = new Set(field ? byField[field].flatMap(b => b.found) : []);
+  const joins = b => !b.field && b.found.some(k => !SOFT.has(k) && ownSkills.has(k));
+  const counted = field ? [...byField[field], ...worked.filter(joins)] : worked, months = span(counted);
   const stated = statedYears(scanText(headed ? [...intro, ...sec.summary] : lines));
-  const leftOut = jobs.some(b => !b.tech && b.end != null);  // stated years may count work outside tech
+  const leftOut = jobs.some(b => b.end != null && !counted.includes(b));  // stated years may count work outside the field
   const years = !months ? stated : leftOut ? half(months) : Math.max(half(months), stated ?? 0);
 
-  const cur = [...worked].sort((a, b) => b.end - a.end || b.start - a.start)[0];
   const title = cur?.title || [...sec.head.slice(0, 6), ...expLines.slice(0, 4)].map(l => findTitle(l, fam)).find(Boolean) || null;
+  const role = title || cur ? tr.family(title || "", cur?.found || names) : null;
+  let level = title && tr.level(title);
+  // An individual "X Manager" whose latest job shows the people they managed is a manager. An internship that has ended
+  // reads as Junior: the next job is a first job.
+  if (title && !level && /\bmanager\b/i.test(title) && cur?.found.includes("People Management")) level = "Manager";
+  if (level === "Intern" && !(cur?.end >= today)) level = "Junior";
   return {
     skills: names, years, evidence: ev,
-    role: title || cur ? familyOf(title || "", cur?.found || names, fam, rules) : null,
-    level: title ? levelFromTitle(title, rules) : null,
+    role: role === "Other" ? null : role,  // a title that names no role says nothing about it
+    level: level || null,
     degree: degreeOf(sec.education.length ? sec.education : lines),
   };
 }
