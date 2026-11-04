@@ -340,13 +340,30 @@ test("Remove during a read keeps the resume removed", async () => {
   assert.equal(page.storage.has("wradar-resume"), false);
 });
 
-test("typing 0 years keeps 0, and an empty box clears it", () => {
+test("typing 0 years keeps 0, and an empty box clears it", t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const page = withResume(openPage());
   page.$("#me").fire("change", { target: { id: "years", value: "0" } });
+  t.mock.timers.tick(150);
   assert.equal(page.run("me.years"), 0);
   assert.equal(JSON.parse(page.storage.get("wradar-resume")).years, 0);
   page.$("#me").fire("change", { target: { id: "years", value: "" } });
+  t.mock.timers.tick(150);
   assert.equal(page.run("me.years"), null);
+});
+
+test("search and the years box wait for a pause in typing, and the last value counts", t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const page = withResume(openPage());
+  for (const v of ["b", "ba", "backend engineer 1"]) page.$("#q").fire("input", { target: { value: v } });
+  t.mock.timers.tick(149);
+  assert.equal(page.run("state.q"), "");
+  t.mock.timers.tick(1);
+  assert.equal(page.run("state.q"), "backend engineer 1");
+  assert.equal(page.$("#count").textContent, "1 of 4 jobs");
+  for (const v of ["4", "5"]) page.$("#me").fire("change", { target: { id: "years", value: v } });
+  t.mock.timers.tick(150);
+  assert.equal(page.run("me.years"), 5);
 });
 
 test("PDF and Word readers load from cdnjs only with an integrity hash", async () => {

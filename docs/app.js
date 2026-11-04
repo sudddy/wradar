@@ -8,6 +8,7 @@ const agoShort = iso => { const m = Math.floor((Date.now() - new Date(iso)) / 6e
 const tier = s => s == null ? "none" : wmatch.TIERS.find(t => s >= t[1])[0].toLowerCase();
 const TIER = { hot: "Hot match", warm: "Warm match", cool: "Cool match" };
 const plural = (n, w, ws = w + "s") => `${n.toLocaleString()} ${n === 1 ? w : ws}`;
+const later = fn => { let t; return v => { clearTimeout(t); t = setTimeout(() => fn(v), 150); }; };  // waits for a pause in typing: a redraw reads every job
 const store = {  // per-browser memory; the app works the same without it
   get: k => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } },
   set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} },
@@ -98,27 +99,25 @@ const unread = () => me && !Object.keys(me.evidence).length;  // saved before wr
 
 function scoreJobs() {
   if (me) stats ||= wmatch.buildStats(D.all);
-  const mine = new Set(me?.skills);
   D.all.forEach(j => {
     j.fit = me ? wmatch.score(me, j, stats) : null;
     j.score = j.fit ? j.fit.score : null;
-    j.matched = me ? j.skills.filter(k => mine.has(k)) : [];
-    j.missing = me ? j.skills.filter(k => !mine.has(k)) : [];
   });
 }
 
 // ---- Filtering ----
 const unhidden = a => a.filter(j => statusOf(j) !== "hidden");
 const pool = () => unhidden(page === "older" ? D.older : D.jobs.filter(j => state.days >= FRESH_DAYS || within(j, state.days))).filter(j => !state.hideApplied || statusOf(j) !== "applied");
-const newest = (a, b) => age(a) - age(b);
+const newest = (a, b) => postedAt(b) - postedAt(a);
 const byMatch = (a, b) => b.score - a.score || b.fit.tie - a.fit.tie || newest(a, b);
 
-function listed({ tech, jobs = pool() } = {}) {
-  const got = knownOnly(jobs.filter(j => matches(j, state, { tech })), state.pay, state.work);
+// One pass serves the list and the skill chips, which count the jobs before the chosen skills narrow them.
+function listed({ jobs = pool() } = {}) {
+  const loose = jobs.filter(j => matches(j, state, { tech: false }));
+  const got = knownOnly(loose.filter(j => hasTech(j, state)), state.pay, state.work);
   got.kept.sort(me && state.sort === "score" ? byMatch : newest);
-  return got;
+  return { ...got, loose };
 }
-const filtered = opts => listed(opts).kept;
 
 // ---- Step bar: the main navigation, 1 Your resume, 2 Matching jobs, 3 Applications ----
 const STEP_OF = { resume: 1, jobs: 2, older: 2, mine: 3 };
@@ -142,15 +141,15 @@ function activeFilters() {
   return more + (roomy() ? 0 : ["where", "role", "level", "work"].filter(k => state[k]).length);
 }
 
-function renderTechs() {
+function renderTechs(loose) {
   const counts = {};
-  filtered({ tech: false }).forEach(j => j.skills.forEach(k => counts[k] = (counts[k] || 0) + 1));
+  knownOnly(loose, state.pay, state.work).kept.forEach(j => j.skills.forEach(k => counts[k] = (counts[k] || 0) + 1));
   const shown = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 18);
   state.techs.forEach(t => shown.includes(t) || shown.unshift(t));
   $("#techs").innerHTML = shown.map(k => `<button type="button" class="tchip" data-k="${esc(k)}" aria-pressed="${state.techs.includes(k)}">${esc(k)}<span>${(counts[k] || 0).toLocaleString()}</span></button>`).join("");
 }
 
-function renderFilters() {
+function renderFilters(loose) {
   const n = activeFilters();
   $("#nfilters").textContent = n ? `(${n})` : "";
   $("#minlabel").classList.toggle("off", !me);
@@ -158,7 +157,7 @@ function renderFilters() {
   press("#ages", page === "older" ? "older" : String(state.days));
   $("#sort").value = me ? state.sort : "new";  // with no resume the list is newest first, whatever was picked
   $("#sort").disabled = !me;
-  renderTechs();
+  renderTechs(loose);
 }
 
 function showMore(on) {
@@ -236,14 +235,15 @@ const tally = (jobs, pick) => {
   jobs.forEach(j => [].concat(pick(j)).forEach(k => t[k] = (t[k] || 0) + 1));
   return Object.entries(t).sort((a, b) => b[1] - a[1]);
 };
+const gaps = jobs => { const mine = new Set(me.skills); return tally(jobs, j => j.skills.filter(k => !mine.has(k))); };
 
 function renderResume() {
   renderMe();
   $("#meside").hidden = !me;  // with no resume, the page is the welcome
   $("#view-resume").classList.toggle("has", !!me);
   if (!me) return;
-  $("#mygaps").innerHTML = bars(tally(D.jobs, j => j.missing).slice(0, 10));
-  const best = D.jobs.filter(j => !["applied", "hidden"].includes(statusOf(j))).sort(byMatch).slice(0, 6);
+  $("#mygaps").innerHTML = bars(gaps(D.jobs).slice(0, 10));
+  const best = topN(D.jobs.filter(j => !["applied", "hidden"].includes(statusOf(j))), 6, byMatch);
   $("#mybest").innerHTML = best.map(j => `<li><button type="button" data-i="${j.i}">${matchNum(j)}
       <span class="jtext"><span class="jtitle">${esc(j.title)}</span><span class="jco">${esc(j.company)}, ${esc(j.where.join(" / "))}</span></span></button></li>`).join("")
     || '<li class="na">No jobs to show yet.</li>';
@@ -260,7 +260,7 @@ function renderInsights() {
   const card = (title, note, entries, cls = "") => `<section class="pane"><h2>${title}</h2><p class="note">${note}</p><ol class="bars ${cls}">${bars(entries)}</ol></section>`;
   $("#charts").innerHTML = [
     card("Most-requested skills", "Number of jobs naming each skill.", tally(D.jobs, j => j.skills).slice(0, 12)),
-    me ? card("Skills to add", "Jobs that name a skill your resume doesn't list.", tally(D.jobs, j => j.missing).slice(0, 12), "gap")
+    me ? card("Skills to add", "Jobs that name a skill your resume doesn't list.", gaps(D.jobs).slice(0, 12), "gap")
        : card("Skills to add", "Add your resume to see this.", []),
     card("Jobs by role", "From the job title, or its skills when the title is generic.", tally(D.jobs, j => j.role)),
     card("Jobs by seniority", "From the job title.", LEVELS.map(l => [l, D.jobs.filter(j => j.level === l).length]).filter(([, n]) => n)),
@@ -349,7 +349,8 @@ function init() {
     renderBoard();
   };
   const set = (k, v) => { state[k] = v; changed(); };
-  $("#q").addEventListener("input", e => set("q", e.target.value));
+  const search = later(v => set("q", v));
+  $("#q").addEventListener("input", e => search(e.target.value));
   ["role", "level", "type", "src", "sort", "work"].forEach(k => $("#" + k).addEventListener("change", e => set(k, e.target.value)));
   $("#pay").addEventListener("change", e => set("pay", +e.target.value));
   $("#min").addEventListener("input", e => { $("#minv").textContent = e.target.value; set("min", +e.target.value); });
@@ -397,8 +398,9 @@ function init() {
     const k = e.target.closest(".xchip button")?.dataset.k;
     if (k) { me.skills = me.skills.filter(s => s !== k); delete me.evidence[k]; saveMe(); $("#addskill")?.focus(); }
   });
+  const setYears = later(v => { if (me) { me.years = v === "" ? null : +v; saveMe(); $("#years")?.focus(); } });  // 0 is a real answer; Remove may come first
   $("#me").addEventListener("change", e => {
-    if (e.target.id === "years") { me.years = e.target.value === "" ? null : +e.target.value; saveMe(); $("#years")?.focus(); }  // 0 is a real answer
+    if (e.target.id === "years") setYears(e.target.value);
     if (e.target.id === "addskill") {
       const k = findSkill(e.target.value);
       if (k && !me.skills.includes(k)) { me.skills = ALL_SKILLS.filter(s => s === k || me.skills.includes(s)); saveMe(); $("#addskill")?.focus(); }

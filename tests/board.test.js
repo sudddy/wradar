@@ -87,6 +87,14 @@ test("matches reads the other saved filters", () => {
   assert.equal(board.matches(job(), { ...FILTERS, techs: ["Rust"] }, { tech: false }), true);
 });
 
+test("topN gives what a full sort would, ties in their order", () => {
+  const cmp = (a, b) => b.n - a.n;
+  for (let r = 0; r < 50; r++) {
+    const a = Array.from({ length: r % 13 }, (_, i) => ({ i, n: (i * 7919 + r) % 5 }));
+    assert.deepEqual(board.topN(a, 6, cmp), [...a].sort(cmp).slice(0, 6));
+  }
+});
+
 test("a saved minimum match resets once, and Any/All survives", () => {
   const defaults = { v: 2, min: 0, mode: "any", work: "" };
   const first = board.savedFilters({ min: 70, mode: "all" }, defaults);

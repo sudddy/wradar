@@ -5,7 +5,8 @@ const DAY = 864e5, FRESH_DAYS = 30, WORK_HOURS_A_YEAR = 2080;
 const BOARDS = ["jobs", "older", "mine"], PAGES = [...BOARDS, "resume", "insights", "sources"];
 const CURRENCY = { USD: "$", CAD: "CA$", GBP: "£", EUR: "€" };
 
-const age = (j, now = Date.now()) => (now - new Date(j.posted || j.first_seen)) / DAY;
+const postedAt = j => (j.ms ??= +new Date(j.posted || j.first_seen));  // read once per row: sorting and counts ask for it often
+const age = (j, now = Date.now()) => (now - postedAt(j)) / DAY;
 const isOlder = (j, now) => age(j, now) > FRESH_DAYS;
 const within = (j, days) => Math.floor(age(j)) <= days;  // whole days, as a row's "2 days ago" reads
 const isNew = j => within(j, 2);  // posted in the last 2 days, as Posted reads it
@@ -40,6 +41,7 @@ function knownOnly(jobs, pay, work) {
 }
 
 const hasTech = (j, f) => !f.techs.length || (f.mode === "all" ? f.techs.every(t => j.skills.includes(t)) : f.techs.some(t => j.skills.includes(t)));
+const searchText = j => (j.text ??= [j.title, j.company, j.location, ...j.skills].join(" ").toLowerCase());
 
 function matches(j, f, { tech = true } = {}) {
   const q = f.q.toLowerCase();
@@ -50,7 +52,20 @@ function matches(j, f, { tech = true } = {}) {
     && (!f.where || j.where.includes(f.where))
     && (!f.type || j.type === f.type)
     && (!f.src || j.source === f.src)
-    && (!q || [j.title, j.company, j.location, ...j.skills].join(" ").toLowerCase().includes(q));
+    && (!q || searchText(j).includes(q));
+}
+
+// The first n of a sorted copy, without sorting everything. Not "top": that is window.top in a browser.
+function topN(a, n, cmp) {
+  const best = [];
+  for (const x of a) {
+    if (best.length === n && cmp(x, best[n - 1]) >= 0) continue;
+    let i = best.length;
+    while (i && cmp(x, best[i - 1]) < 0) i--;
+    best.splice(i, 0, x);
+    if (best.length > n) best.pop();
+  }
+  return best;
 }
 
 // A saved minimum match was on the old scale, so it resets the first time this version loads.
@@ -64,7 +79,7 @@ function parseHash(hash) {
 }
 const hashFor = (view, key) => `#${view}/${encodeURIComponent(key)}`;
 
-if (typeof module !== "undefined") module.exports = { jobKey, age, within, isNew, splitAge, annualPay, payLabel, knownOnly, matches, savedFilters, parseHash, hashFor };
+if (typeof module !== "undefined") module.exports = { jobKey, age, within, isNew, splitAge, annualPay, payLabel, knownOnly, matches, topN, savedFilters, parseHash, hashFor };
 
 // ---- Rows ----
 const nav = Object.fromEntries(BOARDS.map(v => [v, { sel: null, limit: 40, y: 0 }]));  // each tab keeps its own place
@@ -130,7 +145,7 @@ function renderBoard() {
   const at = rows.findIndex(j => j.key === t.sel);
   if (parseHash(location.hash).key) t.limit = Math.max(t.limit, at + 1);  // only a link may reach down the list
   else if (at < 0 || at >= t.limit) t.sel = wide() && rows.length ? rows[0].key : null;
-  if (!mine) renderFilters();
+  if (!mine) renderFilters(got.loose);
   $("#count").textContent = countText(mine ? rows.length : pool().length, got.noPay, got.noMode);
   renderList();
   $("#detail").innerHTML = detail(rowOf(t.sel));
@@ -169,7 +184,7 @@ function reading(j) {
 
 // Required, preferred and other skills, each marked against the resume when there is one.
 function requirements(j) {
-  const have = k => j.matched.includes(k);
+  const have = k => me.skills.includes(k);  // j.fit is there only with a resume
   const item = k => (j.fit ? `<li class="${have(k) ? "have" : "miss"}">${esc(k)}<span class="sr">, ${have(k) ? "on" : "not on"} your resume</span></li>` : `<li>${esc(k)}</li>`);
   const group = (title, a) => (a.length ? `<div class="req"><h4>${title}</h4><ul class="reqs">${a.map(item).join("")}</ul></div>` : "");
   const rest = j.skills.filter(k => !j.must.includes(k) && !j.nice.includes(k));
