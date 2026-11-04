@@ -2,8 +2,8 @@
   "locations": ["US", "Canada", "Remote"],
   "max_age_days": 90,
   "scan_url": "https://wradar-scan.sudharsannsrinivasan.workers.dev",
-  "title_include": "\\b(engineer|developer|swe|programmer|architect|member of technical staff)\\b",
-  "title_exclude": "\\b(interns?|internships?|co-?op|new grad|graduate|manager|director|head|vp|vice president|sales|solutions?|support|customer|field|hardware|electrical|mechanical|recruit\\w*|designer)\\b",
+  "title_include": "\\S",
+  "title_exclude": "\\b(general application|future opportunities|expression of interest|talent (community|pool|network))\\b",
 
   "feeds": ["remotive", "remoteok", "jobicy", "himalayas", "weworkremotely", "workingnomads", "themuse", "hackernews", "amazon"],
 

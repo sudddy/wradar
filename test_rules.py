@@ -52,6 +52,16 @@ class Types(unittest.TestCase):
                            (None, "Engineer", "This is a 6-month contract."): "Contract"}.items():
             self.assertEqual(rules.job_type(*args), want, args)
 
+    def test_internships_per_diem_and_contracts_roles(self):
+        for args, want in {("Intern", "", ""): "Internship", ("Intern (Full-Time)", "", ""): "Internship",
+                           (None, "Software Engineer Intern", ""): "Internship", (None, "Co-op Student, Data", ""): "Internship",
+                           ("Per Diem", "", ""): "Part-time", (None, "Registered Nurse - PRN", ""): "Part-time",
+                           ("contract_to_hire", "", ""): "Contract", (None, "Recruiter (Contract)", ""): "Contract",
+                           (None, "Senior Contracts Manager", ""): "Not specified",
+                           (None, "Legal Contract Manager", ""): "Not specified",
+                           (None, "Nurse", "Per diem travel allowance."): "Not specified"}.items():
+            self.assertEqual(rules.job_type(*args), want, args)
+
     def test_dates(self):
         self.assertEqual((rules.when("October 30, 2026").day, rules.when("Mon, 02 Nov 2026 17:00:19 +0000").month,
                           rules.when(1793636892).year, sources.days_ago("Posted 30+ Days Ago"),
@@ -138,16 +148,25 @@ class Evaluate(unittest.TestCase):
         self.assertEqual((row["mode"], row["salary"], row["posted_approx"]), ("Remote", pay, True))
 
     def test_rules_reject(self):
-        for kw in (dict(title="Engineering Manager, Payments"), dict(title="Account Executive"),
-                   dict(title="Software Engineer Internships - Summer 2027"), dict(location="Berlin, Germany"),
-                   dict(posted=(NOW - timedelta(days=60)).isoformat()), dict(url="javascript:alert(1)")):
+        for kw in (dict(title="General Application - Engineering"), dict(title="Join our Talent Community"),
+                   dict(location="Berlin, Germany"), dict(posted=(NOW - timedelta(days=60)).isoformat()),
+                   dict(url="javascript:alert(1)")):
             self.assertIsNone(rules.evaluate(job(**kw), R, CUTOFF), kw)
         self.assertIsNotNone(rules.evaluate(job(description="Ruby and Rails"), R, CUTOFF))  # every technology is kept
+
+    def test_every_field_and_level_is_kept(self):
+        for title, level, role, kind in (("Engineering Manager, Payments", "Manager", "Backend", "Not specified"),
+                                         ("Account Executive", "Mid", "Sales", "Not specified"),
+                                         ("Software Engineer Internships - Summer 2027", "Intern", "General", "Internship"),
+                                         ("VP, People", "VP", "People & HR", "Not specified"),
+                                         ("Registered Nurse (Per Diem)", "Mid", "Clinical", "Part-time")):
+            row = rules.evaluate(job(title=title, description="Great team."), R, CUTOFF)
+            self.assertEqual((row["level"], row["role"], row["type"]), (level, role, kind), title)
 
     def test_lazy_fields_only_fetched_when_needed(self):
         calls = []
         lazy = lambda v: lambda: calls.append(v) or v  # noqa: E731
-        rules.evaluate(job(title="Account Executive", description=lazy(DESC)), R, CUTOFF)
+        rules.evaluate(job(title="General Application", description=lazy(DESC)), R, CUTOFF)
         self.assertEqual(calls, [])
         row = rules.evaluate(job(location=lazy("Toronto, ON"), description=lazy(DESC), type=lazy("Full time")), R, CUTOFF)
         self.assertEqual((row["where"], row["type"]), (["Canada"], "Full-time"))

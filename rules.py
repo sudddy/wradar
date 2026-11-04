@@ -36,9 +36,12 @@ ELSEWHERE = re.compile(
     r"\b(europe|emea|uk|united kingdom|england|germany|france|spain|portugal|netherlands|poland|ireland|india"
     r"|apac|asia|australia|new zealand|latam|latin america|brazil|mexico|argentina|colombia|philippines|singapore"
     r"|japan|africa|israel|london|berlin|paris|amsterdam|lisbon|dublin|bangalore|bengaluru)\b", re.I)
-# Job type: an explicit field or the title is trusted; the body only counts when it says so plainly.
-TYPE_FIELD = [("Contract", r"contract|freelance|temporary|\btemp\b|fixed[-_ ]?term|short[-_ ]?term|seasonal"),
-              ("Part-time", r"part[-_ ]?time"),
+# Job type: an explicit field or the title is trusted; the body only counts when it says so plainly. Per diem and PRN
+# shifts are part-time; a Contracts Manager is a role, not a contract job.
+TYPE_FIELD = [("Internship", r"\b(?:intern(?:ship)?s?|co-?op)\b"),
+              ("Contract", r"(?<![a-z])contract(?:or)?(?![a-z])(?! (?:manager|management|specialist|administrator|analyst"
+                           r"|counsel|coordinator))|freelance|temporary|\btemp\b|fixed[-_ ]?term|short[-_ ]?term|seasonal"),
+              ("Part-time", r"part[-_ ]?time|per[-_ ]?diem|\bprn\b"),
               ("Full-time", r"full[-_ ]?time|permanent|regular")]
 TYPE_BODY = [("Contract", r"\b(contract|contractor|freelance) (role|position|opportunity|basis|engagement|assignment)\b"
                           r"|\bcontract[- ]to[- ]hire\b|\b(1099|c2c|corp[- ]to[- ]corp)\b|\b\d+[- ]month contract\b"),
