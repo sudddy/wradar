@@ -32,7 +32,7 @@ const KINDS = {
   "ML framework": ["PyTorch", "TensorFlow"],
   warehouse: ["Snowflake", "BigQuery", "Redshift", "ClickHouse", "Databricks"],
   spreadsheet: ["Excel", "Google Sheets"],
-  CRM: ["Salesforce", "HubSpot", "Microsoft Dynamics"],
+  CRM: ["Salesforce", "HubSpot", "Microsoft Dynamics", "CRM"],
   ERP: ["NetSuite", "SAP", "Oracle ERP", "QuickBooks", "ERP Systems"],
   HRIS: ["Workday", "ADP", "HRIS"],
   ATS: ["Greenhouse", "Lever", "Applicant Tracking Systems"],
@@ -129,7 +129,7 @@ const DEGREE_RANK = { "Associate": 0, "Bachelor's": 1, "Master's": 2, "PhD": 3, 
 const DEGREE_NAME = { associate: "associate degree", bachelor: "bachelor's", master: "master's", phd: "PhD", professional: "professional degree" };
 // "only 3% of finance postings": shares are read within the job's field once the data names fields.
 const NOUN = { Customer: "customer-facing", People: "HR and recruiting", "IT & security": "IT and security" };
-const postings = field => (field ? `${NOUN[field] || field.toLowerCase()} postings` : "postings");
+const postings = field => (field ? `${NOUN[field] || field.toLowerCase().replace("&", "and")} postings` : "postings");
 
 const levelOf = p => p.level || (p.years == null ? null : p.years < 2 ? "Junior" : p.years < 5 ? "Mid" : "Senior");
 const list = a => (a.length < 2 ? a.join("") : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`);
@@ -146,9 +146,11 @@ function inTitle(skill, title) {
 }
 
 // A title with no level word is stored as Mid, so that value says nothing. The years bar is the only other evidence.
+// In a recruiter's or a manager's title, the early-career words name who is hired: "Senior Recruiter, Emerging Talent".
 function readLevel(job) {
-  if (job.level === "Intern" || INTERN.test(job.title)) return { name: "Intern", soft: false, grad: true };
-  if (GRAD.test(job.title)) return { name: "Junior", soft: false, grad: true };
+  const hires = job.role === "Recruiting" || BOSS.has(job.level);
+  if (job.level === "Intern" || !hires && INTERN.test(job.title)) return { name: "Intern", soft: false, grad: true };
+  if (!hires && GRAD.test(job.title)) return { name: "Junior", soft: false, grad: true };
   const flat = /member of technical staff/i.test(job.title);
   if (!flat && (job.level !== "Mid" || /\b(?:ii|mid|sde ?2)\b/i.test(job.title))) return { name: job.level, soft: false };
   const y = job.years_required;

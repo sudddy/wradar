@@ -444,6 +444,23 @@ test("how few postings ask for a skill is counted within the job's field", () =>
   assert.equal(r.next[0], "Lead with Treasury Management: only 2% of finance postings ask for it.");
   const gaap = onAll(person("Accounting", "Mid", 5, ["Excel"]), books[0], [treasury, ...books.slice(1), ...code]);
   assert.ok(gaap.next.includes("If you have used GAAP, add it to your resume. If not, 98% of finance postings ask for it, so it's worth learning."), JSON.stringify(gaap.next));
+  const counsel = job({ title: "Counsel", role: "Legal", level: "Mid", must: ["Commercial Contracts"] });
+  const law = score(person("Legal", "Mid", 5, ["Excel"]), counsel, buildStats([counsel], { fields: { Legal: "Legal & compliance" } }));
+  assert.ok(law.next.some(l => l.endsWith("100% of legal and compliance postings ask for it, so it's worth learning.")), JSON.stringify(law.next));
+});
+
+test("a general skill joins its tools' kind: CRM and Salesforce are one requirement", () => {
+  const r = onAll(person("Sales", "Mid", 5, ["HubSpot"]), job({ title: "Account Executive", role: "Sales", level: "Mid", must: ["CRM", "Salesforce"], years_required: 3 }));
+  assert.equal(part(r, "Top must-haves").note, "1 of 1: CRM or Salesforce");
+  assert.equal(r.held.why, "It names only one CRM, so check the posting yourself.");
+});
+
+test("early-career words in a recruiter's or a manager's title name who is hired, not the level", () => {
+  const must = ["Full-cycle Recruiting", "Candidate Sourcing", "University Recruiting"], rec = person("Recruiting", "Senior", 6, must);
+  const at = (title, level, p = rec, role = "Recruiting") => part(onAll(p, job({ title, role, level, must, years_required: 4 })), "Seniority").note;
+  assert.equal(at("Senior Recruiter, Emerging Talent", "Senior"), "Senior to Senior");
+  assert.equal(at("Manager, Intern Programs", "Manager", { ...rec, level: "Manager" }, "People & HR"), "Manager to Manager");
+  assert.equal(at("Recruiting Intern", "Intern"), "Senior to Intern");
 });
 
 test("a job whose family is unknown ranks its skills by its own field", () => {
