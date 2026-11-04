@@ -24,7 +24,7 @@ const pageData = (over = {}) => ({ generated_at: new Date(Date.now() - 2 * 36e5)
 
 // older: the JOB_OLDER that older.js holds, null for no such file, or "wait" to leave it loading until page.older() is called.
 function openPage({ wide = true, keyboard = false, storage = new Map(), data = pageData(), at = "#jobs", older = null } = {}) {
-  const els = {}, scripts = [], winOn = {}, back = [], doc = { activeElement: null };
+  const els = {}, scripts = [], winOn = {}, back = [], frames = [], doc = { activeElement: null };
   let hash = at;
   const fire = (on, type, e = {}) => (on[type] || []).forEach(fn => fn({ preventDefault() {}, composedPath: () => [], ...e }));
   const element = () => {
@@ -56,17 +56,20 @@ function openPage({ wide = true, keyboard = false, storage = new Map(), data = p
     history: { replaceState: (state, title, v) => { hash = v; }, back: () => { hash = back.pop(); changed(); } },
     addEventListener: (type, fn) => (winOn[type] ||= []).push(fn),
     setTimeout: (fn, ms) => setTimeout(fn, ms).unref(), clearTimeout: id => clearTimeout(id),  // unref: a test never waits on the page's timers
-    requestAnimationFrame: fn => fn(),  // every frame is painted at once
+    requestAnimationFrame: fn => frames.push(fn),
   });
   context.window = context;
   for (const [filename, src] of SCRIPTS) vm.runInContext(src, context, { filename });
+  const isOlder = s => s.src.startsWith("older.js");
+  let olderFrame = scripts.some(isOlder) ? 0 : null;  // the frame that asked for older.js: 0 is before the first paint
+  for (let n = 1; frames.length; n++) { frames.shift()(); if (olderFrame == null && scripts.some(isOlder)) olderFrame = n; }
   const run = code => vm.runInContext(code, context);
   const go = to => run(`location.hash = ${JSON.stringify(to)}`);
-  const olderTag = scripts.find(s => s.src.startsWith("older.js"));
+  const olderTag = scripts.find(isOlder);
   const finish = more => { if (more) { context.JOB_OLDER = more; olderTag.onload(); } else olderTag.onerror(); };
   if (older !== "wait") finish(older);
-  return { $: doc.querySelector, doc, run, go, scripts, storage, context, older: finish, fireWindow: (type, e) => fire(winOn, type, e), hash: () => hash };
+  return { $: doc.querySelector, doc, run, go, scripts, storage, context, older: finish, olderFrame, fireWindow: (type, e) => fire(winOn, type, e), hash: () => hash };
 }
 const withResume = page => { page.context.RESUME = RESUME; page.run("useResume('Pasted resume', RESUME)"); return page; };
 
-module.exports = { DAY, daysAgo, read, REAL, row, pageData, openPage, withResume };
+module.exports = { DAY, daysAgo, read, REAL, RESUME, row, pageData, openPage, withResume };

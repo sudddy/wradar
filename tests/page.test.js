@@ -3,8 +3,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const board = require("../docs/board.js");
-const { DAY, daysAgo, read, row, pageData, openPage, withResume } = require("./page-stub.js");
-const RESUME = read("tests/fixtures/priya-raman.txt");
+const { DAY, daysAgo, read, RESUME, row, pageData, openPage, withResume } = require("./page-stub.js");
 
 const undoButton = page => page.$("#toast").querySelector("button");
 const type = (page, v) => { const q = page.$("#q"); q.value = v; q.fire("input", { target: q }); };  // the browser fills the box, then says so
@@ -369,6 +368,7 @@ const older = (...jobs) => ({ generated_at: "x", jobs });
 test("older.js loads after the first paint as a script tag for this scan, and its rows join Older once each", () => {
   const page = withResume(openPage({ older: "wait" }));
   const tag = page.scripts.find(s => s.src.startsWith("older.js"));
+  assert.equal(page.olderFrame, 2);  // the second frame comes after the first paint
   assert.equal(tag.src, "older.js?v=" + encodeURIComponent(page.run("D.generated_at")));
   assert.equal(page.$("#n-older").textContent, "1");
   page.older(older(row(40, { title: "Backend Engineer 40" }), row(50), row(51)));  // row 40 is in jobs.js already
