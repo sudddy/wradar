@@ -112,10 +112,21 @@ test("an acronym counts only in the sense its skill means", () => expect([
   ["Commuter benefits cover the MTA.", []],
 ]));
 
-for (const name of ["levels", "families"]) {
+for (const name of ["levels", "families", "roles"]) {
   test(`every rules.${name} pattern compiles`, () => {
     const rules = D.rules[name];
     assert.ok(rules.length > 2, `only ${rules.length} rules`);
     for (const [label, rx] of rules) assert.doesNotThrow(() => new RegExp(rx, "i"), label);
   });
 }
+
+test("rules.segment compiles and splits a title into its parts", () => {
+  assert.deepEqual("Senior Manager, Sales - Remote (US)".split(new RegExp(D.rules.segment, "i")).filter(Boolean), ["Senior Manager", "Sales", "Remote", "US"]);
+});
+
+test("every level is on the ladder, and every role has a field", () => {
+  for (const [level] of D.rules.levels) assert.ok(D.rules.ladder.includes(level), level);
+  for (const [family] of D.rules.families) assert.equal(D.rules.fields[family], "Engineering", family);
+  for (const [role, , field] of D.rules.roles) assert.equal(D.rules.fields[role], field, role);
+  for (const j of D.jobs) assert.ok(D.rules.fields[j.role] && D.rules.ladder.includes(j.level), `${j.title}: ${j.role}, ${j.level}`);
+});

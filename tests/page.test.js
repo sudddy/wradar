@@ -1,77 +1,23 @@
 "use strict";
-// The real scripts in one context, as the browser loads them, on a stub DOM.
+// The real scripts in one context, as the browser loads them, on a stub DOM (tests/page-stub.js).
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
 const board = require("../docs/board.js");
+const { DAY, daysAgo, read, RESUME, row, pageData, openPage, withResume } = require("./page-stub.js");
 
-const DAY = 864e5;
-const daysAgo = d => new Date(Date.now() - d * DAY).toISOString();
-const job = (over = {}) => ({ title: "Software Engineer", company: "Acme", where: ["US"], location: "Boston", url: "https://acme.test/1", skills: ["Go"],
-  source: "Greenhouse", role: "Backend", level: "Mid", type: "Full-time", score: null, posted: daysAgo(1), first_seen: daysAgo(1),
-  salary: { min: 100000, max: 150000, cur: "USD", per: "year" }, mode: "Remote", ...over });
-
-// Each selector is one stub element,
-// so a test reads what a render wrote (textContent, innerHTML) and calls the handlers the page set.
-const read = f => fs.readFileSync(path.join(__dirname, "..", f), "utf8");
-const SCRIPTS = ["match.js", "resume.js", "board.js", "tracker.js", "scan.js", "app.js"].map(f => [f, read("docs/" + f)]);
-const REAL = (() => { const sandbox = { window: {} }; vm.runInNewContext(read("docs/jobs.js"), sandbox); return sandbox.window.JOB_DATA; })();
-const RESUME = read("tests/fixtures/priya-raman.txt");
-const row = (n, over) => job({ title: `Backend Engineer ${n}`, company: `Co${n}`, posted: daysAgo(1 + n), first_seen: daysAgo(1 + n),
-  must: ["Go"], nice: [], years_required: 3, applicants: null, degree: null, posted_approx: false, ...over });
-const pageData = (over = {}) => ({ generated_at: new Date(Date.now() - 2 * 36e5).toISOString(), slow_fetched_at: null, keywords: REAL.keywords,
-  rules: { ...REAL.rules, scan_url: "" }, sources: [{ name: "Co", kind: "Greenhouse", url: "https://co.test", ok: true, seen: 9, kept: 5 }],
-  jobs: [row(0), row(1), row(2), row(3), row(40)], ...over });
-
-function openPage({ wide = true, keyboard = false, storage = new Map(), data = pageData(), at = "#jobs" } = {}) {
-  const els = {}, scripts = [], winOn = {}, back = [], doc = { activeElement: null };
-  let hash = at;
-  const fire = (on, type, e = {}) => (on[type] || []).forEach(fn => fn({ preventDefault() {}, composedPath: () => [], ...e }));
-  const element = () => {
-    const on = {}, classes = new Set(), kids = {};
-    const el = {
-      hidden: false, disabled: false, value: "", textContent: "", innerHTML: "",
-      classList: { add: c => classes.add(c), remove: c => classes.delete(c), contains: c => classes.has(c), toggle: (c, force = !classes.has(c)) => (force ? classes.add(c) : classes.delete(c)) },
-      setAttribute() {}, addEventListener: (type, fn) => (on[type] ||= []).push(fn), fire: (type, e) => fire(on, type, e),
-      querySelector: s => (kids[s] ||= element()), querySelectorAll: () => [], contains: x => x === el || Object.values(kids).includes(x),
-      focus() { doc.activeElement = el; el.onfocus?.(); }, matches: s => s === ":focus-visible" && keyboard && doc.activeElement === el,
-      scrollIntoView() {}, insertAdjacentHTML() {},
-    };
-    return el;
-  };
-  Object.assign(doc, {
-    querySelector: s => (s.startsWith("script") ? scripts.find(x => s.includes(`"${x.src}"`)) || null : (els[s] ||= element())),
-    querySelectorAll: () => [], addEventListener() {}, createElement: element, head: { append: x => scripts.push(x) },
-  });
-  const changed = () => fire(winOn, "hashchange");
-  const context = vm.createContext({
-    document: doc, JOB_DATA: data, console, scrollY: 0, scrollTo() {},
-    localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, String(v)), removeItem: k => storage.delete(k) },
-    matchMedia: () => ({ matches: wide }),
-    location: {
-      get hash() { return hash; },
-      set hash(v) { if (v !== hash) { back.push(hash); hash = v; changed(); } },
-      replace(v) { if (v !== hash) { hash = v; changed(); } },
-    },
-    history: { replaceState: (state, title, v) => { hash = v; }, back: () => { hash = back.pop(); changed(); } },
-    addEventListener: (type, fn) => (winOn[type] ||= []).push(fn),
-    setTimeout: (fn, ms) => setTimeout(fn, ms).unref(), clearTimeout: id => clearTimeout(id),  // unref: a test never waits on the page's timers
-  });
-  context.window = context;
-  for (const [filename, src] of SCRIPTS) vm.runInContext(src, context, { filename });
-  const run = code => vm.runInContext(code, context);
-  const go = to => run(`location.hash = ${JSON.stringify(to)}`);
-  return { $: doc.querySelector, doc, run, go, scripts, storage, context, fireWindow: (type, e) => fire(winOn, type, e), hash: () => hash };
-}
-const withResume = page => { page.context.RESUME = RESUME; page.run("useResume('Pasted resume', RESUME)"); return page; };
 const undoButton = page => page.$("#toast").querySelector("button");
+const type = (page, v) => { const q = page.$("#q"); q.value = v; q.fire("input", { target: q }); };  // the browser fills the box, then says so
 
 test("the page loads on the stub", () => {
   const page = openPage();
   assert.equal(page.$("#count").textContent, "4 jobs");
   assert.match(page.$("#list").innerHTML, /Backend Engineer 0/);
+});
+
+test("a click on the list opens the job it shows, whatever order jobs.js holds", () => {
+  const page = openPage({ data: pageData({ jobs: [row(3), row(2), row(1), row(0)] }) });  // the list shows the newest first
+  page.$("#list").fire("click", { target: { closest: () => ({ dataset: { n: "0" } }) } });
+  assert.match(page.$("#detail").innerHTML, /<h2 id="dtitle" tabindex="-1">Backend Engineer 0<\/h2>/);
 });
 
 test("a first visit with no resume opens on step 1, the welcome, with a way to browse anyway", () => {
@@ -106,7 +52,7 @@ test("a resume read on the welcome stays on Your resume and points on to the mat
 test("without a resume the jobs list asks for one, and the detail lists skills unmarked", () => {
   const page = openPage();
   assert.equal(page.$("#nores").hidden, false);
-  assert.equal(page.$("#boardtitle").textContent, "Software jobs");
+  assert.equal(page.$("#boardtitle").textContent, "All jobs");
   assert.match(page.$("#detail").innerHTML, /<h4>Must-haves<\/h4><ul class="reqs"><li>Go<\/li>/);
   assert.match(page.$("#detail").innerHTML, /How well do you fit\?/);
 });
@@ -340,23 +286,55 @@ test("Remove during a read keeps the resume removed", async () => {
   assert.equal(page.storage.has("wradar-resume"), false);
 });
 
-test("typing 0 years keeps 0, and an empty box clears it", () => {
+test("typing 0 years keeps 0, and an empty box clears it", t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const page = withResume(openPage());
   page.$("#me").fire("change", { target: { id: "years", value: "0" } });
+  t.mock.timers.tick(150);
   assert.equal(page.run("me.years"), 0);
   assert.equal(JSON.parse(page.storage.get("wradar-resume")).years, 0);
   page.$("#me").fire("change", { target: { id: "years", value: "" } });
+  t.mock.timers.tick(150);
   assert.equal(page.run("me.years"), null);
 });
 
-test("PDF and Word readers load from cdnjs only with an integrity hash", async () => {
+test("search and the years box wait for a pause in typing, and the last value counts", t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const page = withResume(openPage());
+  for (const v of ["b", "ba", "backend engineer 1"]) type(page, v);
+  t.mock.timers.tick(149);
+  assert.equal(page.run("state.q"), "");
+  t.mock.timers.tick(1);
+  assert.equal(page.run("state.q"), "backend engineer 1");
+  assert.equal(page.$("#count").textContent, "1 of 4 jobs");
+  for (const v of ["4", "5"]) page.$("#me").fire("change", { target: { id: "years", value: v } });
+  t.mock.timers.tick(150);
+  assert.equal(page.run("me.years"), 5);
+});
+
+test("a search still waiting keeps to the box after Clear filters, and to the state after leaving the list", t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const page = openPage();
+  type(page, "engineer 1");
+  page.$("#reset").fire("click");
+  t.mock.timers.tick(150);
+  assert.equal(page.run("state.q"), "");
+  assert.equal(page.$("#count").textContent, "4 jobs");
+  type(page, "engineer 1");
+  page.go("#insights");
+  assert.doesNotThrow(() => t.mock.timers.tick(150));
+  page.go("#jobs");
+  assert.equal(page.$("#count").textContent, "1 of 4 jobs");
+});
+
+test("PDF and Word readers load from cdnjs only with an integrity hash", async () => {
+  const page = openPage(), readers = () => page.scripts.filter(s => !s.src.startsWith("older.js"));
   page.run(`readFile({ name: "cv.pdf", arrayBuffer: async () => new ArrayBuffer(0) }).catch(() => {})`);
-  page.scripts[0].onload();
+  readers()[0].onload();
   await new Promise(setImmediate);
   page.run(`readFile({ name: "cv.docx", arrayBuffer: async () => new ArrayBuffer(0) }).catch(() => {})`);
-  assert.deepEqual(page.scripts.map(s => s.src.split("/").pop()), ["pdf.min.js", "pdf.worker.min.js", "mammoth.browser.min.js"]);
-  for (const s of page.scripts) {
+  assert.deepEqual(readers().map(s => s.src.split("/").pop()), ["pdf.min.js", "pdf.worker.min.js", "mammoth.browser.min.js"]);
+  for (const s of readers()) {
     assert.match(s.src, /^https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\//);
     assert.match(s.integrity, /^sha512-[A-Za-z0-9+/]{86}==$/, s.src);
     assert.equal(s.crossOrigin, "anonymous");
@@ -382,4 +360,89 @@ test("Sources doesn't claim every source was read on the last scan", () => {
   const page = openPage();
   page.go("#sources");
   assert.equal(page.$("#srcsum").textContent, "1 of 1 read in the 6 hours up to the last scan (Greenhouse 1). Jobs kept out of jobs seen:");
+});
+
+// ---- older.js ----
+const older = (...jobs) => ({ generated_at: "x", jobs });
+
+test("older.js loads after the first paint as a script tag for this scan, and its rows join Older once each", () => {
+  const page = withResume(openPage({ older: "wait" }));
+  const tag = page.scripts.find(s => s.src.startsWith("older.js"));
+  assert.equal(page.olderFrame, 2);  // the second frame comes after the first paint
+  assert.equal(tag.src, "older.js?v=" + encodeURIComponent(page.run("D.generated_at")));
+  assert.equal(page.$("#n-older").textContent, "1");
+  page.older(older(row(40, { title: "Backend Engineer 40" }), row(50), row(51)));  // row 40 is in jobs.js already
+  assert.equal(page.$("#n-older").textContent, "3");
+  assert.equal(page.run("D.all.length"), 7);
+  assert.equal(page.run("D.all.every(j => j.fit && j.field === 'Engineering')"), true);  // scored against stats that know the new rows
+  page.go("#older");
+  assert.equal(page.$("#count").textContent, "3 jobs");
+});
+
+test("a link to a job not in jobs.js waits for older.js before it says the job is gone", () => {
+  const key = "co50|backend engineer 50";
+  const found = openPage({ at: board.hashFor("jobs", key), older: "wait" });
+  assert.match(found.$("#detail").innerHTML, /Loading this job…/);
+  found.older(older(row(50)));
+  assert.match(found.$("#detail").innerHTML, /<h2 id="dtitle" tabindex="-1">Backend Engineer 50<\/h2>/);
+  const gone = openPage({ at: board.hashFor("jobs", "nobody|nothing"), older: "wait" });
+  gone.older(null);  // no older.js at all, as with data from before it
+  assert.match(gone.$("#detail").innerHTML, /This job is no longer listed\./);
+  assert.equal(gone.$("#live").textContent, "This job is no longer listed.");
+});
+
+test("a phone link to an older job gets focus and is announced once older.js brings it", () => {
+  const page = openPage({ wide: false, at: board.hashFor("older", "co50|backend engineer 50"), older: "wait", data: pageData({ jobs: [row(0)] }) });
+  assert.match(page.$("#list").innerHTML, /Loading the older jobs…/);
+  page.doc.activeElement = null;  // there was no title to focus while it loaded
+  page.older(older(row(50)));
+  assert.equal(page.doc.activeElement, page.$("#dtitle"));
+  assert.equal(page.$("#live").textContent, "Backend Engineer 50 at Co50");
+});
+
+test("focus in the detail or the list stays there when older.js redraws the board", () => {
+  const inDetail = openPage({ older: "wait" });
+  inDetail.doc.activeElement = inDetail.$("#detail").querySelector("[data-do=saved]");
+  inDetail.older(older(row(50)));
+  assert.equal(inDetail.doc.activeElement, inDetail.$("#dtitle"));
+  const inList = openPage({ older: "wait" });
+  inList.doc.activeElement = inList.$("#list").querySelector(".jitem");
+  inList.older(older(row(50)));
+  assert.equal(inList.doc.activeElement, inList.$("#list .jitem[aria-current=true]"));
+});
+
+test("an Applications row waits for older.js before it says No longer listed", () => {
+  const mark = { s: "saved", at: daysAgo(0), title: "Backend Engineer 50", company: "Co50", url: "https://co.test/50", where: ["US"] };
+  const storage = () => new Map([["wradar-tracker", JSON.stringify({ "co50|backend engineer 50": mark })]]);
+  const page = openPage({ storage: storage(), at: "#mine", older: "wait" });
+  assert.match(page.$("#list").innerHTML, /Backend Engineer 50/);
+  assert.doesNotMatch(page.$("#list").innerHTML + page.$("#detail").innerHTML, /No longer listed|may be closed/);
+  page.older(older(row(50)));
+  assert.match(page.$("#list").innerHTML, /51 days ago/);
+  const gone = openPage({ storage: storage(), at: "#mine", older: "wait" });
+  gone.older(older());
+  assert.match(gone.$("#list").innerHTML, /No longer listed/);
+});
+
+test("older rows that arrive on Your resume leave the text being pasted alone", () => {
+  const page = openPage({ at: "#resume", older: "wait" });
+  page.$("#me").innerHTML = "text being pasted";
+  page.older(older(row(50)));
+  assert.equal(page.$("#me").innerHTML, "text being pasted");
+  assert.equal(page.$("#n-older").textContent, "2");
+});
+
+test("older rows keep focus on Your best matches, and leave How it works as it is", () => {
+  const page = withResume(openPage({ at: "#resume", older: "wait" }));
+  const best = page.$("#mybest").querySelector("button");
+  best.dataset = { i: "2" };
+  page.doc.activeElement = best;
+  page.$("#mybest").innerHTML = "";
+  page.older(older(row(50)));
+  assert.match(page.$("#mybest").innerHTML, /data-i="0"/);
+  assert.equal(page.doc.activeElement, page.$('#mybest [data-i="2"]'));
+  const how = openPage({ at: "#sources", older: "wait" });
+  how.$("#srcok").innerHTML = "a link with focus";
+  how.older(older(row(50)));
+  assert.equal(how.$("#srcok").innerHTML, "a link with focus");
 });

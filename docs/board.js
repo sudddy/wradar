@@ -5,7 +5,8 @@ const DAY = 864e5, FRESH_DAYS = 30, WORK_HOURS_A_YEAR = 2080;
 const BOARDS = ["jobs", "older", "mine"], PAGES = [...BOARDS, "resume", "insights", "sources"];
 const CURRENCY = { USD: "$", CAD: "CA$", GBP: "£", EUR: "€" };
 
-const age = (j, now = Date.now()) => (now - new Date(j.posted || j.first_seen)) / DAY;
+const postedAt = j => (j.ms ??= +new Date(j.posted || j.first_seen));  // read once per row: sorting and counts ask for it often
+const age = (j, now = Date.now()) => (now - postedAt(j)) / DAY;
 const isOlder = (j, now) => age(j, now) > FRESH_DAYS;
 const within = (j, days) => Math.floor(age(j)) <= days;  // whole days, as a row's "2 days ago" reads
 const isNew = j => within(j, 2);  // posted in the last 2 days, as Posted reads it
@@ -40,17 +41,32 @@ function knownOnly(jobs, pay, work) {
 }
 
 const hasTech = (j, f) => !f.techs.length || (f.mode === "all" ? f.techs.every(t => j.skills.includes(t)) : f.techs.some(t => j.skills.includes(t)));
+const searchText = j => (j.text ??= [j.title, j.company, j.location, j.role, j.field, ...j.skills].join(" ").toLowerCase());
+const hasRole = (j, role) => !role || (role.startsWith("field:") ? j.field === role.slice(6) : j.role === role);  // "field:Sales" is every Sales family
 
 function matches(j, f, { tech = true } = {}) {
   const q = f.q.toLowerCase();
   return (j.score == null || j.score >= f.min)
     && (!tech || hasTech(j, f))
-    && (!f.role || j.role === f.role)
+    && hasRole(j, f.role)
     && (!f.level || j.level === f.level)
     && (!f.where || j.where.includes(f.where))
     && (!f.type || j.type === f.type)
     && (!f.src || j.source === f.src)
-    && (!q || [j.title, j.company, j.location, ...j.skills].join(" ").toLowerCase().includes(q));
+    && (!q || searchText(j).includes(q));
+}
+
+// The first n of a sorted copy, without sorting everything. Not "top": that is window.top in a browser.
+function topN(a, n, cmp) {
+  const best = [];
+  for (const x of a) {
+    if (best.length === n && cmp(x, best[n - 1]) >= 0) continue;
+    let i = best.length;
+    while (i && cmp(x, best[i - 1]) < 0) i--;
+    best.splice(i, 0, x);
+    if (best.length > n) best.pop();
+  }
+  return best;
 }
 
 // A saved minimum match was on the old scale, so it resets the first time this version loads.
@@ -64,7 +80,59 @@ function parseHash(hash) {
 }
 const hashFor = (view, key) => `#${view}/${encodeURIComponent(key)}`;
 
-if (typeof module !== "undefined") module.exports = { jobKey, age, within, isNew, splitAge, annualPay, payLabel, knownOnly, matches, savedFilters, parseHash, hashFor };
+if (typeof module !== "undefined") module.exports = { jobKey, age, within, isNew, splitAge, annualPay, payLabel, knownOnly, matches, topN, savedFilters, parseHash, hashFor };
+
+// ---- Loading: jobs.js at init, then older.js, the rows past 30 days, after the first paint ----
+let olderIn = false;  // until older.js has loaded or failed, a job not found may be in it
+
+// One row per key: an older.js from another scan may repeat a row of jobs.js.
+function addRows(rows) {
+  const added = rows.filter(j => !byKey.has(jobKey(j)));
+  added.forEach(j => {
+    Object.assign(j, { i: D.all.length, key: jobKey(j), field: fieldOf(j.role) });
+    j.must ||= []; j.nice ||= [];
+    byKey.set(j.key, j);
+    D.all.push(j);
+  });
+  const { fresh, older } = splitAge(added);
+  D.jobs = D.jobs.concat(fresh);
+  D.older = D.older.concat(older);
+  return added.length;
+}
+
+// A script tag, unlike fetch, also works from a file:// copy. ?v= asks for the older.js of this scan, not a cached one.
+// Data from before older.js has none, so a failed load just means no older rows.
+function loadOlder() {
+  document.head.append(Object.assign(document.createElement("script"), { src: "older.js?v=" + encodeURIComponent(D.generated_at),
+    onload: () => joinOlder(window.JOB_OLDER?.jobs || []), onerror: () => joinOlder([]) }));
+}
+
+// The match stats count every row, so they are built again and every job scored again.
+// Only what the older rows change is drawn again, with focus kept: Your resume keeps its own pane, which may hold text being pasted.
+function joinOlder(rows) {
+  const sel = BOARDS.includes(page) && tab().sel, waited = sel && !byKey.has(sel);
+  olderIn = true;
+  if (addRows(rows)) { stats = null; scoreJobs(); }
+  if (BOARDS.includes(page)) return redrawBoard(sel, waited);
+  renderCounts();
+  if (page === "insights") renderInsights();  // its hot and warm counts; Sources shows nothing older.js brings
+  if (page !== "resume") return;
+  const i = $("#mybest").contains(document.activeElement) && document.activeElement.dataset.i;  // Your best matches may reorder
+  renderSide();
+  if (i) ($(`#mybest [data-i="${i}"]`) || $("#mybest button"))?.focus({ preventScroll: true });
+}
+
+// A job the detail waited for is announced, and on a phone a link opened there gets the focus route() gives it.
+function redrawBoard(sel, waited) {
+  const was = document.activeElement, inList = $("#list").contains(was), inDetail = $("#detail").contains(was);
+  const covered = $("#board").classList.contains("showing") && !wide() && (!was || was === document.body);
+  renderBoard();
+  if (inDetail || covered) $("#dtitle")?.focus({ preventScroll: true });
+  else if (inList) focusBoard();
+  if (!waited) return;
+  $("#list .jitem[aria-current=true]")?.scrollIntoView({ block: "nearest" });
+  announce(byKey.has(sel) ? `${byKey.get(sel).title} at ${byKey.get(sel).company}` : "This job is no longer listed.");
+}
 
 // ---- Rows ----
 const nav = Object.fromEntries(BOARDS.map(v => [v, { sel: null, limit: 40, y: 0 }]));  // each tab keeps its own place
@@ -76,7 +144,7 @@ const rowOf = key => byKey.get(key) || (Object.hasOwn(tracker, key) ? { ...track
 const matchNum = j => (j.score == null ? "" : `<span class="match ${tier(j.score)}">${j.score}</span>`);
 
 const rowPlace = j => j.where.filter(w => w !== j.mode).join(" / ");
-const rowWhen = j => (j.delisted ? "No longer listed" : isNew(j) ? "New" : postedText(j));
+const rowWhen = j => (j.delisted ? (olderIn ? "No longer listed" : "") : isNew(j) ? "New" : postedText(j));  // it may still be in older.js
 const rowLabel = j => [`${j.title} at ${j.company}`, j.score != null && `match ${j.score}, ${tier(j.score)}`, payLabel(j.salary), j.mode, rowPlace(j), rowWhen(j), statusText(j)].filter(Boolean).join(", ");
 
 function item(j, n, stop) {
@@ -94,7 +162,7 @@ function item(j, n, stop) {
 
 function emptyText() {
   if (page === "mine") return MINE_EMPTY[mineSeg];
-  if (page === "older") return "No older jobs match these filters. Try clearing one.";
+  if (page === "older") return olderIn ? "No older jobs match these filters. Try clearing one." : "Loading the older jobs…";
   if (state.days < FRESH_DAYS && listed({ jobs: unhidden(D.jobs) }).kept.length) return `No jobs posted in the last ${state.days} days match these filters. Try a longer time under Posted.`;
   const n = listed({ jobs: unhidden(D.older) }).kept.length;
   return n ? `No jobs match these filters. <a href="#older">${plural(n, "older job")} ${n === 1 ? "does" : "do"}.</a>` : "No jobs match these filters. Try clearing one.";
@@ -115,7 +183,7 @@ function countText(total, noPay, noMode) {
 function renderBoard() {
   const t = tab(), mine = page === "mine", shown = t.sel;
   store.set("wradar-filters", state);
-  $("#boardtitle").textContent = mine ? "Applications" : me ? "Matching jobs" : "Software jobs";
+  $("#boardtitle").textContent = mine ? "Applications" : me ? "Matching jobs" : "All jobs";
   $("#filters").hidden = mine;
   $("#minebar").hidden = !mine;
   $("#nores").hidden = (me && !unread()) || mine;  // a resume saved by an older version reads less, so it's asked for again
@@ -130,7 +198,7 @@ function renderBoard() {
   const at = rows.findIndex(j => j.key === t.sel);
   if (parseHash(location.hash).key) t.limit = Math.max(t.limit, at + 1);  // only a link may reach down the list
   else if (at < 0 || at >= t.limit) t.sel = wide() && rows.length ? rows[0].key : null;
-  if (!mine) renderFilters();
+  if (!mine) renderFilters(got.loose);
   $("#count").textContent = countText(mine ? rows.length : pool().length, got.noPay, got.noMode);
   renderList();
   $("#detail").innerHTML = detail(rowOf(t.sel));
@@ -169,7 +237,7 @@ function reading(j) {
 
 // Required, preferred and other skills, each marked against the resume when there is one.
 function requirements(j) {
-  const have = k => j.matched.includes(k);
+  const have = k => me.skills.includes(k);  // j.fit is there only with a resume
   const item = k => (j.fit ? `<li class="${have(k) ? "have" : "miss"}">${esc(k)}<span class="sr">, ${have(k) ? "on" : "not on"} your resume</span></li>` : `<li>${esc(k)}</li>`);
   const group = (title, a) => (a.length ? `<div class="req"><h4>${title}</h4><ul class="reqs">${a.map(item).join("")}</ul></div>` : "");
   const rest = j.skills.filter(k => !j.must.includes(k) && !j.nice.includes(k));
@@ -211,8 +279,10 @@ function dnav(j) {
   return `<div class="dnav"><button type="button" class="btn line back" data-do="back">Back</button>${moves}</div>`;
 }
 
+const LOOKING = "Loading this job…";  // until older.js is in, a job not found may be in it
+
 function detail(j) {
-  if (!j) return `${dnav()}<div class="card empty">${tab().sel ? "This job is no longer listed." : "Pick a job from the list to see the details."}</div>`;
+  if (!j) return `${dnav()}<div class="card empty">${!tab().sel ? "Pick a job from the list to see the details." : olderIn ? "This job is no longer listed." : LOOKING}</div>`;
   const note = text => `<p class="dnote">${text}</p>`;
   // One card per question: what and where, how well you fit, what to say, what it asks for, the rest.
   return `${dnav(j)}
@@ -220,7 +290,7 @@ function detail(j) {
       <header class="dhead"><p class="dco">${esc(j.company)}</p><h2 id="dtitle" tabindex="-1">${esc(j.title)}</h2>${j.delisted ? "" : pills(j)}</header>
       ${actions(j)}
       ${rows.some(r => r.key === j.key) ? "" : note("This job isn't in the current list.")}
-      ${j.delisted ? note("This job wasn't in the last scan, so it may be closed.") : isOlder(j) ? note(`Posted ${postedText(j)}. Check the job is still open before you spend time on it.`) : ""}
+      ${j.delisted ? note(olderIn ? "This job wasn't in the last scan, so it may be closed." : LOOKING) : isOlder(j) ? note(`Posted ${postedText(j)}. Check the job is still open before you spend time on it.`) : ""}
     </section>
     ${j.delisted ? `<section class="card"><dl class="facts">${fact("Where", esc(j.where.join(" / ")))}</dl></section>` : `${reading(j)}${requirements(j)}${about(j)}`}`;
 }

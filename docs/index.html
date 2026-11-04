@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <title>wradar</title>
-<meta name="description" content="Software engineering jobs from 332 company career sites and job boards across the US, Canada and remote, ranked against your own resume in your browser.">
+<meta name="description" content="Jobs in every field from 332 company career sites and job boards across the US, Canada and remote, ranked against your own resume in your browser.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&display=swap" rel="stylesheet">
@@ -35,7 +35,7 @@
     <div class="me" id="me"></div>
     <div class="meside" id="meside">
       <section class="pane"><h2>Your best matches</h2><ol class="best" id="mybest"></ol><a class="btn" href="#jobs">See all matching jobs</a></section>
-      <section class="pane"><h2>Skills to add</h2><p class="note">What jobs ask for most that your resume doesn't list.</p><ol class="bars gap" id="mygaps"></ol></section>
+      <section class="pane"><h2>Skills to add</h2><p class="note" id="mygapsnote">What jobs ask for most that your resume doesn't list.</p><ol class="bars gap" id="mygaps"></ol></section>
     </div>
   </section>
 
@@ -57,7 +57,7 @@
 
     <div class="filters" id="filters">
       <div class="frow">
-        <input type="search" id="q" placeholder="Search title, company or skill" aria-label="Search jobs">
+        <input type="search" id="q" placeholder="Search title, company, skill or role" aria-label="Search jobs">
         <button class="btn line filtersbtn" type="button" id="filtersbtn" aria-expanded="false" aria-controls="fmore"><span class="onroomy">More filters</span><span class="ontight">Filters</span> <span id="nfilters"></span></button>
       </div>
       <div class="fmore" id="fmore" role="group" aria-label="More filters" hidden>
@@ -65,18 +65,18 @@
           <select id="pay"><option value="0">Any pay</option><option value="60000">60k or more</option><option value="80000">80k or more</option><option value="100000">100k or more</option><option value="120000">120k or more</option><option value="150000">150k or more</option><option value="180000">180k or more</option><option value="200000">200k or more</option><option value="250000">250k or more</option><option value="300000">300k or more</option></select>
         </label>
         <label class="field">Job type
-          <select id="type"><option value="">Any job type</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Not specified</option></select>
+          <select id="type"><option value="">Any job type</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Not specified</option></select>
         </label>
         <label class="field">Source
           <select id="src"><option value="">All sources</option></select>
         </label>
         <p class="fhint">Pay is compared in each job's own currency, top of the range, with hourly pay counted as 2,080 hours a year.</p>
         <div class="ftech">
-          <span class="flabel">Technologies</span>
-          <div class="seg small" id="mode" role="group" aria-label="How to combine technologies">
+          <span class="flabel">Skills</span>
+          <div class="seg small" id="mode" role="group" aria-label="How to combine skills">
             <button type="button" data-v="any">Any</button><button type="button" data-v="all">All</button>
           </div>
-          <input id="techq" list="techlist" placeholder="Add a technology" aria-label="Add a technology">
+          <input id="techq" list="techlist" placeholder="Add a skill" aria-label="Add a skill">
           <div class="chips" id="techs"></div>
         </div>
         <div class="ffoot">
@@ -143,7 +143,7 @@
 
 <footer class="foot">
   <div class="footin">
-    <p>Software jobs from public career sites, matched to your resume in this browser. No accounts, nothing uploaded.</p>
+    <p>Jobs from public career sites, matched to your resume in this browser. No accounts, nothing uploaded.</p>
     <nav aria-label="More"><a href="#insights">Insights</a><a href="#sources">How it works and privacy</a><a href="https://github.com/sudddy/wradar" target="_blank" rel="noopener">Code on GitHub</a></nav>
   </div>
 </footer>

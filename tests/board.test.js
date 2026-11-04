@@ -87,6 +87,30 @@ test("matches reads the other saved filters", () => {
   assert.equal(board.matches(job(), { ...FILTERS, techs: ["Rust"] }, { tech: false }), true);
 });
 
+test("Role is one family, or every family of a field", () => {
+  const sales = job({ role: "Solutions & presales", field: "Sales" });
+  assert.equal(board.matches(sales, { ...FILTERS, role: "field:Sales" }), true);
+  assert.equal(board.matches(sales, { ...FILTERS, role: "Solutions & presales" }), true);
+  assert.equal(board.matches(sales, { ...FILTERS, role: "Sales" }), false);
+  assert.equal(board.matches(sales, { ...FILTERS, role: "field:Engineering" }), false);
+  assert.equal(board.matches(job({ field: "Engineering" }), { ...FILTERS, role: "Backend" }), true);  // a value saved before fields
+});
+
+test("search reads the title, company, place, skills, role and field", () => {
+  const sales = job({ title: "Account Executive", company: "Globex", location: "Austin", skills: ["Salesforce"], role: "Solutions & presales", field: "Sales" });
+  for (const q of ["account exec", "globex", "austin", "salesforce", "presales", "sales"]) assert.equal(board.matches(sales, { ...FILTERS, q }), true, q);
+  assert.equal(board.matches(sales, { ...FILTERS, q: "engineering" }), false);
+  assert.equal(board.matches(job({ field: "Engineering" }), { ...FILTERS, q: "engineering" }), true);
+});
+
+test("topN gives what a full sort would, ties in their order", () => {
+  const cmp = (a, b) => b.n - a.n;
+  for (let r = 0; r < 50; r++) {
+    const a = Array.from({ length: r % 13 }, (_, i) => ({ i, n: (i * 7919 + r) % 5 }));
+    assert.deepEqual(board.topN(a, 6, cmp), [...a].sort(cmp).slice(0, 6));
+  }
+});
+
 test("a saved minimum match resets once, and Any/All survives", () => {
   const defaults = { v: 2, min: 0, mode: "any", work: "" };
   const first = board.savedFilters({ min: 70, mode: "all" }, defaults);
