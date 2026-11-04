@@ -307,6 +307,7 @@ function titleRules(rules) {
   };
   return {
     named: [...fam, ...roles || []],  // what a short tail after a comma may name: "Manager, Customer Success"
+    bySkills,
     // The first title segment that names a role decides; "Engineering" hands the title to the families, then the skills.
     // A jobs.js from before roles were exported reads every title as engineering.
     family(title, found) {
@@ -378,7 +379,9 @@ function parseResume(text, skills, rules, now = new Date()) {
   const years = !months ? stated : leftOut ? half(months) : Math.max(half(months), stated ?? 0);
 
   const title = cur?.title || [...sec.head.slice(0, 6), ...expLines.slice(0, 4)].map(l => findTitle(l, fam)).find(Boolean) || null;
-  const role = title || cur ? tr.family(title || "", cur?.found || names) : null;
+  // With no title anywhere, an engineer's Backend or Frontend skills still name the role, as before roles were read.
+  const guess = !title && cur ? tr.bySkills(cur.found) : null;
+  const role = title ? tr.family(title, cur?.found || names) : guess === "General" ? null : guess;
   let level = title && tr.level(title);
   // An individual "X Manager" whose latest job shows the people they managed is a manager. An internship that has ended
   // reads as Junior: the next job is a first job.

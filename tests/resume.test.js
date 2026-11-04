@@ -151,8 +151,9 @@ test("a letter outside ASCII is part of its word, as in Python", () => {
   assert.equal(resume(job("Coordinator, Prévoyance", "2021 - Present", "Kept the files.")).role, null, "not PR, so not Communications");
 });
 
-test("a job with no title counts when it names three skills that aren't soft", () => {
-  assert.equal(resume(["Jan 2020 - Present", "- Built Java, Kafka and PostgreSQL services."]).years, 6.5);
+test("a job with no title counts when it names three skills that aren't soft, which can name an engineer's role", () => {
+  assert.deepEqual(["years", "role"].map(k => resume(["Jan 2020 - Present", "- Built Java, Kafka and PostgreSQL services."])[k]), [6.5, "Backend"]);
+  assert.deepEqual(["years", "role"].map(k => resume(["Jan 2020 - Present", "- Ran campaigns in HubSpot, Marketo and Salesforce."])[k]), [6.5, null]);
   assert.equal(resume(["Jan 2020 - Present", "- Ran Agile ceremonies in Jira for a SaaS team."]).years, null);
 });
 
