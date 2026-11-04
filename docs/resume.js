@@ -291,12 +291,17 @@ function degreeOf(lines) {
 
 // ---- Role and level: level() and family() in rules.py, over the rules jobs.js exports ----
 const first = (table, text) => table.find(([, rx]) => rx.test(text))?.[0] ?? null;
-// Python's \b and \w count every letter and digit, JavaScript's ASCII ones only: "pr" in "Vice-président" is no word in
-// Python. The rules are ASCII, so a title with each other letter and digit read as "_", a word character in both, matches alike.
-const asWords = title => title.replace(/(?![\0-\x7f])[\p{L}\p{N}]/gu, "_");
+// Python's \b and \w count every letter and digit, JavaScript's ASCII ones only: "pr" in "Prévoyance" is no word in Python.
+// With each other letter and digit read as "_", a word character in both, in the text and in the rule alike ("ing[ée]nieur"
+// reads "Ing_nieur"), a rule matches the same in both. Unicode classes would be exact, but are 60 times slower.
+const asWords = text => text.replace(/(?![\0-\x7f])[\p{L}\p{N}]/gu, "_");
+const python = rx => {  // Python reads these with re.I
+  const re = new RegExp(asWords(rx), "i");
+  return { test: text => re.test(asWords(text)) };
+};
 
 function titleRules(rules) {
-  const compile = table => table.map(([n, rx]) => [n, new RegExp(rx, "i")]);  // Python reads these with re.I
+  const compile = table => table.map(([n, rx]) => [n, python(rx)]);
   const fam = compile(rules.families), roles = rules.roles && compile(rules.roles), levels = compile(rules.levels);
   const split = rules.segment ? new RegExp(rules.segment) : null;
   const segments = title => (split ? title.split(split).filter(Boolean) : [title]);
@@ -311,7 +316,6 @@ function titleRules(rules) {
     // The first title segment that names a role decides; "Engineering" hands the title to the families, then the skills.
     // A jobs.js from before roles were exported reads every title as engineering.
     family(title, found) {
-      title = asWords(title);
       for (const text of roles ? segments(title) : []) {
         const name = first(roles, text);
         if (name === "Engineering") return first(fam, title) || bySkills(found);
@@ -322,7 +326,6 @@ function titleRules(rules) {
     // The first segment decides ("Director, Product Marketing"), else the whole title. Python's default is Mid; null here
     // lets levelOf in match.js fill it from years, so edits to years and old profiles both work.
     level(title) {
-      title = asWords(title);
       return first(levels, segments(title)[0] ?? title) ?? first(levels, title);
     },
     field: role => (rules.fields ? rules.fields[role] : "Engineering"),  // before fields were exported, every role was engineering

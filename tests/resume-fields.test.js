@@ -52,6 +52,10 @@ test("an employer whose name holds a role noun doesn't take the title's place", 
 
 test("a letter outside ASCII is part of its word, as in Python", () => {
   assert.equal(resume(job("Coordinator, Prévoyance", "2021 - Present", "Kept the files.")).role, null, "not PR, so not Communications");
+  const french = { ...rules, roles: [["Engineering", "d[ée]veloppeu[rs]", "Engineering"], ["Communications", "\\bpr\\b", "Marketing"]] };
+  const p = parseResume(["EXPERIENCE", ...job("Lead Développeur, Prévoyance", "2021 - Present", "Built Java, Kafka and PostgreSQL services.")].join("\n"),
+    SKILLS, french, new Date(2026, 10, 2));
+  assert.deepEqual([p.role, p.level], ["Backend", "Senior"], "a rule that spells é still reads it");
 });
 
 test("a job with no title counts when it names three skills that aren't soft, which can name an engineer's role", () => {
