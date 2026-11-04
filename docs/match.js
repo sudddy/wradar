@@ -161,16 +161,20 @@ function readLevel(job) {
   return y == null ? null : { name: y < 2 ? "Junior" : y < 5 ? "Mid" : "Senior", soft: true };
 }
 
-// A title with no family word says nothing about the family, so the skills cast the vote among the families of its field.
-// Too few or too even a vote stays unknown, or keeps the family fetch_jobs.py guessed from skills, as read from skills.
-function readRole(job, pool, ctx, sw) {
+// The family a title names, or undefined when the title names none and the skills have to vote.
+function titleRole(job, sw) {
   if (job.role === "Other") return null;
   if (sw && OFF_TRACK.test(job.title)) return { name: "Specialist", read: false };
   if (sw && /\bsecurity\b/i.test(job.title)) return { name: "Security", read: false };  // FAMILIES tries backend and frontend words first
   if (sw && SYSTEMS_TITLE.test(job.title) && (job.role === "General" || job.role === "Backend")) return { name: "DevOps / SRE", read: false };
   if (job.role !== "General" && (!FAMILY_WORDS[job.role] || FAMILY_WORDS[job.role].test(job.title))) return { name: job.role, read: false };
-  const votes = {}, field = ctx.fieldOf(job.role);
-  for (const k of pool) for (const [fam, x] of Object.entries(ctx.lift[k] || {})) if (x > 1 && ctx.fieldOf(fam) === field) votes[fam] = (votes[fam] || 0) + Math.log2(x);
+}
+
+// A title with no family word says nothing about the family, so the skills cast the vote among the families of its field.
+// Too few or too even a vote stays unknown, or keeps the family fetch_jobs.py guessed from skills, as read from skills.
+function voteRole(job, pool, ctx) {
+  const votes = {}, by = ctx.votes[ctx.fieldOf(job.role)] || {};
+  for (const k of pool) for (const [fam, w] of by[k] || []) votes[fam] = (votes[fam] || 0) + w;
   const [a, b] = Object.entries(votes).sort((x, y) => y[1] - x[1]);
   if (a && pool.length >= 3 && a[1] >= 1.5 && a[1] >= 1.5 * (b ? b[1] : 0)) return { name: a[0], read: true };
   return job.role === "General" ? null : { name: job.role, read: true };
@@ -183,22 +187,39 @@ function orJoined(title, names) {
   return gaps.every(g => /^\s*(?:,|\/|,?\s*or)\s*$/i.test(g)) && gaps.some(g => /\/|\bor\b/i.test(g));
 }
 
-function planJob(job, ctx) {
+// What a posting says by itself: everything but the role vote and the skill ranks, which read the stats. Read once per row and
+// field, and kept across buildStats calls, so the older.js join reads only its own rows. Rows are never edited in place.
+const READ = new WeakMap();
+function readJob(job, field) {
+  const had = READ.get(job);
+  if (had?.field === field) return had;
   const others = job.skills.filter(k => !job.must.includes(k) && !job.nice.includes(k));
   const split = job.must.length > 0;
   const pool = split ? job.must : others;
-  const field = ctx.fieldOf(job.role), eng = field === "Engineering", sw = eng && job.role !== "Hardware";  // Hardware names its specialty itself
-  const role = readRole(job, pool, ctx, sw);
-  const core = role && ctx.core[role.name] || ctx.fieldCore[field] || ctx.core[""];
-  const groups = new Map(), soft = [], kinds = {};
+  const eng = field === "Engineering", sw = eng && job.role !== "Hardware";  // Hardware names its specialty itself
+  const soft = [], reqs = [], kinds = {};
   const named = new Set(pool.filter(k => inTitle(k, job.title)));
   for (const k of named) if (KIND_OF[k]) (kinds[KIND_OF[k]] ||= []).push(k);
   const anyOf = new Set(Object.values(kinds).filter(a => a.length > 1 && orJoined(job.title, a)).flat());
   for (const k of pool) {
     const titled = named.has(k), notStack = isSoft(k, eng);
-    if (notStack && !titled) { soft.push(k); continue; }
-    const key = anyOf.has(k) ? `title ${KIND_OF[k]}` : titled || !KIND_OF[k] ? k : KIND_OF[k];
-    const g = groups.get(key) || { key, kind: KIND_OF[k] || null, names: [], titled: false, gate: false, rank: 0, stack: !notStack };
+    if (notStack && !titled) soft.push(k);
+    else reqs.push({ k, titled, stack: !notStack, key: anyOf.has(k) ? `title ${KIND_OF[k]}` : titled || !KIND_OF[k] ? k : KIND_OF[k] });
+  }
+  const read = { field, split, pool, reqs, soft, role: titleRole(job, sw), level: readLevel(job), nice: job.nice, plain: split ? others : [],
+    sideTrack: sw && SIDE_TRACK.test(job.title), sideTopic: sw && SIDE_TOPIC.test(job.title),
+    stackless: job.nice.some(k => !isSoft(k, eng)) ? NO_LIST : NO_STACK };  // with nice-to-haves named, "names none" isn't true
+  READ.set(job, read);
+  return read;
+}
+
+function planJob(job, ctx) {
+  const field = ctx.fieldOf(job.role), r = readJob(job, field);
+  const role = r.role !== undefined ? r.role : voteRole(job, r.pool, ctx);
+  const core = role && ctx.core[role.name] || ctx.fieldCore[field] || ctx.core[""];
+  const groups = new Map();
+  for (const { k, key, titled, stack } of r.reqs) {
+    const g = groups.get(key) || { key, kind: KIND_OF[k] || null, names: [], titled: false, gate: false, rank: 0, stack };
     g.names.push(k);
     g.titled ||= titled;
     g.gate ||= CREDENTIALS.has(k);
@@ -206,9 +227,8 @@ function planJob(job, ctx) {
     groups.set(key, g);
   }
   const reqs = [...groups.values()].sort((a, b) => b.titled - a.titled || b.gate - a.gate || b.rank - a.rank);
-  return { split, role, level: readLevel(job), top: reqs.slice(0, TOP_N), more: reqs.slice(TOP_N), soft, nice: job.nice, plain: split ? others : [],
-    share: ctx.shareOf(job.role), sideTrack: sw && SIDE_TRACK.test(job.title), sideTopic: sw && SIDE_TOPIC.test(job.title),
-    stackless: job.nice.some(k => !isSoft(k, eng)) ? NO_LIST : NO_STACK };  // with nice-to-haves named, "names none" isn't true
+  return { split: r.split, role, level: r.level, top: reqs.slice(0, TOP_N), more: reqs.slice(TOP_N), soft: r.soft, nice: r.nice, plain: r.plain,
+    share: ctx.shareOf(job.role), sideTrack: r.sideTrack, sideTopic: r.sideTopic, stackless: r.stackless };
 }
 
 // rules.fields maps each role to its field. Old data has none: every role is Engineering then, and shares are of every posting.
@@ -222,7 +242,7 @@ function buildStats(jobs, rules) {
     for (const k of j.must.length ? j.must : j.skills) ((count[j.role] ||= {})[k] = (count[j.role][k] || 0) + 1);
   }
   // Lift is read within a field, so sales postings don't change what Java says about Backend.
-  const total = {}, inField = {}, lift = {}, core = { "": {} }, fieldCore = {};
+  const total = {}, inField = {}, votes = {}, core = { "": {} }, fieldCore = {};
   const named = Object.entries(count).filter(([f]) => f !== "General" && f !== "Other");
   const N = named.reduce((s, [f]) => s + byRole[f], 0);
   for (const [f, c] of named) {
@@ -238,7 +258,7 @@ function buildStats(jobs, rules) {
     core[f] = {};
     for (const [k, n] of Object.entries(c)) {
       const share = n / byRole[f], x = share / (F.total[k] / F.n);
-      (lift[k] ||= {})[f] = x;
+      if (x > 1) (((votes[fieldOf(f)] ||= {})[k] ||= []).push([f, Math.log2(x)]));  // what k says for family f, by field
       core[f][k] = share * Math.log2(1 + x);
     }
   }
@@ -251,7 +271,7 @@ function buildStats(jobs, rules) {
     for (const k of j.must) ((df[key] ||= {})[k] = (df[key][k] || 0) + 1);
   }
   const stats = { ask, df, n, shareOf, plans: new Map(), credits: new WeakMap() };
-  for (const j of jobs) stats.plans.set(j, planJob(j, { lift, core, fieldCore, fieldOf, shareOf }));
+  for (const j of jobs) stats.plans.set(j, planJob(j, { votes, core, fieldCore, fieldOf, shareOf }));
   return stats;
 }
 

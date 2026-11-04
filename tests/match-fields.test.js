@@ -23,6 +23,17 @@ test("Payments is a real requirement in a sales job but background in an enginee
   assert.equal(part(eng, "Everything else").note, "1 other must-have");
 });
 
+test("a row read once is read again when its field changes, and a rebuild over more rows plans the same", () => {
+  const ae = job({ title: "Account Executive", role: "Sales", level: "Mid", must: ["Payments", "Salesforce"], years_required: 3 }), p = person("Sales", "Mid", 5, ["Salesforce"]);
+  assert.equal(part(on(p, ae), "Top must-haves").note, "1 of 1: Salesforce");  // data without fields: every role is Engineering
+  assert.match(part(onAll(p, ae), "Top must-haves").note, /^1 of 2: .*Payments/);
+  const rows = [ae, job(), job({ title: "Software Engineer", role: "General", level: "Mid", must: ["Java", "Kafka", "AWS"] })], copies = rows.map(j => ({ ...j }));
+  const rules = { fields: { Sales: "Sales", Backend: "Engineering", General: "Engineering" } }, first = buildStats(rows.slice(0, 2), rules);
+  for (const j of rows.slice(0, 2)) score(p, j, first);  // the first paint, before older.js joins
+  const joined = buildStats(rows, rules), fresh = buildStats(copies, rules);
+  rows.forEach((j, i) => assert.deepEqual(score(full, j, joined), score(full, copies[i], fresh), j.title));
+});
+
 test("reconciliation and demand planning are the job in finance and operations, and background in engineering", () => {
   for (const [k, title, role] of [["Account Reconciliation", "Staff Accountant", "Accounting"], ["Demand & Supply Planning", "Demand Planner", "Supply chain"]]) {
     const at = onAll(person(role, "Mid", 5, ["Excel"]), job({ title, role, level: "Mid", must: [k, "Excel"], years_required: 3 }));
