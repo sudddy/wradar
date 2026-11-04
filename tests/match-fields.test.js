@@ -23,6 +23,14 @@ test("Payments is a real requirement in a sales job but background in an enginee
   assert.equal(part(eng, "Everything else").note, "1 other must-have");
 });
 
+test("reconciliation and demand planning are the job in finance and operations, and background in engineering", () => {
+  for (const [k, title, role] of [["Account Reconciliation", "Staff Accountant", "Accounting"], ["Demand & Supply Planning", "Demand Planner", "Supply chain"]]) {
+    const at = onAll(person(role, "Mid", 5, ["Excel"]), job({ title, role, level: "Mid", must: [k, "Excel"], years_required: 3 }));
+    assert.match(part(at, "Top must-haves").note, new RegExp(`^1 of 2: .*${k}`), k);
+    assert.equal(part(onAll(full, job({ must: [...MUST, k] })), "Everything else").note, "1 other must-have", k);
+  }
+});
+
 test("a Senior Accountant's CPA counts in full when only listed, and never reads as only listed", () => {
   const skills = ["GAAP", "Month-end Close", "Account Reconciliation", "NetSuite", "CPA"];
   const j = job({ title: "Senior Accountant", role: "Accounting", level: "Senior", must: ["CPA", "GAAP", "Month-end Close", "Account Reconciliation", "ERP Systems"] });

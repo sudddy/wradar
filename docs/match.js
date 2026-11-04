@@ -64,7 +64,7 @@ const PRACTICE = new Set(["Agile", "Mentoring", "Cross-functional", "Technical L
 const DOMAIN = new Set(["SaaS", "B2B", "Payments", "Fintech", "Banking", "Billing", "Fraud / Risk", "Ledgers", "KYC / AML", "Go-to-Market", "E-commerce",
   "Healthcare", "Telehealth", "Insurance", "Public Sector", "Restaurant & Hospitality", "Retail Operations", "Point of Sale", "Fleet & Telematics", "Payroll",
   "DEI Programs", "Troubleshooting", "Data Analysis", "Project Management", "Program Management", "Recruiting", "Customer Success", "Business Operations",
-  "Strategic Planning"]);
+  "Strategic Planning", "Account Reconciliation", "Demand & Supply Planning"]);
 const isSoft = (k, eng) => PRACTICE.has(k) || eng && DOMAIN.has(k);
 // A licence or certificate is held or not: listed under Certifications, it proves as much as a job bullet does. A posting that
 // requires one screens on it first, and one licence never stands in for another: an RN is no near match for a physician job.
