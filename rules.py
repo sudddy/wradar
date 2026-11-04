@@ -9,12 +9,16 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 from extract import degree, rich_text, salary, split_sections, tier_skills, work_mode, years_min
+from scan_state import LEGAL
 
 try:  # Python's own regex parser, to read the words a re: alias can't match without
     from re import _constants as sre, _parser as sre_parse  # Python 3.11+
-except ImportError:  # Python 3.10
-    import sre_constants as sre
-    import sre_parse
+except ImportError:
+    try:  # Python 3.10
+        import sre_constants as sre
+        import sre_parse
+    except ImportError:  # gone in a later Python: every re: alias is then searched in every posting, slower but the same
+        sre = sre_parse = None
 
 ROOT = Path(__file__).parent
 
@@ -74,15 +78,17 @@ LEVELS = [
     ("VP", r"(?<!assistant )(?<!associate )\bvice[- ]president\b|\b[se]?vp\b|\bmanaging director\b"
            r"|(?<!assistant )(?<!associate )(?<!deputy )\bgeneral counsel\b"),
     ("Senior Director", r"\b(?:senior|sr\.?|executive|group)\s+director\b"),
-    ("Director", r"\bdirector\b|\bhead\s+of\b|\bgeneral counsel\b|\bchief of staff\b|\bassociate vice[- ]president\b"),
+    ("Director", r"(?<!account )(?<!client )\bdirector\b|\bhead\s+of\b|\bgeneral counsel\b|\bchief of staff\b"
+                 r"|\bassociate vice[- ]president\b"),
     ("Senior Manager", r"\b(?:senior|sr\.?)\s+(?:[\w&]+\s+){0,2}" + NOT_IC + r"manager\b|" + NOT_IC + r"\bmanager\s+(?:ii|iii|2|3)\b"
                        r"|^manager\s+(?:ii|iii|2|3)\b|\bassistant vice[- ]president\b|\bavp\b"),
     ("Manager", NOT_IC + r"\bmanager\b|^manager\b|\bsupervisor\b"),
     ("Staff+", r"(?<!technical )\bstaff\b(?!\s+(?:accountant|auditor|attorney|nurse|writer|pharmacist|physician|to\b))"
                r"|\b(?:principal|distinguished|fellow)\b|\bgroup (?:product|program) manager\b"
-               r"|\b(?:software|enterprise|chief|data|cloud|security|systems|platform|technical)\s+architect\b"),
-    ("Senior", r"\b(?:senior|sr\.?|lead|iii|iv)\b"),
-    ("Intern", r"\b(?:interns?|internships?|co-?op|summer student)\b"),
+               r"|\b(?:software|enterprise|chief|data|cloud|security|systems|platform|technical)\s+architect\b"
+               r"|\b[lp]mts\b|\blead member of technical staff\b"),
+    ("Senior", r"\b(?:senior|sr\.?|lead|iii|iv|smts)\b|\b(?:account|client) director\b"),  # a senior seller, not a manager
+    ("Intern", r"\b(?:interns?|internships?|co-?op|summer student|stagiaires?)\b"),
     ("Junior", r"\b(?:junior|jr\.?|entry|associate|i|new grad|university grad|graduate|early career|emerging talent"
                r"|apprentice|apprenticeship|trainee)\b"),
 ]
@@ -90,7 +96,7 @@ LADDER = ["Intern", "Junior", "Mid", "Senior", "Staff+", "Manager", "Senior Mana
           "C-level"]
 FAMILIES = [("Full stack", r"full[- ]?stack"),
             ("Backend", r"back[- ]?end|server[- ]side|\bapi\b|distributed systems|\bpayments?\b|ledger|integrations?\b"),
-            ("Frontend", r"front[- ]?end|\bui\b|\bweb developer"),
+            ("Frontend", r"front[- ]?end|\bui\b|\bweb develop(?:er|ment)"),
             ("Mobile", r"\b(ios|android|mobile|react native)\b"),
             ("Security", r"security"),
             ("ML / AI", r"machine learning|\bml\b|\bai\b|\bllms?\b|deep learning|\bnlp\b"),
@@ -108,23 +114,25 @@ ROLES = [
     ("Sales", r"\b(?:account|sales) exec\w*|\bsales (?:representative|director|manager|lead|specialist|development)"
               r"|\b(?:sdr|bdr|ae)\b|\b(?:business|account) development representative\b", "Sales"),
     ("IT", r"\bit\b|\binformation technology\b|\bhelp ?desk\b|\bservice desk\b|\bdesktop support\b|\bsysadmin\b"
-           r"|\bsystems? administrator\b|\bnetwork administrator\b|\bend[- ]user\b|\bdata center technician\b", "IT & security"),
-    ("Support", r"\bsupport\b|\bcustomer (?:service|care|operations)\b|\bmember (?:services|support)\b|\bescalations?\b",
-     "Customer"),
+           r"|\bsystems? administrator\b|\bnetwork administrator\b|\bend[- ]user\b|\bdata center technician\b"
+           r"|\bdba\b|\bdatabase administrator\b", "IT & security"),
+    ("Support", r"\bsupport\b|\b(?:customer|client) (?:service|care|operations)\b|\bmember (?:services|support)\b"
+                r"|\bescalations?\b", "Customer"),
     ("Developer relations", r"\bdeveloper (?:relations|advocate|advocacy|evangelist)|\bdevrel\b|\btechnical marketing engineer",
      "Marketing"),
     ("Hardware", r"\b(?:hardware|electrical|mechanical|asic|fpga|silicon|pcb|rf|analog|mixed[- ]signal|optical|photonics"
                  r"|thermal|power|manufacturing|controls?|process|chemical|civil|structural|facilities|commissioning)\s+"
                  r"engineer|\bdesign verification\b|\bphysical design\b|\btechnician\b", "Engineering"),
-    ("Engineering", r"engineer\w*|developer|programmer|\bswe\b|\bsde\b|\bsre\b|devops|architect|technical staff|\bmts\b"
-                    r"|\bcto\b", "Engineering"),
+    ("Engineering", r"engineer\w*|developer|programmer|\bswe\b|\bsde\b|\bsre\b|devops|architect|technical staff|\b[slp]?mts\b"
+                    r"|\bcto\b|\bsdet\b|\bfde\b|ing[ée]nieur|d[ée]veloppeu[rs]|programmeu[rs]|desarrollador", "Engineering"),
     ("Data science", r"\bdata scien\w*|\bquantitative\b|\bstatistic\w*|\beconomist\b|\bdecision scien\w*", "Data & research"),
-    ("Research", r"\bresearch scientist|\bapplied scientist\b|\bresearcher\b|\bscientist\b|\bpostdoc", "Data & research"),
+    ("Research", r"\bresearch scientist|\bapplied scien\w*|\bresearcher\b|\bscientist\b|\bpostdoc|\bhead of research\b"
+                 r"|(?<!ux )(?<!user )\bresearch (?:intern|fellow)\w*", "Data & research"),
     ("Analytics", r"\b(?:data|business|product|marketing|sales|people|operations|revenue|bi|insights?|reporting|growth)\s+"
-                  r"(?:analyst|analytics|intelligence)\b|\banalytics\b|\bbusiness intelligence\b|\bbi\b", "Data & research"),
+                  r"(?:analyst|analytics|analysis|intelligence)\b|\banalytics\b|\bbusiness intelligence\b|\bbi\b", "Data & research"),
     ("Cybersecurity", r"security|\bgrc\b|\bsoc\b|cyber|infosec|\bthreat|vulnerab|penetration|\bred team|\bdetection",
      "IT & security"),
-    ("Clinical", r"\b(?:physician|nurse|nursing|rn|np|pa-c|lcsw|lpc|md|do|psychiatr\w*|psycholog\w*|therapist|therapy"
+    ("Clinical", r"\b(?:physician|nurse|nursing|rn|np|pa-c|lcsw|lpc|md|do|psychiatr\w*|(?:neuro)?psycholog\w*|therapist|therapy"
                  r"|clinician|clinical|counselor|phlebotomist|pharmac\w*|dentist|dental|medical|dietitian|midwife|doula"
                  r"|care (?:coordinator|navigator|manager|partner)|health coach|behavioral health|mental health"
                  r"|psychotherapist|optometrist|radiolog\w*|sonographer|paramedic|emt)\b", "Healthcare"),
@@ -136,27 +144,30 @@ ROLES = [
                r"|\billustrat|\bcreative\b|\bartist\b|\banimat|\bart director\b|\bvfx\b|\bmotion\b|\bart\b", "Design"),
     ("Sales", r"\baccount (?:director|manager)\b|\bsales\b|\bbusiness development\b|\bterritory\b|\bclient partner\b"
               r"|\baccount partner\b|\bcommercial (?:lead|director)\b|\bpartner (?:manager|development|account)"
-              r"|\bpartnerships?\b|\balliances?\b|\bchannel\b|\bagent\b|\bseller\b|\bgtm\b", "Sales"),
+              r"|\bpartnerships?\b|\balliances?\b|\bchannel\b|\bagent\b|\bseller\b|\bwholesaler\b", "Sales"),
     ("Customer success", r"\b(?:customer|client) success\b|\bcsm\b|\btechnical account manager\b|\btam\b|\baccount management\b"
                          r"|\bcustomer (?:engagement|onboarding|advocate|experience)\b|\bonboarding\b|\brenewals?\b|\bcx\b"
-                         r"|\bclient services\b", "Customer"),
+                         r"|\bclient services\b|\bsuccess manager\b", "Customer"),
     ("Marketing", r"marketing|\bgrowth\b|\bbrand\b|\bdemand gen|\bseo\b|\bsem\b|\bsocial media\b|\bevents?\b|\bcommunity\b"
                   r"|\badvocate\b|\bcampaigns?\b|\blifecycle\b|\bcopywrit|\binfluencer\b|\bpaid (?:social|search|media)\b"
                   r"|\banalyst relations\b", "Marketing"),
-    ("Communications", r"communications?\b|\bpublic relations\b|\bpr\b|\bcontent\b|\bwriter\b|\beditor\b|\beditorial\b"
-                       r"|\bjournalist\b|\bspeechwriter\b|\blocali[sz]ation\b|\btranslator\b|\bvideo\b|\bproducer\b"
-                       r"|\bmoderator\b|\bgovernment affairs\b|\bpublic policy\b", "Marketing"),
-    ("Recruiting", r"recruit\w*|\btalent acquisition\b|\bsourcer\b|\bsourcing (?:lead|partner|specialist)\b|\bta partner\b",
-     "People"),
+    ("Communications", r"communications?\b|\bpublic relations\b|\bpr(?![^\s/&])|\bcontent\b|\bwriter\b|\beditor\b"
+                       r"|\beditorial\b|\bjournalist\b|\bspeechwriter\b|\blocali[sz]ation\b|\btranslator\b|\bvideo\b"
+                       r"|\bproducer\b|\bmoderator\b|\b(?:government|corporate|global|public|media) (?:affairs|relations)\b"
+                       r"|\bpublic policy\b", "Marketing"),  # "pr" not before "é": JavaScript's \b would match "président"
+    ("Recruiting", r"recruit\w*|\btalent acquisition\b|\bsourcer\b|\bsourcing (?:lead|partner|specialist)\b|\bta partner\b"
+                   r"|\btalent (?:advisor|partner)\b", "People"),
     ("People & HR", r"\bpeople\b|\bhuman resources\b|\bhr\b|\bhrbp\b|\bcompensation\b|\bbenefits\b|\btotal rewards\b"
                     r"|\blearning (?:and|&) development\b|\bl&d\b|\btalent (?:management|development)\b|\bemployee\b"
                     r"|\bpayroll\b|\bdei\b|\bdiversity\b|\bworkforce\b|\borganizational\b", "People"),
     ("Accounting", r"accountant|accounting|\bcontroller\b|\bcomptroller\b|\btax\b|\baccounts (?:payable|receivable)\b"
-                   r"|\bbookkeep|\baudit\w*|\bsox\b|\brevenue (?:recognition|accountant)\b|\bbilling\b|\bcollections?\b",
+                   r"|\bbookkeep|\baudit\w*|\bsox\b|\brevenue (?:recognition|accountant)\b|\bbilling\b|\bcollections?\b"
+                   r"|\bconsolidations?\b|\bsec reporting\b",
      "Finance"),
     ("Finance", r"financ\w*|\bfp&a\b|\btreasury\b|\binvestor relations\b|\bcorporate development\b|\bcorp dev\b|\bm&a\b"
                 r"|\bactuar\w*|\bunderwrit\w*|\bcredit\b|\binvestment\w*|\bcapital markets\b|\bprocurement\b"
-                r"|\bpricing\b|\bbanker\b|\btrader\b|\btrading\b|\bportfolio\b", "Finance"),
+                r"|\bpricing\b|\bbanker\b|\btrader\b|\btrading\b|\bportfolio\b|\btreasurer\b|\bbanking\b|\bmortgage\b"
+                r"|\bloan officer\b|\bequity research\b", "Finance"),
     ("Legal", r"\blegal\b|\bcounsel\b|\battorney\b|\blawyer\b|\bparalegal\b|\bcontracts? (?:manager|specialist|administrator)"
               r"|\bprivacy\b|\bintellectual property\b|\bpatent\b|\blitigation\b", "Legal & compliance"),
     ("Risk & compliance", r"\bcompliance\b|\brisk\b|\baml\b|\bkyc\b|\bbsa\b|\bfraud\b|\bregulatory\b|\bfinancial crimes\b"
@@ -169,7 +180,8 @@ ROLES = [
                      r"|\bwarehouse\b|\binventory\b|\bdemand planning\b|\bplanner\b|\bvendor\b|\bfleet\b|\bdriver\b"
                      r"|\breceiving\b|\bshipping\b|\bcapacity\b", "Operations"),
     ("Administrative", r"\b(?:executive|administrative|admin|office|personal)\s+(?:assistant|coordinator|manager|business partner)\b"
-                       r"|\breceptionist\b|\bexecutive business partner\b|\badministrat\w*|\bconcierge\b", "Operations"),
+                       r"|\breceptionist\b|\bexecutive business partner\b|\badministrat\w*|\bconcierge\b|\bvirtual assistant\b"
+                       r"|\bdata entry\b|\bclerk\b", "Operations"),
     ("Facilities & workplace", r"\bfacilit\w*|\bworkplace\b|\breal estate\b|\bconstruction\b|\bsite (?:manager|lead|operations)\b"
                                r"|\bhvac\b|\bmaintenance\b|\bsecurity officer\b|\bcritical (?:facility|environment)"
                                r"|\bforeman\b|\bpipefitter\b|\belectrician\b|\bdata center\b|\benergy\b", "Operations"),
@@ -178,6 +190,12 @@ ROLES = [
     ("Business operations", r"\boperations?\b|\bops\b|\bstrategy\b|\bstrategist\b|\bstrategic\b|\bbusiness (?:analyst|partner)\b"
                             r"|\bchief of staff\b|\bconsultant\b|\btransformation\b|\bplanning\b|\bgeneral manager\b"
                             r"|\bprograms?\b|\bengagement\b|\bexpert\b", "Operations"),
+    # Last, so a field's own noun wins: "GTM Finance" is Finance, "Finance Systems Analyst" Finance, "Software Development
+    # Project Manager" a program manager.
+    ("Engineering", r"\bsoftware development\b|\bsw development\b|\bweb development\b|full[- ]?stack|\breact native\b"
+                    r"|\bmachine learning\b|\btech(?:nical)? lead\b|\bhead of technology\b", "Engineering"),
+    ("IT", r"\bbusiness systems\b|\bsystems analyst\b", "IT & security"),
+    ("Sales", r"\bgtm\b|\bgo-to-market\b|\bmid[- ]market\b", "Sales"),
 ]
 SEGMENT = r"\s*(?:,|\(|\)|\[|\]|\||:|;|\s[-–—]\s|–|—)\s*"
 FIELDS = ({name: "Engineering" for name, _ in FAMILIES} | {"General": "Engineering"}
@@ -192,6 +210,7 @@ FRONTEND = {"React", "Angular", "Vue.js", "Next.js", "Redux", "HTML/CSS"}
 # regex matches is always in the lowered text, at the same place: every character lowers to exactly one.
 FOLD = str.maketrans({"İ": "i", "ı": "i", "ſ": "s"})
 WORD, CASED_WORD = re.compile(r"[a-z0-9]+"), re.compile(r"[A-Za-z0-9]+")  # as the aliases' lookarounds split words
+BRAND_END = re.compile(rf"(?:[\s,]+(?:{'|'.join(sorted(LEGAL | {'labs', 'technologies', 'computing'}))})\.?)+$", re.I)
 
 
 def pattern(alias):
@@ -234,7 +253,7 @@ def needles(d):
             plain = [a for a in aliases if not a.startswith("re:") and a.isascii() and WORD.search(a.lower())]
             rest = [a for a in aliases if a not in plain]
             pairs = [(max(WORD.findall(a), key=len), a) for a in (p.lstrip("=").lower() for p in plain)]
-            words = [required(sre_parse.parse(pattern(a))) for a in rest]
+            words = [required(sre_parse.parse(pattern(a))) if sre_parse else None for a in rest]
             out[name] = (frozenset(k for k, _ in pairs), pairs, re.compile("|".join(map(pattern, rest))) if rest else None,
                          None if None in words else set().union(*words))
     return out
@@ -265,6 +284,15 @@ def skills(kw, s, needles=None):
                 not keys.isdisjoint(words) and matches_at(rx, s, low, [a for k, a in pairs if k in words])):
             found.add(name)
     return found
+
+
+def unnamed(company, text):
+    """text with the employer's own name blanked out, whole words in any case: Datadog's postings name Datadog, and that
+    isn't a skill asked for. A skill other words name still counts (HRIS at Rippling). "Grafana Labs" also blanks Grafana."""
+    for name in (company, BRAND_END.sub("", company)):
+        if CASED_WORD.search(name):
+            text = re.sub(r"(?<![A-Za-z0-9])" + re.escape(name) + r"(?![A-Za-z0-9])", " ", text, flags=re.I)
+    return text
 
 
 def when(v):
@@ -356,8 +384,7 @@ def evaluate(job, r, cutoff):
     if not tags:
         return None
     body, company = rich_text(val("description")), job["company"].strip()
-    sec, found = split_sections(body), skills(r["kw"], f"{title}\n{body}", r["needles"])
-    found = {k for k in found if not r["kw"][k].search(company)}  # Datadog's postings name Datadog; it isn't a skill asked for
+    sec, found = split_sections(body), skills(r["kw"], unnamed(company, f"{title}\n{body}"), r["needles"])
     names = [k for k in r["kw"] if k in found]
     must, nice = tier_skills(names, title, sec, r["kw"])
     return dict(title=title, company=company, where=tags, location=location[:120],
