@@ -107,7 +107,11 @@ class Classify(unittest.TestCase):
                             "Product Manager": "Mid", "Customer Success Manager": "Mid", "Senior Product Manager": "Senior",
                             "Group Product Manager": "Staff+", "Enterprise Architect": "Staff+", "Solutions Architect": "Mid",
                             "Staff Accountant": "Mid", "Software Engineering Intern": "Intern",
-                            "New Grad Software Engineer": "Junior"}.items():
+                            "New Grad Software Engineer": "Junior", "Account Director - Enterprise": "Senior",
+                            "Senior Account Director": "Senior", "Client Director, Financial Services": "Senior",
+                            "Director, Account Management": "Director", "SMTS Software Engineer": "Senior", "LMTS": "Staff+",
+                            "PMTS, Platform": "Staff+", "Lead Member of Technical Staff": "Staff+",
+                            "Développeur Logiciels (Stagiaire), Backend": "Intern"}.items():
             self.assertEqual(rules.level(title), want, title)
         self.assertEqual(set(rules.LADDER), {name for name, _ in rules.LEVELS} | {"Mid"})
 

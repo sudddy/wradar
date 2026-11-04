@@ -78,15 +78,17 @@ LEVELS = [
     ("VP", r"(?<!assistant )(?<!associate )\bvice[- ]president\b|\b[se]?vp\b|\bmanaging director\b"
            r"|(?<!assistant )(?<!associate )(?<!deputy )\bgeneral counsel\b"),
     ("Senior Director", r"\b(?:senior|sr\.?|executive|group)\s+director\b"),
-    ("Director", r"\bdirector\b|\bhead\s+of\b|\bgeneral counsel\b|\bchief of staff\b|\bassociate vice[- ]president\b"),
+    ("Director", r"(?<!account )(?<!client )\bdirector\b|\bhead\s+of\b|\bgeneral counsel\b|\bchief of staff\b"
+                 r"|\bassociate vice[- ]president\b"),
     ("Senior Manager", r"\b(?:senior|sr\.?)\s+(?:[\w&]+\s+){0,2}" + NOT_IC + r"manager\b|" + NOT_IC + r"\bmanager\s+(?:ii|iii|2|3)\b"
                        r"|^manager\s+(?:ii|iii|2|3)\b|\bassistant vice[- ]president\b|\bavp\b"),
     ("Manager", NOT_IC + r"\bmanager\b|^manager\b|\bsupervisor\b"),
     ("Staff+", r"(?<!technical )\bstaff\b(?!\s+(?:accountant|auditor|attorney|nurse|writer|pharmacist|physician|to\b))"
                r"|\b(?:principal|distinguished|fellow)\b|\bgroup (?:product|program) manager\b"
-               r"|\b(?:software|enterprise|chief|data|cloud|security|systems|platform|technical)\s+architect\b"),
-    ("Senior", r"\b(?:senior|sr\.?|lead|iii|iv)\b"),
-    ("Intern", r"\b(?:interns?|internships?|co-?op|summer student)\b"),
+               r"|\b(?:software|enterprise|chief|data|cloud|security|systems|platform|technical)\s+architect\b"
+               r"|\b[lp]mts\b|\blead member of technical staff\b"),
+    ("Senior", r"\b(?:senior|sr\.?|lead|iii|iv|smts)\b|\b(?:account|client) director\b"),  # a senior seller, not a manager
+    ("Intern", r"\b(?:interns?|internships?|co-?op|summer student|stagiaires?)\b"),
     ("Junior", r"\b(?:junior|jr\.?|entry|associate|i|new grad|university grad|graduate|early career|emerging talent"
                r"|apprentice|apprenticeship|trainee)\b"),
 ]
