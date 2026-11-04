@@ -100,6 +100,19 @@ test("a licence the posting requires is the screen: held, it carries a posting t
   assert.equal(onAll(lcsw, clinic("Care Manager", ["RN License", "Social Work License", "EHR Systems"])).tier, "Hot");
 });
 
+test("a credential screens only in a field that asks for it: CPA in a marketing posting is cost per acquisition", () => {
+  const ads = ["Performance Marketing", "Google Ads", "Unit Economics"], cpa = ["CPA", "GAAP", "Month-end Close"];
+  const books = Array.from({ length: 10 }, () => job({ title: "Senior Accountant", role: "Accounting", level: "Senior", must: cpa }));
+  const growth = Array.from({ length: 10 }, () => job({ title: "Growth Marketing Manager", role: "Marketing", level: "Mid", must: ads, years_required: 3 }));
+  const paid = job({ title: "Paid Media Manager", role: "Marketing", level: "Mid", must: [...ads, "Meta Ads", "CPA"], years_required: 3 });
+  const r = onAll(person("Marketing", "Mid", 5, [...ads, "Meta Ads"]), paid, [...books, ...growth]);
+  assert.equal(r.tier, "Hot", JSON.stringify(r.held));
+  assert.equal(part(r, "Top must-haves").note, "3 of 4: Performance Marketing, Google Ads or Meta Ads, Unit Economics, CPA");
+  const acct = onAll(person("Accounting", "Senior", 6, ["GAAP", "Month-end Close"]), books[0], [...books.slice(1), ...growth, paid]);
+  assert.equal(part(acct, "Top must-haves").note, "2 of 3: CPA, GAAP, Month-end Close");
+  assert.deepEqual(acct.held, { at: 74, why: "Not on your resume: CPA." });
+});
+
 test("a General job is no role match for someone from another field, nor a job in another field for a General resume", () => {
   const must = ["SQL", "Python", "Tableau"], swe = job({ title: "Software Engineer", role: "General", level: "Mid", must, years_required: 3 });
   const analyst = person("Analytics", "Mid", 4, must), r = onAll(analyst, swe);

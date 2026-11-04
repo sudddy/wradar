@@ -66,8 +66,9 @@ const DOMAIN = new Set(["SaaS", "B2B", "Payments", "Fintech", "Banking", "Billin
   "DEI Programs", "Troubleshooting", "Data Analysis", "Project Management", "Program Management", "Recruiting", "Customer Success", "Business Operations",
   "Strategic Planning", "Account Reconciliation", "Demand & Supply Planning"]);
 const isSoft = (k, eng) => PRACTICE.has(k) || eng && DOMAIN.has(k);
-// A licence or certificate is held or not: listed under Certifications, it proves as much as a job bullet does. A posting that
-// requires one screens on it first, and one licence never stands in for another: an RN is no near match for a physician job.
+// A licence or certificate is held or not: listed under Certifications, it proves as much as a job bullet does, and one never stands
+// in for another: an RN is no near match for a physician job. A posting screens on one first in a field that asks for it at least a
+// quarter as often as the field that asks most; elsewhere it is likely another sense, as CPA is cost per acquisition in marketing.
 const CREDENTIALS = new Set(["CPA", "CFA", "PMP", "HR Certification", "FINRA Licenses", "Law Degree & Bar", "Insurance License", "RN License",
   "Nurse Practitioner License", "Physician Assistant License", "Medical License", "Pharmacist License", "Social Work License", "Case Manager Certification"]);
 
@@ -214,7 +215,7 @@ function readJob(job, field) {
 }
 
 function planJob(job, ctx) {
-  const field = ctx.fieldOf(job.role), r = readJob(job, field);
+  const field = ctx.fieldOf(job.role), share = ctx.shareOf(job.role), r = readJob(job, field);
   const role = r.role !== undefined ? r.role : voteRole(job, r.pool, ctx);
   const core = role && ctx.core[role.name] || ctx.fieldCore[field] || ctx.core[""];
   const groups = new Map();
@@ -222,13 +223,13 @@ function planJob(job, ctx) {
     const g = groups.get(key) || { key, kind: KIND_OF[k] || null, names: [], titled: false, gate: false, rank: 0, stack };
     g.names.push(k);
     g.titled ||= titled;
-    g.gate ||= CREDENTIALS.has(k);
+    g.gate ||= CREDENTIALS.has(k) && 4 * (ctx.df[share]?.[k] || 0) / ctx.n[share] >= ctx.most[k];
     g.rank = Math.max(g.rank, core[k] || 0);
     groups.set(key, g);
   }
   const reqs = [...groups.values()].sort((a, b) => b.titled - a.titled || b.gate - a.gate || b.rank - a.rank);
   return { split: r.split, role, level: r.level, top: reqs.slice(0, TOP_N), more: reqs.slice(TOP_N), soft: r.soft, nice: r.nice, plain: r.plain,
-    share: ctx.shareOf(job.role), sideTrack: r.sideTrack, sideTopic: r.sideTopic, stackless: r.stackless };
+    share, sideTrack: r.sideTrack, sideTopic: r.sideTopic, stackless: r.stackless };
 }
 
 // rules.fields maps each role to its field. Old data has none: every role is Engineering then, and shares are of every posting.
@@ -265,13 +266,14 @@ function buildStats(jobs, rules) {
   for (const [k, n] of Object.entries(total)) core[""][k] = n / N;
   for (const [name, F] of Object.entries(inField)) fieldCore[name] = Object.fromEntries(Object.entries(F.total).map(([k, n]) => [k, n / F.n]));
   const ask = Object.fromEntries(Object.entries(asked).map(([l, a]) => [l, a.sort((x, y) => x - y)[a.length >> 1]]));
-  const df = {}, n = {};
+  const df = {}, n = {}, most = {};
   for (const j of jobs) for (const key of new Set(["", shareOf(j.role)])) {
     n[key] = (n[key] || 0) + 1;
     for (const k of j.must) ((df[key] ||= {})[k] = (df[key][k] || 0) + 1);
   }
+  for (const f in df) for (const k in df[f]) if (CREDENTIALS.has(k)) most[k] = Math.max(most[k] || 0, df[f][k] / n[f]);
   const stats = { ask, df, n, shareOf, plans: new Map(), credits: new WeakMap() };
-  for (const j of jobs) stats.plans.set(j, planJob(j, { votes, core, fieldCore, fieldOf, shareOf }));
+  for (const j of jobs) stats.plans.set(j, planJob(j, { votes, core, fieldCore, fieldOf, shareOf, df, n, most }));
   return stats;
 }
 
