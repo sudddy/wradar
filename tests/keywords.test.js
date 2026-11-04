@@ -80,12 +80,36 @@ test("a tool named like a common word counts only as the tool", () => expect([
 test("R, spoken languages, supply chain and privacy skip their look-alikes", () => expect([
   ["Fund R&D, migrate SAP R/3 and resell Acme(R) parts.", ["SAP"]],
   ["Query data in Python, R, or SQL.", ["Python", "R", "SQL"]],
+  ["Reconcile A/R and A/P, and partner with R & D teams on the R and D budget.", ["Accounts Payable", "Accounts Receivable"]],
+  ["Model it in Python/R.", ["Python", "R"]],
   ["Sell to Japanese enterprises and German automakers from our French office.", []],
   ["Fluent in Spanish and bilingual English/French.", ["French", "Spanish"]],
   ["Harden our software supply chain and supply chain security.", []],
   ["Run supply chain operations for the region.", ["Supply Chain Management"]],
   ["Read our Data Privacy Notice before you apply.", []],
   ["Advise product teams on data privacy and GDPR.", ["Privacy Law"]],
+]));
+
+test("a skill's own phrase does not also tag an unrelated skill", () => expect([
+  ["Tune our security information and event management (SIEM) rules.", ["Security Operations (SIEM / EDR)"]],
+  ["Own enterprise performance management (EPM) and application performance management (APM) tools.", ["EPM Tools"]],
+  ["Handle benefits renewals and office lease renewals.", ["Benefits Administration"]],
+  ["Build learning experience design for new hires.", ["Instructional Design"]],
+  ["Run event management for our summit.", ["Event Planning"]],
+  ["Coach managers on performance management.", ["Performance Management"]],
+  ["Own customer renewals and experience design.", ["Renewals & Retention", "UX Design"]],
+]));
+
+test("an acronym counts only in the sense its skill means", () => expect([
+  ["Write firmware for DSPs and MCUs, and keep the System Security Plan (SSP) current.", []],
+  ["Buy media through demand-side platforms.", ["Programmatic Advertising"]],
+  ["Partner with the Technical Account Manager (TAM).", []],
+  ["Size the TAM/SAM/SOM for a new market.", ["Market Research"]],
+  ["F-1 students on CPT/OPT or Curricular Practical Training (CPT) are welcome.", []],
+  ["Code claims with CPT and ICD-10.", ["Medical Coding & Billing"]],
+  ["Built services with Spring Boot and Spring AOP.", ["Spring Boot"]],
+  ["Own the AOP.", ["FP&A"]],
+  ["Commuter benefits cover the MTA.", []],
 ]));
 
 for (const name of ["levels", "families"]) {
