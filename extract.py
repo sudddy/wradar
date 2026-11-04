@@ -130,10 +130,11 @@ def tier_skills(names, title, sec, kw):
 WORDS = {w: n for n, w in enumerate("one two three four five six seven eight nine ten eleven twelve".split(), 1)}
 NUMBER = rf"\d{{1,2}}|\b(?:{'|'.join(WORDS)})\b"
 SUFFIX = r"\s*(?:\(\d{1,2}\+?\)\s*)?\+?\s*"  # "five (5)", "5+"
+AGE = r"\s+old|\s+of age\b|\s+or (?:older|over)\b"  # "at least 18 years of age" is an age, not experience
 YEARS = re.compile(rf"(?<![\d.$,])({NUMBER}){SUFFIX}(?:(?:-|–|—|to)\s*(?:{NUMBER}){SUFFIX})?(?:(?:plus|or more)\s+)?"
-                   r"(?:years?|yrs?|yoe)\b(?!\s+old|\s+ago|\s+degree)", re.I)
+                   rf"(?:years?|yrs?|yoe)\b(?!{AGE}|\s+ago|\s+degree)", re.I)
 EXPERIENCE = re.compile(
-    r"(\d{1,2})\s*\+?\s*(?:(?:-|–|to)\s*\d{1,2}\s*\+?\s*)?years?(?:\s+of)?(?:\s+[\w/&-]+){0,5}?\s+experience", re.I)
+    rf"(\d{{1,2}})\s*\+?\s*(?:(?:-|–|to)\s*\d{{1,2}}\s*\+?\s*)?years?(?!{AGE})(?:\s+of)?(?:\s+[\w/&-]+){{0,5}}?\s+experience", re.I)
 NOT_YEARS = re.compile(r"\b(company|founded|for over|over the (?:last|past)|in the (?:last|past)|within|history|since"
                        r"|ago|last \d|no more than|up to|less than|fewer than)\b", re.I)
 
