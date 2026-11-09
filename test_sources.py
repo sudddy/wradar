@@ -295,16 +295,31 @@ class Adzuna(unittest.TestCase):
             def refuse(url, body=None, code=code, reply=reply):
                 raise HTTPError(url, code, "Refused", {}, io.BytesIO(reply))  # as urlopen raises it: the URL, key and all
 
-            with mock.patch.dict(os.environ, KEYS), mock.patch.object(sources, "fetch", side_effect=refuse):
+            with mock.patch.dict(os.environ, KEYS), mock.patch.object(sources, "fetch", side_effect=refuse) as fetch:
                 with self.assertRaises(HTTPError) as caught:
                     sources.adzuna(5, 50, 90)
                 src, rows = f.run_source(("feed", "adzuna"), R, CUTOFF, {})
+            self.assertEqual(fetch.call_count, 2)  # one call each time: page 1's refusal stops the other three searches
             e = caught.exception
             self.assertIn("test-app-key", e.url)  # the key is in the request, so the checks below mean something
             self.assertEqual((src["ok"], src["error"], rows), (False, f"HTTP {code}", []))
             crash_log = "".join(traceback.format_exception(type(e), e, e.__traceback__))
             for said in (json.dumps(src), f.describe(e), str(e), repr(e), crash_log):
                 self.assertNotIn("test-app-key", said)
+
+    def test_a_refusal_mid_scan_stops_every_search_after_it(self):
+        calls = []
+
+        def answer(url, body=None):
+            calls.append(url)
+            if len(calls) == 3:
+                raise HTTPError(url, 429, "Too Many Requests", {}, io.BytesIO(b""))
+            return json.dumps({"results": [ad(f"{len(calls)}{i}") for i in range(2)]}).encode()  # full pages
+
+        with mock.patch.dict(os.environ, KEYS), mock.patch.object(sources, "fetch", side_effect=answer):
+            with self.assertRaises(HTTPError):
+                sources.adzuna(pages=5, per_page=2, max_days=90)
+        self.assertEqual(len(calls), 3)
 
     def test_a_reply_in_another_shape_is_the_sources_error_not_an_empty_list(self):
         for reply, error in ((b'callback({"results": []})', "JSONDecodeError"), (b'{"count": 0}', "KeyError")):
