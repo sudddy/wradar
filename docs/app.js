@@ -388,7 +388,8 @@ function init() {
     press("#where", state.where); press("#mode", state.mode);
   };
   const changed = () => {  // a filter change ends any deep link, so the list picks the selection again, from page 1
-    nav.jobs.pg = nav.older.pg = tab().pg = 0;  // Matching jobs and Over 30 days ago share the filters
+    if (page === "mine") nav.mine.pg = 0;  // Show: All, Saved, Applied, Hidden
+    else nav.jobs.pg = nav.older.pg = 0;  // Matching jobs and Over 30 days ago share the filters
     if (parseHash(location.hash).key) history.replaceState(null, "", "#" + page);
     renderBoard();
   };

@@ -177,6 +177,16 @@ test("each list keeps its page until a reload, and nothing stores it", () => {
   assert.equal(page.run("nav.jobs.pg"), 0);  // the list now sorts by match
 });
 
+test("picking Saved or All under Applications keeps the Matching jobs page", () => {
+  const page = openPage({ data: pageData({ jobs: many(60) }) });
+  turn(page, 2);
+  page.go("#mine");
+  ["saved", "all"].forEach(v => page.$("#mineseg").fire("click", { target: { closest: () => ({ dataset: { v } }) } }));
+  page.go("#jobs");
+  assert.equal(page.run("nav.jobs.pg"), 2);
+  assert.match(page.$("#pager").innerHTML, /Showing 51–60 of 60/);
+});
+
 test("Applications pages a long list too", () => {
   const marks = Object.fromEntries(many(30).map((j, i) => [keyOf(i), { s: "saved", at: daysAgo(i / 100), title: j.title, company: j.company, url: j.url, where: j.where }]));
   const page = openPage({ data: pageData({ jobs: many(30) }), storage: new Map([["wradar-tracker", JSON.stringify(marks)]]), at: "#mine" });
