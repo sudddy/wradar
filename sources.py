@@ -259,7 +259,7 @@ def amazon():
 
 
 ADZUNA_COUNTRIES = {"us": ("United States", "USD"), "ca": ("Canada", "CAD")}
-ADZUNA_ASKS = {"contract": "Contract", "part_time": "Part-time"}  # the filter asked for -> the type it stands for
+ADZUNA_ASKS = {"contract": "contract_type", "part_time": "contract_time"}  # the filter asked for -> the ad's field it sets
 
 
 def adzuna_keys():
@@ -281,16 +281,16 @@ def adzuna_place(loc, country):
     return place if len(set(where(place)) - {"Remote"}) == 1 else join(*(loc.get("area") or [])[1:2], country)
 
 
-def adzuna_job(j, country, cur, asked):
-    """The ad's own fields set its type, a part-time contract reading as Contract as job_type() reads a field naming both;
-    with neither, the filter that found it does."""
-    kind = ("Contract" if j.get("contract_type") == "contract" else
-            "Part-time" if j.get("contract_time") == "part_time" else asked)
+def adzuna_job(j, country, cur, ask):
+    """The ad's own contract_type and contract_time set its type, read as job_type() reads any field: a part-time contract
+    is Contract, a permanent full-time ad Full-time whatever the search asked. The filter that found it fills only its own
+    field, when the ad leaves that blank."""
+    said = {ADZUNA_ASKS[ask]: ask} | {k: j[k] for k in ADZUNA_ASKS.values() if j.get(k)}
     lo, hi = j.get("salary_min") or j.get("salary_max"), j.get("salary_max") or j.get("salary_min")
     stated = str(j.get("salary_is_predicted")) == "0"  # Adzuna estimates pay for many ads; only stated pay is kept
     return dict(title=j["title"], company=(j.get("company") or {}).get("display_name") or "", url=j["redirect_url"],
                 posted=j.get("created"), description=j.get("description", ""), dept=(j.get("category") or {}).get("label"),
-                location=adzuna_place(j.get("location") or {}, country), type=kind,
+                location=adzuna_place(j.get("location") or {}, country), type=" ".join(said.values()),
                 salary=structured_pay(lo, hi, cur, "hour" if hi and hi <= 400 else "year") if stated else None)
 
 
@@ -299,11 +299,11 @@ def adzuna(pages, per_page, max_days):
     last. The key goes only into the request URL, and a failed call reads as its HTTP code (fetch_jobs.describe)."""
     keys, jobs = adzuna_keys(), {}
     for country, (name, cur) in ADZUNA_COUNTRIES.items():
-        for ask, kind in ADZUNA_ASKS.items():
+        for ask in ADZUNA_ASKS:
             for page in range(1, pages + 1):
                 results = get_json(adzuna_url(keys, country, page, ask, per_page, max_days))["results"]
                 for j in results:
-                    jobs.setdefault(j["id"], adzuna_job(j, name, cur, kind))  # an ad both asks find: the first stays
+                    jobs.setdefault(j["id"], adzuna_job(j, name, cur, ask))  # an ad both asks find: the first stays
                 if len(results) < per_page:
                     break
     return list(jobs.values())

@@ -261,6 +261,17 @@ class Adzuna(unittest.TestCase):
         self.assertEqual((got["Tutor"]["url"], got["Tutor"]["company"]),
                          ("https://www.adzuna.com/land/ad/5?se=x&utm_medium=api&utm_source=test-app-id", "Acme Health"))
 
+    def test_the_ads_own_fields_beat_the_filter_that_found_it(self):  # as when Adzuna ignores contract=1 or part_time=1
+        self.serve({("us", "contract"): [[ad(1, title="Clerk A", contract_type="permanent", contract_time="full_time"),
+                                          ad(2, title="Clerk B", contract_type="permanent"),
+                                          ad(3, title="Clerk C", contract_time="full_time")]],  # a full-time contract
+                    ("us", "part_time"): [[ad(4, title="Clerk D", contract_time="full_time"),
+                                           ad(5, title="Clerk E", contract_type="permanent")]]})  # a permanent part-time job
+        _, rows = f.run_source(("feed", "adzuna"), R, CUTOFF, {})
+        self.assertEqual({j["title"]: j["type"] for j in rows}, {"Clerk A": "Full-time", "Clerk B": "Full-time",
+                                                                 "Clerk C": "Contract", "Clerk D": "Full-time",
+                                                                 "Clerk E": "Part-time"})
+
     def test_a_refused_call_is_the_sources_error_and_never_shows_the_key(self):
         for code, reply in ((429, b""), (400, b'{"exception": "BAD_REQUEST", "display": "Bad parameter"}')):
             def refuse(url, body=None, code=code, reply=reply):

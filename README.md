@@ -153,7 +153,7 @@ The first scan in the next 6-hour slot reads Adzuna. Until both secrets exist th
 
 Each slot asks Adzuna for contract jobs and for part-time jobs, in the US and in Canada, newest first. `adzuna.pages` in `config.json` sets the calls per slot, four per page: the default 5 pages make 20 calls a slot and at most 80 a day, of `adzuna.per_page` (50) jobs each, and a search that runs out early stops early. The free key's limits aren't published; they show in your Adzuna account, so check them there before raising `pages`.
 
-A job's type comes from Adzuna's own fields (a part-time contract shows as Contract), else from the search that found it. Adzuna gives only a snippet of each posting, so its jobs show fewer skills than jobs from a company's own board, and when a job is on both, the company board's copy is the one kept.
+A job's type comes from Adzuna's own fields (a part-time contract shows as Contract, and a permanent full-time job as Full-time even when the contract search found it), else from the search that found it. Adzuna gives only a snippet of each posting, so its jobs show fewer skills than jobs from a company's own board, and when a job is on both, the company board's copy is the one kept.
 
 The key stays secret: it lives only in the repo secrets and the fetch step's environment, and goes only into the request to Adzuna. It never reaches the data files, the logs or an error message; a refused call shows on How it works as its code, such as "HTTP 429". Adzuna's job links may carry the app_id as a tracking parameter; the app_id isn't secret, only the app_key is.
 
