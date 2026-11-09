@@ -271,8 +271,21 @@ test("a row opened in another tab shows Clicked here", () => {
 });
 
 // ---- Adzuna ----
+const ad = (site, n) => `https://www.adzuna.${site}/land/ad/${n}?se=x&utm_medium=api`;  // its redirect_url
+
+test("a saved Adzuna job that left the feed keeps its badge and Apply on Adzuna, though its snapshot has no source", () => {
+  const gone = row(7, { url: ad("ca", 7), where: ["Canada"] }), snap = { s: "saved", at: daysAgo(0), title: gone.title, company: gone.company, url: gone.url, where: gone.where };
+  const page = openPage({ data: pageData({ jobs: many(3) }), storage: new Map([["wradar-tracker", JSON.stringify({ [keyOf(7)]: snap })]]), at: "#mine" });
+  assert.ok(rowHtml(page, 7).startsWith(' class="adzrow">'));
+  assert.match(rowHtml(page, 7), /<a class="adz" href="https:\/\/www\.adzuna\.ca"/);
+  page.run("select(rows[0].key)");
+  assert.match(page.$("#detail").innerHTML, /<a class="adz" href="https:\/\/www\.adzuna\.ca"/);
+  assert.match(page.$("#detail").innerHTML, /<span class="onwide">Apply on Adzuna<\/span>/);
+});
+
 test("an Adzuna job carries the word Adzuna, linked to its site for the job's country, beside the row's button and atop its detail, and applies on Adzuna", () => {
-  const jobs = [row(0, { source: "Adzuna", where: ["US"] }), row(1, { source: "Adzuna", where: ["Canada"] }), row(2, { source: "Adzuna", where: ["Remote", "US", "Canada"] }), row(3)];
+  const jobs = [row(0, { source: "Adzuna", url: ad("com", 0), where: ["US"] }), row(1, { source: "Adzuna", url: ad("ca", 1), where: ["Canada"] }),
+    row(2, { source: "Adzuna", url: ad("com", 2), where: ["Remote", "US", "Canada"] }), row(3)];
   const page = withResume(openPage({ data: pageData({ jobs }) }));
   page.run("state.sort = 'new'; renderBoard()");
   const badge = site => `<a class="adz" href="https://www.adzuna.${site}" target="_blank" rel="noopener"`;

@@ -92,7 +92,10 @@ function pageList(cur, total) {
   return [1, null, cur - 1, cur, cur + 1, null, total];
 }
 
-if (typeof module !== "undefined") module.exports = { jobKey, age, within, isNew, splitAge, annualPay, payLabel, knownOnly, matches, topN, savedFilters, parseHash, hashFor, PER_PAGE, pageList };
+// An Adzuna job's link is an adzuna.com or adzuna.ca redirect. A tracker snapshot keeps the link but not the source, so the link decides.
+const fromAdzuna = j => /^https?:\/\/([\w-]+\.)*adzuna\.(com|ca)([/?#:]|$)/i.test(j.url);
+
+if (typeof module !== "undefined") module.exports = { jobKey, age, within, isNew, splitAge, annualPay, payLabel, knownOnly, matches, topN, savedFilters, parseHash, hashFor, PER_PAGE, pageList, fromAdzuna };
 
 // ---- Loading: jobs.js at init, then older.js, the rows past 30 days, after the first paint ----
 let olderIn = false;  // until older.js has loaded or failed, a job not found may be in it
@@ -159,13 +162,13 @@ const matchNum = j => (j.score == null ? "" : `<span class="match ${tier(j.score
 const rowPlace = j => j.where.filter(w => w !== j.mode).join(" / ");
 const rowWhen = j => (j.delisted ? (olderIn ? "No longer listed" : "") : isNew(j) ? "New" : postedText(j));  // it may still be in older.js
 // Adzuna's terms: each of its jobs shows the word Adzuna, linked to its site for the job's country, at 116 × 23 px or more.
-const adzuna = (j, attrs = "") => (j.source !== "Adzuna" ? "" : `<a class="adz" href="https://www.adzuna.${j.where.includes("Canada") && !j.where.includes("US") ? "ca" : "com"}" target="_blank" rel="noopener"${attrs}>Jobs by Adzuna<span class="sr"> (opens in a new tab)</span></a>`);
+const adzuna = (j, attrs = "") => (!fromAdzuna(j) ? "" : `<a class="adz" href="https://www.adzuna.${j.where.includes("Canada") && !j.where.includes("US") ? "ca" : "com"}" target="_blank" rel="noopener"${attrs}>Jobs by Adzuna<span class="sr"> (opens in a new tab)</span></a>`);
 const rowLabel = j =>[`${j.title} at ${j.company}`, j.score != null && `match ${j.score}, ${tier(j.score)}`, payLabel(j.salary), j.mode, rowPlace(j), rowWhen(j), markText(j)].filter(Boolean).join(", ");
 
 function item(j, n, stop) {
   const s = statusOf(j), on = j.key === tab().sel, pay = payLabel(j.salary);
   const facts = [j.mode, rowPlace(j)].filter(Boolean).map(x => `<span class="jfact">${esc(x)}</span>`).join("");
-  return `<li${j.source === "Adzuna" ? ' class="adzrow"' : ""}><button type="button" class="jitem${s === "applied" ? " applied" : ""}" data-n="${n}" aria-current="${on}" tabindex="${j.key === stop ? 0 : -1}" aria-label="${esc(rowLabel(j))}">
+  return `<li${fromAdzuna(j) ? ' class="adzrow"' : ""}><button type="button" class="jitem${s === "applied" ? " applied" : ""}" data-n="${n}" aria-current="${on}" tabindex="${j.key === stop ? 0 : -1}" aria-label="${esc(rowLabel(j))}">
     ${matchNum(j)}
     <span class="jtext">
       <span class="jline"><span class="jtitle">${esc(j.title)}</span>${markTag(j)}</span>
@@ -302,9 +305,9 @@ function pills(j) {
     rowPlace(j) && `<li>${esc(rowPlace(j))}</li>`, `<li>Posted ${esc(postedText(j))}</li>`].filter(Boolean).join("")}</ul>`;
 }
 
-function actions(j) {  // an Adzuna job's link is an adzuna.com redirect, so its button says so
+function actions(j) {  // an Adzuna job's link is an Adzuna redirect, so its button says so
   const link = /^https?:\/\//.test(j.url)
-    ? `<a class="btn" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer" data-do="open"><span class="onwide">${j.source === "Adzuna" ? "Apply on Adzuna" : "Apply on company site"}</span><span class="onphone">Apply</span><span class="sr"> (opens in a new tab)</span></a>`
+    ? `<a class="btn" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer" data-do="open"><span class="onwide">${fromAdzuna(j) ? "Apply on Adzuna" : "Apply on company site"}</span><span class="onphone">Apply</span><span class="sr"> (opens in a new tab)</span></a>`
     : '<span class="na">No link for this posting</span>';
   const mark = (s, label) => `<button type="button" class="btn line mark" data-do="${s}" aria-pressed="${statusOf(j) === s}">${label}</button>`;
   const ask = statusOf(j) === "applied" ? "" : `<p class="dask" id="dask" hidden><span>Did you apply?</span>

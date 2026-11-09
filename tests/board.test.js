@@ -150,6 +150,13 @@ test("the pager shows every page up to seven, else the first, the last and the c
   }
 });
 
+test("an Adzuna job is known by its link, an adzuna.com or adzuna.ca redirect, so a tracker snapshot with no source still is", () => {
+  ["https://www.adzuna.com/land/ad/4412523946?se=x&v=1", "https://www.adzuna.ca/land/ad/1", "http://adzuna.com", "https://WWW.ADZUNA.CA/details/2"]
+    .forEach(url => assert.ok(board.fromAdzuna({ url }), url));
+  ["https://acme.test/jobs?ref=adzuna.com", "https://adzuna.com.evil.test/x", "https://notadzuna.com/x", "https://www.adzuna.co.uk/land/ad/1", "", undefined]
+    .forEach(url => assert.ok(!board.fromAdzuna({ url }), url));
+});
+
 test("a tracker snapshot survives a delisted job", () => {
   const live = { ...job(), key: "acme|software engineer" };
   const t = tracker.mark({}, live, "applied", "2026-10-28T10:00:00Z");
