@@ -163,7 +163,7 @@ const rowPlace = j => j.where.filter(w => w !== j.mode).join(" / ");
 const rowWhen = j => (j.delisted ? (olderIn ? "No longer listed" : "") : isNew(j) ? "New" : postedText(j));  // it may still be in older.js
 // Adzuna's terms: each of its jobs shows the word Adzuna, linked to its site for the job's country, at 116 × 23 px or more.
 const adzuna = (j, attrs = "") => (!fromAdzuna(j) ? "" : `<a class="adz" href="https://www.adzuna.${j.where.includes("Canada") && !j.where.includes("US") ? "ca" : "com"}" target="_blank" rel="noopener"${attrs}>Jobs by Adzuna<span class="sr"> (opens in a new tab)</span></a>`);
-const rowLabel = j =>[`${j.title} at ${j.company}`, j.score != null && `match ${j.score}, ${tier(j.score)}`, payLabel(j.salary), j.mode, rowPlace(j), rowWhen(j), markText(j)].filter(Boolean).join(", ");
+const rowLabel = j => [`${j.title} at ${j.company}`, j.score != null && `match ${j.score}, ${tier(j.score)}`, payLabel(j.salary), j.mode, rowPlace(j), rowWhen(j), markText(j)].filter(Boolean).join(", ");
 
 function item(j, n, stop) {
   const s = statusOf(j), on = j.key === tab().sel, pay = payLabel(j.salary);
@@ -199,10 +199,10 @@ const showingText = () => { const first = tab().pg * PER_PAGE; return `Showing $
 function renderPager() {
   const t = tab(), pages = Math.ceil(rows.length / PER_PAGE);
   $("#pager").hidden = pages < 2;
-  const end = (pg, cls, label, text) => `<button type="button" class="btn line ${cls}" data-pg="${pg}" aria-label="${label}"${pg < 0 || pg >= pages ? " disabled" : ""}>${text}</button>`;
+  const end = (pg, label, text) => `<button type="button" class="btn line" data-pg="${pg}" aria-label="${label}"${pg < 0 || pg >= pages ? " disabled" : ""}>${text}</button>`;
   const num = n => (n ? `<li><button type="button" class="btn line" data-pg="${n - 1}" aria-label="Page ${n}"${n - 1 === t.pg ? ' aria-current="page"' : ""}>${n.toLocaleString()}</button></li>`
     : '<li class="gap" aria-hidden="true">…</li>');
-  $("#pager").innerHTML = `${end(t.pg - 1, "pprev", "Previous page", "Previous")}<p class="prange">${showingText()}</p>${end(t.pg + 1, "pnext", "Next page", "Next")}
+  $("#pager").innerHTML = `${end(t.pg - 1, "Previous page", "Previous")}<p class="prange">${showingText()}</p>${end(t.pg + 1, "Next page", "Next")}
     <ol class="pages">${pageList(t.pg + 1, pages).map(num).join("")}</ol>`;
 }
 
