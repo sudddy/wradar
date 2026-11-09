@@ -5,7 +5,11 @@
   "title_include": "\\S",
   "title_exclude": "\\b(general application|future opportunities|expression of interest|talent (community|pool|network))\\b",
 
-  "feeds": ["remotive", "remoteok", "jobicy", "himalayas", "weworkremotely", "workingnomads", "themuse", "hackernews", "amazon"],
+  "feeds": ["remotive", "remoteok", "jobicy", "himalayas", "weworkremotely", "workingnomads", "themuse", "hackernews", "amazon",
+            "adzuna"],
+
+  "_adzuna_help": "Adzuna runs once the repo secrets ADZUNA_APP_ID and ADZUNA_APP_KEY exist, at most once per 6-hour slot. It asks for contract and for part-time jobs in the US and in Canada, so one slot makes up to pages x 4 calls, of per_page results each.",
+  "adzuna": {"pages": 5, "per_page": 50},
 
   "_boards_help": "Company career boards, grouped by the platform they run on. Use the slug from the careers URL: boards.greenhouse.io/<slug>, jobs.lever.co/<slug>, jobs.ashbyhq.com/<slug>, jobs.smartrecruiters.com/<slug>, apply.workable.com/<slug>, and <tenant>.<wdN>.myworkdayjobs.com/<site> for Workday (written as tenant.wdN/site). Add '|Display Name' when the slug isn't the company name.",
   "boards": {

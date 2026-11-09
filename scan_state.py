@@ -7,7 +7,8 @@ import re
 from datetime import datetime
 
 PREFIX, OLDER = "window.JOB_DATA = ", "window.JOB_OLDER = "  # docs/jobs.js, docs/older.js
-SLOW = {"remotive", "workable", "workday", "smartrecruiters", "jobicy"}  # strict limits, or a detail call per job
+# Strict or unpublished limits (Adzuna's free key), or a detail call per job.
+SLOW = {"remotive", "workable", "workday", "smartrecruiters", "jobicy", "adzuna"}
 SLOT_SECONDS = 6 * 3600
 NEWER = dict(must=[], nice=[], salary=None, mode=None, degree=None, posted_approx=False)  # fields a row from older data lacks
 LEGAL = {"inc", "llc", "ltd", "limited", "corp", "corporation", "co", "gmbh", "ag", "ab", "plc", "sa", "bv", "srl", "pty", "oy"}

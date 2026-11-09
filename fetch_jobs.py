@@ -16,7 +16,7 @@ from urllib.error import HTTPError
 from rules import BACKEND, FAMILIES, FIELDS, FRONTEND, LADDER, LEVELS, ROLES, SEGMENT, evaluate, load_rules
 from scan_state import (OLDER, PREFIX, failed_over, held_over, is_slow, job_key, load_previous, merge, same_job,
                         slot_open)
-from sources import BOARDS, FEEDS, NOW
+from sources import BOARDS, FEEDS, NOW, adzuna_keys
 
 ROOT = Path(__file__).parent
 OUT = ROOT / "docs" / "jobs.js"
@@ -36,6 +36,8 @@ def run_source(task, r, cutoff, before):
     kind, entry = task
     if kind == "feed":
         name, fn, url = FEEDS[entry]
+        if entry == "adzuna":  # the one feed with settings: its call budget, and how far back to ask
+            fn = partial(fn, max_days=r["cfg"]["max_age_days"], **r["cfg"]["adzuna"])
         src = dict(name=name, kind="Job boards", url=url)
     else:
         label, board, page = BOARDS[kind]
@@ -66,7 +68,8 @@ def main():
     cfg, run_slow = r["cfg"], slot_open(prev, NOW)
     last = prev.get("jobs", [])
     cutoff, before = NOW - timedelta(days=cfg["max_age_days"]), {**{same_job(j): j for j in last}, **{job_key(j): j for j in last}}
-    tasks = [(kind, e) for kind, entries in cfg["boards"].items() for e in entries] + [("feed", f) for f in cfg["feeds"]]
+    tasks = [(kind, e) for kind, entries in cfg["boards"].items() for e in entries] + [
+        ("feed", f) for f in cfg["feeds"] if f != "adzuna" or adzuna_keys()]  # no key yet: no calls and no source entry
     with ThreadPoolExecutor(12) as ex:
         results = list(ex.map(partial(run_source, r=r, cutoff=cutoff, before=before),
                               [t for t in tasks if run_slow or not is_slow(t)]))

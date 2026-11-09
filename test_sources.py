@@ -1,11 +1,22 @@
 """Self-checks for the source adapters. Run: python3 -m unittest"""
+import io
 import json
+import os
+import traceback
 import unittest
+from datetime import timedelta
 from unittest import mock
+from urllib.error import HTTPError
+from urllib.parse import parse_qs, urlsplit
 
 import extract as x
+import fetch_jobs as f
 import rules
+import scan_state as s
 import sources
+from test_fetch_jobs import CUTOFF, NOW, R, row
+
+KEYS = {"ADZUNA_APP_ID": "test-app-id", "ADZUNA_APP_KEY": "test-app-key"}  # placeholders: no real key is used in tests
 
 
 class Sources(unittest.TestCase):
@@ -168,6 +179,123 @@ class Sources(unittest.TestCase):
             dict(title=t, company_name="C", url="https://x.test/1", category_name=c)
             for t, c in (("Backend Engineer", "Development"), ("Recruiter", "Administration"))]])
         self.assertEqual([j["title"] for j in jobs], ["Backend Engineer", "Recruiter"])
+
+
+def ad(id, **kw):
+    """One Adzuna search result, in the shape its docs show."""
+    return {**dict(id=str(id), title="Medical Assistant", description="Day shifts in a busy clinic…",
+                   created=(NOW - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                   redirect_url=f"https://www.adzuna.com/land/ad/{id}?se=x&utm_medium=api&utm_source=test-app-id",
+                   company={"display_name": "Acme Health"}, category={"label": "Other/General Jobs", "tag": "other-general-jobs"},
+                   location={"area": ["US", "California", "Los Angeles County", "Los Angeles"],
+                             "display_name": "Los Angeles, California"},
+                   salary_min=41600, salary_max=52000, salary_is_predicted="0"), **kw}
+
+
+class Adzuna(unittest.TestCase):
+    def serve(self, pages):
+        """Patch fetch to answer each (country, filter) with its pages of results. -> the list of URLs asked for."""
+        asked = []
+
+        def answer(url, body=None):
+            asked.append(url)
+            path, query = urlsplit(url).path.split("/"), parse_qs(urlsplit(url).query)
+            got = pages.get((path[4], "contract" if "contract" in query else "part_time"), [])
+            page = int(path[6]) - 1
+            return json.dumps({"count": 999, "results": got[page] if page < len(got) else []}).encode()
+
+        for patch in (mock.patch.dict(os.environ, KEYS), mock.patch.object(sources, "fetch", side_effect=answer)):
+            patch.start()
+            self.addCleanup(patch.stop)
+        return asked
+
+    def test_without_both_keys_it_is_off(self):  # fetch_jobs then leaves it out: test_fetch_jobs.Main
+        for gone in KEYS:
+            with mock.patch.dict(os.environ, KEYS):
+                del os.environ[gone]
+                self.assertIsNone(sources.adzuna_keys())
+        with mock.patch.dict(os.environ, KEYS, ADZUNA_APP_KEY=""):  # a secret that isn't set reads as "" in the workflow
+            self.assertIsNone(sources.adzuna_keys())
+        with mock.patch.dict(os.environ, KEYS):
+            self.assertEqual(sources.adzuna_keys(), {"app_id": "test-app-id", "app_key": "test-app-key"})
+
+    def test_asks_each_country_for_contract_then_part_time_newest_first_and_stops_at_a_short_page(self):
+        full = lambda tag: [ad(f"{tag}{i}") for i in range(2)]  # noqa: E731
+        asked = self.serve({("us", "contract"): [full("a"), [ad("b")]], ("us", "part_time"): [],
+                            ("ca", "contract"): [full("c"), full("d"), full("e")], ("ca", "part_time"): [[ad("f")]]})
+        sources.adzuna(pages=3, per_page=2, max_days=90)
+        calls = [(urlsplit(u).path, parse_qs(urlsplit(u).query)) for u in asked]
+        self.assertEqual([p for p, _ in calls], ["/v1/api/jobs/us/search/1", "/v1/api/jobs/us/search/2",  # page 2 is short
+                                                 "/v1/api/jobs/us/search/1",  # empty
+                                                 "/v1/api/jobs/ca/search/1", "/v1/api/jobs/ca/search/2",
+                                                 "/v1/api/jobs/ca/search/3",  # the pages limit
+                                                 "/v1/api/jobs/ca/search/1"])
+        self.assertEqual({urlsplit(u).netloc for u in asked}, {"api.adzuna.com"})
+        for (_, query), ask in zip(calls, ["contract"] * 2 + ["part_time"] + ["contract"] * 3 + ["part_time"]):
+            self.assertEqual(query, {"app_id": ["test-app-id"], "app_key": ["test-app-key"], "results_per_page": ["2"],
+                                     "max_days_old": ["90"], "sort_by": ["date"], ask: ["1"]})
+
+    def test_rows_pass_the_rules_with_place_type_pay_and_department(self):
+        toronto = {"area": ["Canada", "Ontario", "Toronto"], "display_name": "Toronto, Ontario"}
+        self.serve({("us", "contract"): [[
+            ad(1, title="Registered Nurse", salary_min=25, salary_max=30, contract_type="contract", contract_time="part_time"),
+            ad(2, title="Associate", category={"label": "Logistics & Warehouse Jobs"}, contract_type="contract",
+               location={"area": ["US", "California", "San Bernardino County", "Ontario"], "display_name": "Ontario, California"}),
+            ad(9)]],
+            ("us", "part_time"): [[ad(3, title="Cashier", salary_is_predicted="1", contract_time="part_time"), ad(9)]],
+            ("ca", "contract"): [[ad(4, title="Bookkeeper", location=toronto, salary_min=60000, salary_max=70000)]],
+            ("ca", "part_time"): [[ad(5, title="Tutor", location=toronto, salary_is_predicted=1)]]})
+        src, rows = f.run_source(("feed", "adzuna"), R, CUTOFF, {})  # config.json's pages and per_page: one call each here
+        self.assertEqual((src["name"], src["kind"], src["ok"], src["seen"], src["kept"]), ("Adzuna", "Job boards", True, 6, 6))
+        got = {j["title"]: j for j in rows}
+        pay = lambda lo, hi, cur, per: dict(min=lo, max=hi, cur=cur, per=per)  # noqa: E731
+        want = {"Registered Nurse": (["US"], "Contract", pay(25, 30, "USD", "hour"), "Clinical"),  # contract beats part-time
+                "Associate": (["US"], "Contract", pay(41600, 52000, "USD", "year"), "Supply chain"),  # from the category
+                "Medical Assistant": (["US"], "Contract", pay(41600, 52000, "USD", "year"), "Clinical"),  # first query kept
+                "Cashier": (["US"], "Part-time", None, "Other"),  # predicted pay is left out
+                "Bookkeeper": (["Canada"], "Contract", pay(60000, 70000, "CAD", "year"), "Accounting"),  # from the query
+                "Tutor": (["Canada"], "Part-time", None, "Education")}
+        self.assertEqual({t: (j["where"], j["type"], j["salary"], j["role"]) for t, j in got.items()}, want)
+        self.assertEqual((got["Associate"]["location"], got["Bookkeeper"]["location"], got["Registered Nurse"]["source"]),
+                         ("California / United States", "Toronto, Ontario / Canada", "Adzuna"))  # Ontario, California is US
+        self.assertEqual((got["Tutor"]["url"], got["Tutor"]["company"]),
+                         ("https://www.adzuna.com/land/ad/5?se=x&utm_medium=api&utm_source=test-app-id", "Acme Health"))
+
+    def test_a_refused_call_is_the_sources_error_and_never_shows_the_key(self):
+        for code, reply in ((429, b""), (400, b'{"exception": "BAD_REQUEST", "display": "Bad parameter"}')):
+            def refuse(url, body=None, code=code, reply=reply):
+                raise HTTPError(url, code, "Refused", {}, io.BytesIO(reply))  # as urlopen raises it: the URL, key and all
+
+            with mock.patch.dict(os.environ, KEYS), mock.patch.object(sources, "fetch", side_effect=refuse):
+                with self.assertRaises(HTTPError) as caught:
+                    sources.adzuna(5, 50, 90)
+                src, rows = f.run_source(("feed", "adzuna"), R, CUTOFF, {})
+            e = caught.exception
+            self.assertIn("test-app-key", e.url)  # the key is in the request, so the checks below mean something
+            self.assertEqual((src["ok"], src["error"], rows), (False, f"HTTP {code}", []))
+            crash_log = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+            for said in (json.dumps(src), f.describe(e), str(e), repr(e), crash_log):
+                self.assertNotIn("test-app-key", said)
+
+    def test_a_reply_in_another_shape_is_the_sources_error_not_an_empty_list(self):
+        for reply, error in ((b'callback({"results": []})', "JSONDecodeError"), (b'{"count": 0}', "KeyError")):
+            with mock.patch.dict(os.environ, KEYS), mock.patch.object(sources, "fetch", return_value=reply):
+                src, _ = f.run_source(("feed", "adzuna"), R, CUTOFF, {})
+            self.assertEqual((src["ok"], src["error"]), (False, error), reply)
+
+    def test_read_once_per_slot_and_held_over_between(self):
+        self.assertTrue(s.is_slow(("feed", "adzuna")))
+        prev = dict(sources=[dict(name="Adzuna", kind="Job boards"), dict(name="Himalayas", kind="Job boards")],
+                    jobs=[row(source="Adzuna"), row(source="Himalayas")])
+        held, rows = s.held_over(prev)
+        self.assertEqual(([h["name"] for h in held], [j["source"] for j in rows]), (["Adzuna"], ["Adzuna"]))
+
+    def test_the_companys_own_board_wins_over_adzuna(self):
+        listed = row(company="Acme Inc.", source="Adzuna", url="https://www.adzuna.com/land/ad/1")
+        board = row(company="Acme", url="https://boards.greenhouse.io/acme/jobs/1")
+        for rows in ([listed, board], [board, listed]):
+            [j] = s.merge(rows, {}, NOW, CUTOFF, own={label for label, _, _ in sources.BOARDS.values()})
+            self.assertEqual((j["source"], j["url"]), ("Greenhouse", board["url"]))
 
 
 if __name__ == "__main__":

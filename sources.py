@@ -5,11 +5,12 @@ category, where the payload has one; rules.evaluate() decides what is kept and r
 """
 import html
 import json
+import os
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from functools import cache
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from extract import pick_pay, structured_pay
@@ -257,6 +258,57 @@ def amazon():
             for offset in range(0, 1000, 100) for j in get_json(url + str(offset))["jobs"]]  # newest 1,000: about 2 weeks
 
 
+ADZUNA_COUNTRIES = {"us": ("United States", "USD"), "ca": ("Canada", "CAD")}
+ADZUNA_ASKS = {"contract": "Contract", "part_time": "Part-time"}  # the filter asked for -> the type it stands for
+
+
+def adzuna_keys():
+    """{app_id, app_key} from the environment, or None while either is missing: the scan then skips Adzuna."""
+    keys = {k: os.environ.get(f"ADZUNA_{k.upper()}", "").strip() for k in ("app_id", "app_key")}
+    return keys if all(keys.values()) else None
+
+
+def adzuna_url(keys, country, page, ask, per_page, max_days):
+    """One search. Every parameter is here, so one real call can confirm them: the docs only show some."""
+    return f"https://api.adzuna.com/v1/api/jobs/{country}/search/{page}?" + urlencode(
+        dict(keys, results_per_page=per_page, max_days_old=max_days, sort_by="date", **{ask: 1}))
+
+
+def adzuna_place(loc, country):
+    """Its place with the country spelled out, as ", CA" in a US address is California. A US town named like a Canadian
+    place (Ontario, California) would read as both countries, so then its state or province stands in."""
+    place = join(loc.get("display_name"), country)
+    return place if len(set(where(place)) - {"Remote"}) == 1 else join(*(loc.get("area") or [])[1:2], country)
+
+
+def adzuna_job(j, country, cur, asked):
+    """The ad's own fields set its type, a part-time contract reading as Contract as job_type() reads a field naming both;
+    with neither, the filter that found it does."""
+    kind = ("Contract" if j.get("contract_type") == "contract" else
+            "Part-time" if j.get("contract_time") == "part_time" else asked)
+    lo, hi = j.get("salary_min") or j.get("salary_max"), j.get("salary_max") or j.get("salary_min")
+    stated = str(j.get("salary_is_predicted")) == "0"  # Adzuna estimates pay for many ads; only stated pay is kept
+    return dict(title=j["title"], company=(j.get("company") or {}).get("display_name") or "", url=j["redirect_url"],
+                posted=j.get("created"), description=j.get("description", ""), dept=(j.get("category") or {}).get("label"),
+                location=adzuna_place(j.get("location") or {}, country), type=kind,
+                salary=structured_pay(lo, hi, cur, "hour" if hi and hi <= 400 else "year") if stated else None)
+
+
+def adzuna(pages, per_page, max_days):
+    """Contract and part-time jobs in every field, US and Canada, newest first: up to pages × 4 calls. A short page is the
+    last. The key goes only into the request URL, and a failed call reads as its HTTP code (fetch_jobs.describe)."""
+    keys, jobs = adzuna_keys(), {}
+    for country, (name, cur) in ADZUNA_COUNTRIES.items():
+        for ask, kind in ADZUNA_ASKS.items():
+            for page in range(1, pages + 1):
+                results = get_json(adzuna_url(keys, country, page, ask, per_page, max_days))["results"]
+                for j in results:
+                    jobs.setdefault(j["id"], adzuna_job(j, name, cur, kind))  # an ad both asks find: the first stays
+                if len(results) < per_page:
+                    break
+    return list(jobs.values())
+
+
 FEEDS = {"remotive": ("Remotive", remotive, "https://remotive.com"),
          "remoteok": ("RemoteOK", remoteok, "https://remoteok.com"),
          "jobicy": ("Jobicy", jobicy, "https://jobicy.com"),
@@ -265,4 +317,5 @@ FEEDS = {"remotive": ("Remotive", remotive, "https://remotive.com"),
          "workingnomads": ("Working Nomads", workingnomads, "https://www.workingnomads.com"),
          "themuse": ("The Muse", themuse, "https://www.themuse.com/search"),
          "hackernews": ("HN Who's Hiring", hackernews, "https://news.ycombinator.com/submitted?id=whoishiring"),
-         "amazon": ("Amazon Jobs", amazon, "https://www.amazon.jobs")}
+         "amazon": ("Amazon Jobs", amazon, "https://www.amazon.jobs"),
+         "adzuna": ("Adzuna", adzuna, "https://www.adzuna.com")}
