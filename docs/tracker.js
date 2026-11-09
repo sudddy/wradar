@@ -42,7 +42,8 @@ const markTag = (j, dated) => (markText(j) ? `<span class="tag ${statusOf(j) || 
 
 // Read again before every change, so a mark here never wipes one made in another tab.
 const loadTracker = () => { tracker = store.get("wradar-tracker") || tracker; };
-const loadClicks = () => { clicks = Object.fromEntries(Object.entries(store.get("wradar-clicked") || {}).filter(([, at]) => typeof at === "string" && !isNaN(Date.parse(at)))); };  // only dates, whatever else is there
+// Only dates, whatever else is there. Where storage is blocked it gives nothing, so the marks made since the page loaded stay.
+const loadClicks = () => { clicks = Object.fromEntries(Object.entries(store.get("wradar-clicked") || clicks).filter(([, at]) => typeof at === "string" && !isNaN(Date.parse(at)))); };
 
 function markClicked(j) {
   loadClicks();

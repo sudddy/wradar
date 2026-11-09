@@ -244,6 +244,15 @@ test("wradar-clicked holds job keys and dates only, the latest 2,000, and keeps 
   assert.equal(a.run("clickedOn(rows[2])"), null);
 });
 
+test("where storage throws, as with site data blocked, every row opened stays Clicked until a reload", () => {
+  const fail = () => { throw new Error("SecurityError"); };
+  const page = openPage({ storage: { get: fail, set: fail, delete: fail }, data: pageData({ jobs: many(5) }) });
+  open(page, 0);
+  open(page, 1);
+  assert.match(rowHtml(page, 0), /<span class="tag clicked">Clicked<\/span>/);
+  assert.match(rowHtml(page, 1), /<span class="tag clicked">Clicked<\/span>/);
+});
+
 // ---- Adzuna ----
 test("an Adzuna job carries the word Adzuna, linked to its site for the job's country, beside the row's button and atop its detail, and applies on Adzuna", () => {
   const jobs = [row(0, { source: "Adzuna", where: ["US"] }), row(1, { source: "Adzuna", where: ["Canada"] }), row(2, { source: "Adzuna", where: ["Remote", "US", "Canada"] }), row(3)];
