@@ -12,7 +12,7 @@ The app is served from **https://sudddy.github.io/wradar/** once GitHub Pages is
 2. **Matching jobs:** the filters, the job list and the selected job, shown as cards. **Posted** picks jobs from the last 2, 3, 7 or 30 days, or **Over 30 days ago**: jobs posted 31 to 90 days ago, with a warning above the list, as many are filled or closed, so check a job is still open before you spend time on it. Without a resume the list asks for one.
 3. **Applications:** the jobs you've marked, under All, Saved, Applied and Hidden. A job that leaves the feed stays here, labeled "No longer listed".
 
-The footer links to **Insights** (most-requested skills and how the jobs break down by role, seniority, location and type) and **How it works and privacy** (how jobs are found and which of the 332 sources were read in the 6 hours up to the last scan).
+The footer links to **Insights** (most-requested skills and how the jobs break down by role, seniority, location and type) and **How it works and privacy** (how jobs are found and which of the 333 sources were read in the 6 hours up to the last scan).
 
 Jobs are kept for 90 days after posting. Past 30 days they move to Over 30 days ago, and they stop counting in Insights and the hot match count. The scan writes the last 30 days to `docs/jobs.js` and the rest to `docs/older.js`, which the page loads after it first appears.
 
@@ -24,7 +24,7 @@ To run it on your own machine instead: `python3 fetch_jobs.py`, then open `docs/
 
 The button appears once `scan_url` is set in `config.json` (see [Setup](#setup-pages-and-scan-now)). It shows a running clock while the scan runs, and **New jobs ready. Reload** when the new data is out. Expect about 4 to 14 minutes (an estimate, not yet measured end to end). A scan can start at most once an hour, and the scheduled runs count, so the button may say "Next scan in 42 min" instead. If the scan can't be started it says "Scan didn't start" and how old the jobs on screen are.
 
-Remotive, Workable, Workday, SmartRecruiters and Jobicy are read at most once per 6-hour slot, because of their limits or the number of calls they take. After a Scan now, their rows can be up to 6 hours old.
+Remotive, Workable, Workday, SmartRecruiters, Jobicy and Adzuna are read at most once per 6-hour slot, because of their limits or the number of calls they take. After a Scan now, their rows can be up to 6 hours old.
 
 ## Your resume
 
@@ -83,9 +83,9 @@ Role comes from the job title, then the board's department; a generic title like
 
 Job type comes from the posting's own field where the site has one (Lever, Ashby, SmartRecruiters, Workable, Workday, Amazon and most feeds). Otherwise it's read from the title or a plain statement in the description; if neither says, it shows "Not specified".
 
-Pay comes from the posting's own field on Lever and Ashby, otherwise from the description. Work mode comes from the posting's own field (Lever, Ashby, SmartRecruiters), then the title and location, then a plain statement in the description. Workday only says "30+ days" for older postings, so those show as "30+ days ago".
+Pay comes from the posting's own field on Lever and Ashby, and on Adzuna when the ad states it (Adzuna's own estimates are left out), otherwise from the description. Work mode comes from the posting's own field (Lever, Ashby, SmartRecruiters), then the title and location, then a plain statement in the description. Workday only says "30+ days" for older postings, so those show as "30+ days ago".
 
-## Sources (332)
+## Sources (333)
 
 | Kind | Count | How it's read |
 |---|---|---|
@@ -96,6 +96,7 @@ Pay comes from the posting's own field on Lever and Ashby, otherwise from the de
 | SmartRecruiters (ServiceNow, Canva, Freshworks…) | 7 | public postings API |
 | Workable | 2 | public widget API |
 | Job boards: Remotive, RemoteOK, Jobicy, Himalayas, We Work Remotely, Working Nomads, The Muse, HN "Who is hiring", Amazon Jobs | 9 | public APIs / RSS |
+| Adzuna: contract and part-time jobs in every field, gathered from across the web, in the US and Canada | 1 | public search API with a free key (see [Setup: Adzuna](#setup-adzuna)), the newest 250 contract and 250 part-time jobs per country |
 
 LinkedIn, Indeed and Glassdoor aren't polled: they have no public jobs API and their terms forbid scraping.
 
@@ -121,7 +122,7 @@ LinkedIn, Indeed and Glassdoor aren't polled: they have no public jobs API and t
 
 | File | What to change |
 |---|---|
-| `config.json` | Allowed locations, max job age (90 days), title include/exclude patterns, boards and feeds, and `scan_url` |
+| `config.json` | Allowed locations, max job age (90 days), title include/exclude patterns, boards and feeds, Adzuna's call budget (`adzuna`), and `scan_url` |
 | `keywords.json` | The skill dictionary used for both job postings and resumes. Add a skill and its aliases; `=Alias` is case-sensitive, `re:` is a raw regex (keep it valid in both Python and JavaScript). |
 
 To add a company, find its careers page and put the slug under the matching platform in `config.json` → `boards` (the help text there shows each URL pattern). The app's How it works page lists any source that couldn't be read on the last run.
@@ -139,6 +140,24 @@ The repo owner does these once. Each needs the owner's own accounts.
 The Worker URL is not a secret: it's in `config.json` and in the page. The token is. It lives only as a Worker secret, never in this repo or the browser. When it expires, Scan now shows "Scan didn't start" until you add a new one.
 
 The Worker accepts POST only from `https://sudddy.github.io`. It reads the latest Fetch jobs run: if one is running it says so, if the last one started under an hour ago it returns the time left, and otherwise it starts the workflow on `main`. On a fork, change `SITE` and `WORKFLOW` at the top of `worker/scan.js`.
+
+## Setup: Adzuna
+
+Adzuna is a job aggregator, and it adds contract and part-time jobs in every field. It needs a free key, which only the repo owner can get:
+
+1. Sign up at https://developer.adzuna.com/signup and choose **Publishing Adzuna ad listings** as what you'll use the API for.
+2. Copy the **app_id** and **app_key** from your Adzuna account.
+3. In the repo's Settings → Secrets and variables → Actions, add them as two repository secrets, `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`.
+
+The first scan in the next 6-hour slot reads Adzuna. Until both secrets exist the scan skips it: no calls, and nothing about it on How it works.
+
+Each slot asks Adzuna for contract jobs and for part-time jobs, in the US and in Canada, newest first. `adzuna.pages` in `config.json` sets the calls per slot, four per page: the default 5 pages make 20 calls a slot and at most 80 a day, of `adzuna.per_page` (50) jobs each, and a search that runs out early stops early. The free key's limits aren't published; they show in your Adzuna account, so check them there before raising `pages`.
+
+A job's type comes from Adzuna's own fields (a part-time contract shows as Contract), else from the search that found it. Adzuna gives only a snippet of each posting, so its jobs show fewer skills than jobs from a company's own board, and when a job is on both, the company board's copy is the one kept.
+
+The key stays secret: it lives only in the repo secrets and the fetch step's environment, and goes only into the request to Adzuna. It never reaches the data files, the logs or an error message; a refused call shows on How it works as its code, such as "HTTP 429". Adzuna's job links may carry the app_id as a tracking parameter; the app_id isn't secret, only the app_key is.
+
+Adzuna's terms cover this use as publishing Adzuna ad listings, which asks for an "Adzuna" link label on each job shown. Rows from Adzuna have the source `Adzuna`, the app shows that label on them, and each links to Adzuna's own page for the job.
 
 ## Tests
 
