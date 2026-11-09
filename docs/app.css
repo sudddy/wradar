@@ -231,7 +231,6 @@ textarea { width: 100%; min-height: 180px; background: var(--pane); border: 1px 
 .jlist .adz { position: absolute; right: 16px; bottom: 13px; }
 .adzrow .jfacts { display: flex; align-items: center; min-height: 23px; padding-right: 128px; }  /* room for the badge, even with no facts */
 .best .adz { margin: 0 0 10px 52px; }  /* under the job's title */
-.more { display: flex; margin: 12px auto 0; }
 .pager { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-top: 12px; }
 .pager .btn { padding: 5px 12px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .prange { margin: 0; text-align: center; font-size: 13.5px; color: var(--muted); font-variant-numeric: tabular-nums; }

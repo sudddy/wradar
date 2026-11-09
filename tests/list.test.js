@@ -70,6 +70,11 @@ test("the list shows 25 rows a page, with Previous, the page numbers and Next un
   assert.equal(page.$("#count").textContent, "60 jobs");
 });
 
+test("the pager replaced Show more jobs, and its old rule is gone: on How it works' details.more it set the summary beside the list", () => {
+  assert.doesNotMatch(read("docs/index.html"), /id="more"/);
+  assert.doesNotMatch(read("docs/app.css"), /(^|[\s,}])\.more\s*[{,]/);
+});
+
 test("a page change shows its rows, a wide screen selects the first, and focus goes there", () => {
   const page = openPage({ data: pageData({ jobs: many(60) }) });
   turn(page, 2);
