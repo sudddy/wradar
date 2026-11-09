@@ -272,6 +272,18 @@ class Adzuna(unittest.TestCase):
                                                                  "Clerk C": "Contract", "Clerk D": "Full-time",
                                                                  "Clerk E": "Part-time"})
 
+    def test_pay_takes_numbers_only_and_an_odd_one_does_not_sink_the_source(self):
+        bounds = {"Hourly top": (15, 400), "Past hourly": (401, 401), "Max only": (None, 25), "Zero min": (0, 52000),
+                  "Negative min": (-5, 30), "Swapped": (60000, 50000), "Strings": ("41600", "52000")}
+        self.serve({("us", "contract"): [[ad(i, title=t, salary_min=lo, salary_max=hi)
+                                          for i, (t, (lo, hi)) in enumerate(bounds.items())]]})
+        src, rows = f.run_source(("feed", "adzuna"), R, CUTOFF, {})
+        pay = lambda lo, hi, per: dict(min=lo, max=hi, cur="USD", per=per)  # noqa: E731
+        self.assertEqual((src["ok"], {j["title"]: j["salary"] for j in rows}),
+                         (True, {"Hourly top": pay(15, 400, "hour"), "Past hourly": None, "Max only": pay(25, 25, "hour"),
+                                 "Zero min": pay(52000, 52000, "year"), "Negative min": pay(30, 30, "hour"),
+                                 "Swapped": pay(50000, 60000, "year"), "Strings": None}))
+
     def test_a_refused_call_is_the_sources_error_and_never_shows_the_key(self):
         for code, reply in ((429, b""), (400, b'{"exception": "BAD_REQUEST", "display": "Bad parameter"}')):
             def refuse(url, body=None, code=code, reply=reply):

@@ -284,14 +284,14 @@ def adzuna_place(loc, country):
 def adzuna_job(j, country, cur, ask):
     """The ad's own contract_type and contract_time set its type, read as job_type() reads any field: a part-time contract
     is Contract, a permanent full-time ad Full-time whatever the search asked. The filter that found it fills only its own
-    field, when the ad leaves that blank."""
+    field, when the ad leaves that blank. Pay is read from numbers only, so one odd ad can't sink the source."""
     said = {ADZUNA_ASKS[ask]: ask} | {k: j[k] for k in ADZUNA_ASKS.values() if j.get(k)}
-    lo, hi = j.get("salary_min") or j.get("salary_max"), j.get("salary_max") or j.get("salary_min")
-    stated = str(j.get("salary_is_predicted")) == "0"  # Adzuna estimates pay for many ads; only stated pay is kept
+    pay = sorted(v for v in (j.get("salary_min"), j.get("salary_max")) if isinstance(v, (int, float)) and v > 0)
+    stated = pay and str(j.get("salary_is_predicted")) == "0"  # Adzuna estimates pay for many ads; only stated pay is kept
     return dict(title=j["title"], company=(j.get("company") or {}).get("display_name") or "", url=j["redirect_url"],
                 posted=j.get("created"), description=j.get("description", ""), dept=(j.get("category") or {}).get("label"),
                 location=adzuna_place(j.get("location") or {}, country), type=" ".join(said.values()),
-                salary=structured_pay(lo, hi, cur, "hour" if hi and hi <= 400 else "year") if stated else None)
+                salary=structured_pay(pay[0], pay[-1], cur, "hour" if pay[-1] <= 400 else "year") if stated else None)
 
 
 def adzuna(pages, per_page, max_days):
