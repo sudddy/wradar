@@ -24,6 +24,9 @@ jobs:
           ref: main                # a run that waited in the queue starts from today's main, not the commit that queued it
       - run: python3 -m unittest -q
       - run: python3 fetch_jobs.py
+        env:                       # this step only; with either secret unset, Adzuna is skipped
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
       - run: node --test tests/*.test.js   # after the fetch: these read the fresh docs/jobs.js. Node 22 refuses a bare directory
       - name: Commit refreshed data
         run: |
