@@ -36,13 +36,14 @@ PDF and Word files are read with PDF.js and Mammoth, loaded from cdnjs the first
 
 ## What stays in your browser
 
-Nothing is uploaded and there are no accounts. Three things are kept in that browser's `localStorage`, and nothing else:
+Nothing is uploaded and there are no accounts. Four things are kept in that browser's `localStorage`, and nothing else:
 
 | Key | What it holds |
 |---|---|
 | `wradar-resume` | Derived facts only: a label such as "PDF resume", your skills, each skill's evidence (where it shows, years of use, months since last used), and your total years, level, role and degree. Never the resume text, your name, your employers or the file name. Skills come from a fixed list, so a company named like one, such as Stripe, can show up as a skill. |
 | `wradar-tracker` | Each Saved, Applied or Hidden job: the mark, when you made it, and the job's title, company, link and location. A hidden job also keeps the mark it had before, so showing it again brings that back. |
-| `wradar-filters` | Your filter and sort choices. |
+| `wradar-clicked` | Each job you opened from the list, marked Clicked: the job's key (its company and title) and the date you first opened it, nothing else. The 2,000 most recent are kept. |
+| `wradar-filters` | Your filter and sort choices. The page of the list you're on isn't kept: a reload starts at page 1. |
 
 Tracking lives in one browser. It doesn't follow you to another device, and clearing site data removes it.
 
@@ -70,12 +71,14 @@ Only the skills in `keywords.json` (about 480 across every field) are visible to
 
 ## What it shows
 
-- Filters, in one panel: search (title, company, skill, role or field); **Posted** (the last 2, 3, 7 or 30 days, or over 30 days ago); location (US, Canada, Remote), role (grouped by field, such as All Sales, All Finance or Backend), level (Intern to C-level) and work mode; plus **More filters**: minimum pay, job type, source, technologies (pick any or all, e.g. Java, Node.js) and minimum match. Choices are remembered in the browser; **Clear filters** clears them.
+- Filters, in one panel: search (title, company, skill, role or field); **Posted** (the last 2, 3, 7 or 30 days, or over 30 days ago); **Job type** (Any, Full-time, Contract, Part-time, Internship, each with how many jobs it would list under the other filters; Any includes jobs whose type isn't stated); location (US, Canada, Remote), role (grouped by field, such as All Sales, All Finance or Backend), level (Intern to C-level) and work mode; plus **More filters**: minimum pay, source, technologies (pick any or all, e.g. Java, Node.js) and minimum match. Choices are remembered in the browser; **Clear filters** clears them.
 - Pay and work mode filters leave out jobs that don't state them, and the count says how many. Pay is compared in each job's own currency, top of the range, with hourly pay counted as 2,080 hours a year.
-- Rows: match, title, your mark, company, pay, work mode, place and age. Sort by best match or newest.
+- Rows: match, title, your mark, company, pay, work mode, place and age. Sort by best match or newest. The list shows 25 jobs a page, with Previous, Next and the page numbers under it and "Showing 26–50 of 1,329"; Matching jobs, Over 30 days ago and Applications each keep their page until you reload, and changing a filter, the search or the sort goes back to page 1.
+- Marks: a row shows one, the strongest. Applied (with its date), Saved and Hidden are yours to set; **Clicked** is set when you open a job by clicking, tapping or pressing Enter on its row (not by arrow keys, Previous / Next or a link), and the top of the job shows it with the date.
+- Jobs from Adzuna carry a **Jobs by Adzuna** link to adzuna.com (US) or adzuna.ca (Canada) on their row, at the top of the job and under Your best matches, as Adzuna's terms ask. Their link goes through Adzuna, so the button says **Apply on Adzuna**.
 - The selected job: its pay, work mode, place and age, then **Apply on company site**, **Applied**, **Save** and **Hide**, then the score and its parts, why you fit, gaps and next steps, the skills it asks for (must-haves, nice to have, also mentioned) each marked as on or not on your resume, and the rest of its facts. After Apply on company site it asks "Did you apply?"
 - Your marks: Applied rows show the date and stay in the list until you tick **Hide applied**. Hide removes the row, with an Undo. To bring a job back, select it under Applications → Hidden and press Hide again.
-- Moving around: arrow keys move through the list, and Previous and Next above the selected job step through it. On a phone the job opens full screen and Back closes it. `#jobs/<key>` links a job.
+- Moving around: arrow keys move through the list, and Previous and Next above the selected job step through it, turning the page past either end. After a page change, focus goes to the page's first row. On a phone the job opens full screen and Back closes it. `#jobs/<key>` links a job and opens the page it's on.
 - Applicants: shown when a source provides it, otherwise "Not available" (public job APIs don't expose this)
 - The skills most often asked for and, with a resume, the skills to add across the listed jobs, and which sources were read in the 6 hours up to the last scan
 
