@@ -456,7 +456,10 @@ function init() {
   $("#me").addEventListener("dragover", e => { if (!me) { e.preventDefault(); $("#drop")?.classList.add("over"); } });
   $("#me").addEventListener("dragleave", () => $("#drop")?.classList.remove("over"));
   $("#me").addEventListener("drop", e => { if (!me) { e.preventDefault(); $("#drop")?.classList.remove("over"); onFile(e.dataTransfer.files[0]); } });
-  $("#mybest").addEventListener("click", e => { const b = e.target.closest("button[data-i]"); if (b) location.hash = hashFor("jobs", D.all[+b.dataset.i].key); });
+  $("#mybest").addEventListener("click", e => {  // opened as from its row, so it's Clicked too
+    const j = D.all[e.target.closest("button[data-i]")?.dataset.i];
+    if (j) { markClicked(j); location.hash = hashFor("jobs", j.key); }
+  });
 
   window.addEventListener("hashchange", route);
   matchMedia("(min-width: 821px)").addEventListener?.("change", route);  // a phone turned sideways may stop covering the list with the detail

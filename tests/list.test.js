@@ -220,6 +220,14 @@ test("opening a row marks it Clicked: a tag in the row, and the date at the top 
   }
 });
 
+test("a job opened from Your best matches is marked Clicked too", () => {
+  const page = withResume(openPage({ data: pageData({ jobs: many(5) }), at: "#resume" }));
+  page.$("#mybest").fire("click", { target: { closest: () => ({ dataset: { i: "3" } }) } });
+  assert.deepEqual(Object.keys(clicks(page)), [keyOf(3)]);
+  assert.equal(page.hash(), board.hashFor("jobs", keyOf(3)));
+  assert.match(page.$("#detail").innerHTML, /<span class="tag clicked">Clicked [A-Z][a-z]{2} \d{1,2}<\/span>/);
+});
+
 test("arrow keys, the detail's Previous and Next, a page change and a link don't mark a job", () => {
   const page = openPage({ data: pageData({ jobs: many(30) }), at: board.hashFor("jobs", keyOf(5)) });
   arrow(page, "ArrowDown");
