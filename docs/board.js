@@ -158,19 +158,21 @@ const matchNum = j => (j.score == null ? "" : `<span class="match ${tier(j.score
 
 const rowPlace = j => j.where.filter(w => w !== j.mode).join(" / ");
 const rowWhen = j => (j.delisted ? (olderIn ? "No longer listed" : "") : isNew(j) ? "New" : postedText(j));  // it may still be in older.js
-const rowLabel = j => [`${j.title} at ${j.company}`, j.score != null && `match ${j.score}, ${tier(j.score)}`, payLabel(j.salary), j.mode, rowPlace(j), rowWhen(j), markText(j)].filter(Boolean).join(", ");
+// Adzuna's terms: each of its jobs shows the word Adzuna, linked to its site for the job's country, at 116 × 23 px or more.
+const adzuna = (j, attrs = "") => (j.source !== "Adzuna" ? "" : `<a class="adz" href="https://www.adzuna.${j.where.includes("Canada") && !j.where.includes("US") ? "ca" : "com"}" target="_blank" rel="noopener"${attrs}>Jobs by Adzuna<span class="sr"> (opens in a new tab)</span></a>`);
+const rowLabel = j =>[`${j.title} at ${j.company}`, j.score != null && `match ${j.score}, ${tier(j.score)}`, payLabel(j.salary), j.mode, rowPlace(j), rowWhen(j), markText(j)].filter(Boolean).join(", ");
 
 function item(j, n, stop) {
   const s = statusOf(j), on = j.key === tab().sel, pay = payLabel(j.salary);
   const facts = [j.mode, rowPlace(j)].filter(Boolean).map(x => `<span class="jfact">${esc(x)}</span>`).join("");
-  return `<li><button type="button" class="jitem${s === "applied" ? " applied" : ""}" data-n="${n}" aria-current="${on}" tabindex="${j.key === stop ? 0 : -1}" aria-label="${esc(rowLabel(j))}">
+  return `<li${j.source === "Adzuna" ? ' class="adzrow"' : ""}><button type="button" class="jitem${s === "applied" ? " applied" : ""}" data-n="${n}" aria-current="${on}" tabindex="${j.key === stop ? 0 : -1}" aria-label="${esc(rowLabel(j))}">
     ${matchNum(j)}
     <span class="jtext">
       <span class="jline"><span class="jtitle">${esc(j.title)}</span>${markTag(j)}</span>
       <span class="jline"><span class="jco">${esc(j.company)}</span><span class="jwhen${isNew(j) ? " fresh" : ""}">${esc(rowWhen(j))}</span></span>
       <span class="jline jfacts">${pay ? `<span class="jpay">${esc(pay)}</span>` : ""}${facts}</span>
     </span>
-  </button></li>`;
+  </button>${adzuna(j, ' tabindex="-1"')}</li>`;  // beside the button, not in it; the list keeps one Tab stop, and the detail's badge takes Tab
 }
 
 function emptyText() {
@@ -326,7 +328,7 @@ function detail(j) {
   // One card per question: what and where, how well you fit, what to say, what it asks for, the rest.
   return `${dnav(j)}
     <section class="card dmain">
-      <header class="dhead"><p class="dco"><span>${esc(j.company)}</span>${markTag(j, true)}</p><h2 id="dtitle" tabindex="-1">${esc(j.title)}</h2>${j.delisted ? "" : pills(j)}</header>
+      <header class="dhead"><p class="dco"><span>${esc(j.company)}</span>${markTag(j, true)}${adzuna(j)}</p><h2 id="dtitle" tabindex="-1">${esc(j.title)}</h2>${j.delisted ? "" : pills(j)}</header>
       ${actions(j)}
       ${rows.some(r => r.key === j.key) ? "" : note("This job isn't in the current list.")}
       ${j.delisted ? note(olderIn ? "This job wasn't in the last scan, so it may be closed." : LOOKING) : isOlder(j) ? note(`Posted ${postedText(j)}. Check the job is still open before you spend time on it.`) : ""}

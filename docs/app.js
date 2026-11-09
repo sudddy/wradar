@@ -287,7 +287,7 @@ function renderSide() {
   $("#mygaps").innerHTML = bars(gaps(inField(D.jobs, f)).slice(0, 10));
   const best = topN(D.jobs.filter(j => !["applied", "hidden"].includes(statusOf(j))), 6, byMatch);
   $("#mybest").innerHTML = best.map(j => `<li><button type="button" data-i="${j.i}">${matchNum(j)}
-      <span class="jtext"><span class="jtitle">${esc(j.title)}</span><span class="jco">${esc(j.company)}, ${esc(j.where.join(" / "))}</span></span></button></li>`).join("")
+      <span class="jtext"><span class="jtitle">${esc(j.title)}</span><span class="jco">${esc(j.company)}, ${esc(j.where.join(" / "))}</span></span></button>${adzuna(j)}</li>`).join("")
     || '<li class="na">No jobs to show yet.</li>';
 }
 

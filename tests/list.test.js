@@ -1,9 +1,9 @@
 "use strict";
-// The job list on the stub DOM (tests/page-stub.js): the Job type chips and the pages.
+// The job list on the stub DOM (tests/page-stub.js): the Job type chips, the pages, the Clicked mark and the Adzuna badge.
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const board = require("../docs/board.js");
-const { daysAgo, row, pageData, openPage, withResume } = require("./page-stub.js");
+const { daysAgo, read, row, pageData, openPage, withResume } = require("./page-stub.js");
 
 // n rows, newest first as the list shows them with no resume: rows[k] is Backend Engineer k.
 const many = n => Array.from({ length: n }, (_, i) => row(i, { posted: daysAgo(1 + i / 10), first_seen: daysAgo(1 + i / 10) }));
@@ -241,4 +241,25 @@ test("wradar-clicked holds job keys and dates only, the latest 2,000, and keeps 
   assert.ok(!Object.hasOwn(stored, "old0|job") && !Object.hasOwn(stored, "old1|job") && Object.hasOwn(stored, "old2|job"));
   assert.ok(Object.entries(stored).every(([k, v]) => k.includes("|") && !k.startsWith("bad") && typeof v === "string" && !isNaN(Date.parse(v))));
   assert.equal(a.run("clickedOn(rows[2])"), null);
+});
+
+// ---- Adzuna ----
+test("an Adzuna job carries the word Adzuna, linked to its site for the job's country, beside the row's button and atop its detail", () => {
+  const jobs = [row(0, { source: "Adzuna", where: ["US"] }), row(1, { source: "Adzuna", where: ["Canada"] }), row(2, { source: "Adzuna", where: ["Remote", "US", "Canada"] }), row(3)];
+  const page = withResume(openPage({ data: pageData({ jobs }) }));
+  page.run("state.sort = 'new'; renderBoard()");
+  const badge = site => `<a class="adz" href="https://www.adzuna.${site}" target="_blank" rel="noopener"`;
+  const label = '>Jobs by Adzuna<span class="sr"> (opens in a new tab)</span></a>';
+  assert.ok(rowHtml(page, 0).startsWith(' class="adzrow">'));
+  assert.ok(rowHtml(page, 0).endsWith(`</button>${badge("com")} tabindex="-1"${label}</li>`));  // a link of its own, out of the list's one Tab stop
+  assert.ok(rowHtml(page, 1).includes(`</button>${badge("ca")} tabindex="-1"${label}`));
+  assert.ok(rowHtml(page, 2).includes(badge("com")));
+  assert.doesNotMatch(rowHtml(page, 3), /adz/i);
+  page.run("select(rows[1].key)");
+  assert.match(page.$("#detail").innerHTML, new RegExp(`<p class="dco"><span>Co1</span>${badge("ca")}${label.replace(/[()]/g, "\\$&")}</p>`));
+  page.run("select(rows[3].key)");
+  assert.doesNotMatch(page.$("#detail").innerHTML, /adzuna/i);
+  page.go("#resume");
+  assert.match(page.$("#mybest").innerHTML, new RegExp(`</button>${badge("ca")}>`));
+  assert.match(read("docs/app.css"), /\.adz \{[^}]*min-width: 116px; min-height: 23px;/);
 });
