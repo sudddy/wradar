@@ -17,6 +17,7 @@ const wide = () => matchMedia("(min-width: 821px)").matches;
 const roomy = () => matchMedia("(min-width: 1024px)").matches;  // every quick filter fits on one line
 const LADDER = D?.rules?.ladder || ["Junior", "Mid", "Senior", "Staff+"];  // data from before the ladder has these four
 const DAYS = [2, 3, 7, FRESH_DAYS];  // the Posted choices; Over 30 days ago is #older
+const TYPES = ["Full-time", "Contract", "Part-time", "Internship"];  // the Job type chips after Any, which also holds Not specified
 const FIELDS = ["Engineering", "Data & research", "Product", "Design", "Sales", "Customer", "Marketing", "People", "Finance", "Legal & compliance",
   "Operations", "IT & security", "Healthcare", "Education", "Other"];
 const fieldOf = role => (D.rules.fields ? D.rules.fields[role] || "Other" : "Engineering");  // data from before fields is all engineering
@@ -80,7 +81,7 @@ function useResume(name, text) {
   status = ""; pasting = false; justRead = true; state.sort = "score";
   store.set("wradar-filters", state);  // Your resume doesn't save the filters, and a reload must keep Role and the flag
   if (!location.hash.slice(1)) history.replaceState(null, "", "#resume");  // read on the welcome: stay to check it, not jump to the jobs
-  nav.jobs.y = nav.older.y = 0;  // the lists now sort by match, so an old scroll spot would land on other jobs
+  nav.jobs.y = nav.older.y = nav.jobs.pg = nav.older.pg = 0;  // the lists now sort by match, so an old scroll spot or page would land on other jobs
   store.set("wradar-resume", me);
   refresh();
   announce(`Your resume is in. ${plural(me.skills.length, "skill")} read.`);
@@ -136,12 +137,13 @@ const pool = () => unhidden(page === "older" ? D.older : D.jobs.filter(j => stat
 const newest = (a, b) => postedAt(b) - postedAt(a);
 const byMatch = (a, b) => b.score - a.score || b.fit.tie - a.fit.tie || newest(a, b);
 
-// One pass serves the list and the skill chips, which count the jobs before the chosen skills narrow them.
+// One pass serves the list and the chips: the skill chips count the jobs before the chosen skills narrow them, the Job type chips before the type does.
 function listed({ jobs = pool() } = {}) {
-  const loose = jobs.filter(j => matches(j, state, { tech: false }));
+  const anyType = { ...state, type: "" }, typed = jobs.filter(j => matches(j, anyType, { tech: false }));
+  const loose = state.type ? typed.filter(j => j.type === state.type) : typed;
   const got = knownOnly(loose.filter(j => hasTech(j, state)), state.pay, state.work);
   got.kept.sort(me && state.sort === "score" ? byMatch : newest);
-  return { ...got, loose };
+  return { ...got, loose, typed };
 }
 
 // ---- Step bar: the main navigation, 1 Your resume, 2 Matching jobs, 3 Applications ----
@@ -162,7 +164,7 @@ function renderSteps() {
 const press = (group, v) => $(group).querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === v));
 
 function activeFilters() {
-  const more = ["type", "src", "pay"].filter(k => state[k]).length + (state.min && me ? 1 : 0) + (state.techs.length ? 1 : 0);
+  const more = ["src", "pay"].filter(k => state[k]).length + (state.min && me ? 1 : 0) + (state.techs.length ? 1 : 0);
   return more + (roomy() ? 0 : ["where", "role", "level", "work"].filter(k => state[k]).length);
 }
 
@@ -174,7 +176,15 @@ function renderTechs(loose) {
   $("#techs").innerHTML = shown.map(k => `<button type="button" class="tchip" data-k="${esc(k)}" aria-pressed="${state.techs.includes(k)}">${esc(k)}<span>${(counts[k] || 0).toLocaleString()}</span></button>`).join("");
 }
 
-function renderFilters(loose) {
+// Each Job type chip counts the jobs it would list, with the other filters as they are.
+function renderTypes(typed) {
+  const kept = knownOnly(typed.filter(j => hasTech(j, state)), state.pay, state.work).kept, n = { "": kept.length };
+  kept.forEach(j => { n[j.type] = (n[j.type] || 0) + 1; });
+  ["", ...TYPES].forEach(v => { $("#n-t" + (v || "any").toLowerCase()).textContent = (n[v] || 0).toLocaleString(); });
+  press("#types", state.type);
+}
+
+function renderFilters({ loose, typed }) {
   const n = activeFilters();
   $("#nfilters").textContent = n ? `(${n})` : "";
   $("#minlabel").classList.toggle("off", !me);
@@ -182,6 +192,7 @@ function renderFilters(loose) {
   press("#ages", page === "older" ? "older" : String(state.days));
   $("#sort").value = me ? state.sort : "new";  // with no resume the list is newest first, whatever was picked
   $("#sort").disabled = !me;
+  renderTypes(typed);
   renderTechs(loose);
 }
 
@@ -276,7 +287,7 @@ function renderSide() {
   $("#mygaps").innerHTML = bars(gaps(inField(D.jobs, f)).slice(0, 10));
   const best = topN(D.jobs.filter(j => !["applied", "hidden"].includes(statusOf(j))), 6, byMatch);
   $("#mybest").innerHTML = best.map(j => `<li><button type="button" data-i="${j.i}">${matchNum(j)}
-      <span class="jtext"><span class="jtitle">${esc(j.title)}</span><span class="jco">${esc(j.company)}, ${esc(j.where.join(" / "))}</span></span></button></li>`).join("")
+      <span class="jtext"><span class="jtitle">${esc(j.title)}</span><span class="jco">${esc(j.company)}, ${esc(j.where.join(" / "))}</span></span></button>${adzuna(j)}</li>`).join("")
     || '<li class="na">No jobs to show yet.</li>';
 }
 
@@ -358,6 +369,7 @@ function init() {
   addRows(first);
   loadResume();
   loadTracker();
+  loadClicks();
   $("#updated").textContent = `Scanned ${agoShort(D.generated_at)}`;
   $("#updated").title = new Date(D.generated_at).toLocaleString();
   initScan();
@@ -367,15 +379,17 @@ function init() {
   $("#techlist").innerHTML = ALL_SKILLS.map(k => `<option value="${esc(k)}"></option>`).join("");
 
   const sync = () => {
-    ["q", "role", "level", "type", "src", "sort", "work"].forEach(k => { $("#" + k).value = state[k]; state[k] = $("#" + k).value; });
+    ["q", "role", "level", "src", "sort", "work"].forEach(k => { $("#" + k).value = state[k]; state[k] = $("#" + k).value; });
     $("#pay").value = state.pay; state.pay = +$("#pay").value;
     $("#min").value = state.min; $("#minv").textContent = state.min;
     if (!DAYS.includes(state.days)) state.days = FRESH_DAYS;  // a choice saved by an older version
+    if (!TYPES.includes(state.type)) state.type = "";  // Not specified, which the old Job type list offered, is under Any
     $("#hideapplied").checked = state.hideApplied;
     press("#where", state.where); press("#mode", state.mode);
   };
-  const changed = () => {  // a filter change ends any deep link, so the list picks the selection again
-    tab().limit = 40;
+  const changed = () => {  // a filter change ends any deep link, so the list picks the selection again, from page 1
+    if (page === "mine") nav.mine.pg = 0;  // Show: All, Saved, Applied, Hidden
+    else nav.jobs.pg = nav.older.pg = 0;  // Matching jobs and Over 30 days ago share the filters
     if (parseHash(location.hash).key) history.replaceState(null, "", "#" + page);
     renderBoard();
   };
@@ -383,18 +397,19 @@ function init() {
   // The box as it reads when the pause ends, since Clear filters may have emptied it; the page may no longer be a list.
   const search = later(() => { state.q = $("#q").value; if (BOARDS.includes(page)) changed(); });
   $("#q").addEventListener("input", search);
-  ["role", "level", "type", "src", "sort", "work"].forEach(k => $("#" + k).addEventListener("change", e => set(k, e.target.value)));
+  ["role", "level", "src", "sort", "work"].forEach(k => $("#" + k).addEventListener("change", e => set(k, e.target.value)));
   $("#pay").addEventListener("change", e => set("pay", +e.target.value));
   $("#min").addEventListener("input", e => { $("#minv").textContent = e.target.value; set("min", +e.target.value); });
   $("#ages").addEventListener("click", e => {  // Over 30 days ago is its own page, with its warning
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.v === "older") return void (location.hash = "#older");
-    state.days = +b.dataset.v; nav.jobs.limit = 40;
+    state.days = +b.dataset.v; nav.jobs.pg = 0;
     page === "jobs" ? changed() : (location.hash = "#jobs");
   });
   $("#hideapplied").addEventListener("change", e => set("hideApplied", e.target.checked));
   $("#where").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { press("#where", b.dataset.v); set("where", b.dataset.v); } });
   $("#mode").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { press("#mode", b.dataset.v); set("mode", b.dataset.v); } });
+  $("#types").addEventListener("click", e => { const b = e.target.closest("button"); if (b) set("type", b.dataset.v); });  // renderTypes presses it
   $("#mineseg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { mineSeg = b.dataset.v; changed(); } });
   $("#techs").addEventListener("click", e => {
     const b = e.target.closest(".tchip"); if (!b) return;
@@ -406,8 +421,8 @@ function init() {
   $("#reset").addEventListener("click", () => { Object.assign(state, DEFAULTS, { techs: [], sort: state.sort, hideApplied: state.hideApplied, autoRole: state.autoRole }); sync(); changed(); });
   $("#filtersbtn").addEventListener("click", () => showMore($("#fmore").hidden));
   document.addEventListener("click", e => { if (!$("#fmore").hidden && !e.composedPath().includes($("#filters"))) showMore(false); });
-  $("#more").addEventListener("click", () => { tab().limit += 40; renderList(); });
-  $("#list").addEventListener("click", e => { const b = e.target.closest(".jitem"); if (b) openRow(rows[+b.dataset.n]); });
+  $("#pager").addEventListener("click", e => { const b = e.target.closest("button[data-pg]"); if (b && +b.dataset.pg !== tab().pg) turnPage(+b.dataset.pg); });
+  $("#list").addEventListener("click", e => { const b = e.target.closest(".jitem"); if (b) clickRow(rows[+b.dataset.n]); });  // Enter on a row is a click too
   $("#list").addEventListener("keydown", e => {
     const d = { ArrowDown: 1, ArrowUp: -1 }[e.key];
     if (d && e.target.closest(".jitem")) { e.preventDefault(); step(d); }
@@ -426,7 +441,7 @@ function init() {
     // Each redraw replaces the pane, so focus goes back where the person was working.
     if (id === "pastebtn") { pasting = !pasting; renderMe(); $(pasting ? "#pastetext" : "#pastebtn")?.focus(); }
     if (id === "usepaste") { const t = $("#pastetext").value; reads++; t.trim() ? useResume(PASTED, t) : (status = "Paste your resume text first.", renderMe(), $("#pastetext")?.focus()); }  // reads++: a file still loading no longer counts
-    if (id === "forget") { reads++; me = null; status = ""; nav.jobs.y = nav.older.y = 0; store.set("wradar-resume", null); refresh(); $("#pick")?.focus(); }  // reads++ drops a read still going
+    if (id === "forget") { reads++; me = null; status = ""; nav.jobs.y = nav.older.y = nav.jobs.pg = nav.older.pg = 0; store.set("wradar-resume", null); refresh(); $("#pick")?.focus(); }  // reads++ drops a read still going
     const k = e.target.closest(".xchip button")?.dataset.k;
     if (k) { me.skills = me.skills.filter(s => s !== k); delete me.evidence[k]; saveMe(); $("#addskill")?.focus(); }
   });
@@ -441,12 +456,16 @@ function init() {
   $("#me").addEventListener("dragover", e => { if (!me) { e.preventDefault(); $("#drop")?.classList.add("over"); } });
   $("#me").addEventListener("dragleave", () => $("#drop")?.classList.remove("over"));
   $("#me").addEventListener("drop", e => { if (!me) { e.preventDefault(); $("#drop")?.classList.remove("over"); onFile(e.dataTransfer.files[0]); } });
-  $("#mybest").addEventListener("click", e => { const b = e.target.closest("button[data-i]"); if (b) location.hash = hashFor("jobs", D.all[+b.dataset.i].key); });
+  $("#mybest").addEventListener("click", e => {  // opened as from its row, so it's Clicked too
+    const j = D.all[e.target.closest("button[data-i]")?.dataset.i];
+    if (j) { markClicked(j); location.hash = hashFor("jobs", j.key); }
+  });
 
   window.addEventListener("hashchange", route);
   matchMedia("(min-width: 821px)").addEventListener?.("change", route);  // a phone turned sideways may stop covering the list with the detail
   window.addEventListener("storage", e => {  // a mark made in another tab; Your resume isn't redrawn, so text being typed there stays
     if (e.key === "wradar-tracker") { loadTracker(); BOARDS.includes(page) ? route() : renderCounts(); }
+    if (e.key === "wradar-clicked") { loadClicks(); if (BOARDS.includes(page)) redrawBoard(); }  // focus stays where it was
   });
   sync();
   refresh();

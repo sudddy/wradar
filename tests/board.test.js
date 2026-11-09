@@ -132,6 +132,31 @@ test("a deep link survives the characters a key can hold", () => {
   assert.deepEqual(board.parseHash("#jobs/%E0%A4%A"), { view: "jobs", key: null });
 });
 
+test("the pager shows every page up to seven, else the first, the last and the current page's neighbours", () => {
+  assert.equal(board.PER_PAGE, 25);
+  assert.deepEqual(board.pageList(1, 1), [1]);
+  assert.deepEqual(board.pageList(3, 7), [1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(board.pageList(1, 54), [1, 2, 3, 4, 5, null, 54]);
+  assert.deepEqual(board.pageList(5, 54), [1, null, 4, 5, 6, null, 54]);
+  assert.deepEqual(board.pageList(10, 54), [1, null, 9, 10, 11, null, 54]);
+  assert.deepEqual(board.pageList(54, 54), [1, null, 50, 51, 52, 53, 54]);
+  for (let total = 1; total < 40; total++) {
+    for (let cur = 1; cur <= total; cur++) {
+      const list = board.pageList(cur, total), nums = list.filter(Boolean);
+      assert.ok(list.length <= 7 && nums.includes(cur) && list[0] === 1 && list.at(-1) === total, `${cur} of ${total}`);
+      list.forEach((n, i) => n === null && assert.ok(list[i + 1] - list[i - 1] > 2, `a gap hides two pages or more: ${list}`));
+      nums.forEach((n, i) => i && assert.ok(n > nums[i - 1]));
+    }
+  }
+});
+
+test("an Adzuna job is known by its link, an adzuna.com or adzuna.ca redirect, so a tracker snapshot with no source still is", () => {
+  ["https://www.adzuna.com/land/ad/4412523946?se=x&v=1", "https://www.adzuna.ca/land/ad/1", "http://adzuna.com", "https://WWW.ADZUNA.CA/details/2"]
+    .forEach(url => assert.ok(board.fromAdzuna({ url }), url));
+  ["https://acme.test/jobs?ref=adzuna.com", "https://adzuna.com.evil.test/x", "https://notadzuna.com/x", "https://www.adzuna.co.uk/land/ad/1", "", undefined]
+    .forEach(url => assert.ok(!board.fromAdzuna({ url }), url));
+});
+
 test("a tracker snapshot survives a delisted job", () => {
   const live = { ...job(), key: "acme|software engineer" };
   const t = tracker.mark({}, live, "applied", "2026-10-28T10:00:00Z");
@@ -179,6 +204,23 @@ test("showing a hidden job again brings back its Applied or Saved mark", () => {
   assert.equal(hidden.a.s, "hidden");
   assert.deepEqual(tracker.toggle(hidden, a, "hidden", "2026-10-03T00:00:00Z"), applied);
   assert.deepEqual(tracker.toggle(tracker.mark({}, a, "hidden", "2026-10-02T00:00:00Z"), a, "hidden", "2026-10-03T00:00:00Z"), {});
+});
+
+test("Clicked keeps the date a job was first opened, and only the newest past the cap", () => {
+  assert.equal(tracker.CLICKS_KEPT, 2000);
+  const once = tracker.addClick({}, "acme|engineer", "2026-11-01T00:00:00.000Z");
+  assert.deepEqual(once, { "acme|engineer": "2026-11-01T00:00:00.000Z" });
+  assert.equal(tracker.addClick(once, "acme|engineer", "2026-11-05T00:00:00.000Z"), once);
+  let c = {};
+  for (const d of [3, 1, 5, 2, 4]) c = tracker.addClick(c, `k${d}`, `2026-11-0${d}T00:00:00.000Z`, 3);
+  assert.deepEqual(Object.keys(c).sort(), ["k3", "k4", "k5"]);
+  assert.deepEqual(Object.keys(tracker.addClick({}, "__proto__", "2026-11-01T00:00:00.000Z")), ["__proto__"]);  // a key is data, never a prototype
+});
+
+test("past the cap, the job just opened stays Clicked, even with equal dates or a clock set back", () => {
+  const d = "2026-11-01T00:00:00.000Z", later = "2026-12-01T00:00:00.000Z";
+  assert.deepEqual(Object.keys(tracker.addClick({ a: d, b: d, c: d }, "new", d, 3)).sort(), ["a", "b", "new"]);
+  assert.deepEqual(Object.keys(tracker.addClick({ a: later, b: later }, "new", d, 2)).sort(), ["a", "new"]);
 });
 
 test("Undo puts back exactly what was there", () => {

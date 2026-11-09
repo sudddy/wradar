@@ -64,9 +64,6 @@
         <label class="field">Minimum pay
           <select id="pay"><option value="0">Any pay</option><option value="60000">60k or more</option><option value="80000">80k or more</option><option value="100000">100k or more</option><option value="120000">120k or more</option><option value="150000">150k or more</option><option value="180000">180k or more</option><option value="200000">200k or more</option><option value="250000">250k or more</option><option value="300000">300k or more</option></select>
         </label>
-        <label class="field">Job type
-          <select id="type"><option value="">Any job type</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Not specified</option></select>
-        </label>
         <label class="field">Source
           <select id="src"><option value="">All sources</option></select>
         </label>
@@ -90,6 +87,12 @@
           <button type="button" data-v="2"><span class="lastw">Last </span>2 days <span id="n-d2"></span></button><button type="button" data-v="3"><span class="lastw">Last </span>3 days <span id="n-d3"></span></button><button type="button" data-v="7"><span class="lastw">Last </span>7 days <span id="n-d7"></span></button><button type="button" data-v="30"><span class="lastw">Last </span>30 days <span id="n-jobs"></span></button><button type="button" data-v="older">Over 30 days ago <span id="n-older"></span></button>
         </div>
       </div>
+      <div class="fline">
+        <span class="flabel" id="typelabel">Job type</span>
+        <div class="seg types" id="types" role="group" aria-labelledby="typelabel">
+          <button type="button" data-v="">Any <span id="n-tany"></span></button><button type="button" data-v="Full-time">Full-time <span id="n-tfull-time"></span></button><button type="button" data-v="Contract">Contract <span id="n-tcontract"></span></button><button type="button" data-v="Part-time">Part-time <span id="n-tpart-time"></span></button><button type="button" data-v="Internship">Internship <span id="n-tinternship"></span></button>
+        </div>
+      </div>
       <div class="fline fquick">
         <span class="flabel" id="wherelabel">Where</span>
         <div class="seg" id="where" role="group" aria-labelledby="wherelabel">
@@ -111,7 +114,7 @@
             <label class="sort" id="sortwrap">Sort by <select id="sort"><option value="score">Best match</option><option value="new">Newest</option></select></label>
           </div></div>
         <ul class="jlist" id="list"></ul>
-        <button class="btn line more" id="more" type="button" hidden>Show more jobs</button>
+        <nav class="pager" id="pager" aria-label="Job list pages" hidden></nav>
       </section>
       <article class="detail" id="detail" tabindex="-1" aria-label="Job details"></article>
     </div>
@@ -132,7 +135,7 @@
       <div class="stack">
         <section class="pane"><h2>Privacy</h2>
           <p>Your resume never leaves your browser. Its text, your name and your employers are never kept. So jobs stay scored next time, this device keeps only a label such as "PDF resume", your skills, how each one shows on your resume (latest job, older work or listed), its years of use and months since you last used it, and your total years, level, role and degree. Skills come from a fixed list, so a company named like one, such as Stripe, can show up as a skill.</p>
-          <p>Your Saved, Applied and Hidden jobs stay on this device too: the mark, when you made it, and the job's title, company, link and location. A hidden job also keeps the mark it had before, so showing it again brings that back. So do your filter choices.</p>
+          <p>Your Saved, Applied and Hidden jobs stay on this device too: the mark, when you made it, and the job's title, company, link and location. A hidden job also keeps the mark it had before, so showing it again brings that back. So does each job you open from the list or Your best matches, marked Clicked: just its company and title, and the date, for the latest 2,000. So do your filter choices.</p>
           <p>None of this is sent anywhere. Remove your resume any time from Your resume. Clearing site data removes everything.</p></section>
         <section class="pane"><h2>Run your own copy</h2>
           <p>The code is on GitHub. Fork <a href="https://github.com/sudddy/wradar" target="_blank" rel="noopener">sudddy/wradar</a>, edit <code>config.json</code> to change companies, locations and rules, and GitHub Actions keeps your copy fresh.</p></section>
