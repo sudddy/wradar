@@ -253,6 +253,13 @@ test("where storage throws, as with site data blocked, every row opened stays Cl
   assert.match(rowHtml(page, 1), /<span class="tag clicked">Clicked<\/span>/);
 });
 
+test("a row opened in another tab shows Clicked here", () => {
+  const storage = new Map(), a = openPage({ storage, data: pageData({ jobs: many(5) }) }), b = openPage({ storage, data: pageData({ jobs: many(5) }) });
+  open(a, 2);
+  b.fireWindow("storage", { key: "wradar-clicked" });
+  assert.match(rowHtml(b, 2), /<span class="tag clicked">Clicked<\/span>/);
+});
+
 // ---- Adzuna ----
 test("an Adzuna job carries the word Adzuna, linked to its site for the job's country, beside the row's button and atop its detail, and applies on Adzuna", () => {
   const jobs = [row(0, { source: "Adzuna", where: ["US"] }), row(1, { source: "Adzuna", where: ["Canada"] }), row(2, { source: "Adzuna", where: ["Remote", "US", "Canada"] }), row(3)];

@@ -461,6 +461,7 @@ function init() {
   matchMedia("(min-width: 821px)").addEventListener?.("change", route);  // a phone turned sideways may stop covering the list with the detail
   window.addEventListener("storage", e => {  // a mark made in another tab; Your resume isn't redrawn, so text being typed there stays
     if (e.key === "wradar-tracker") { loadTracker(); BOARDS.includes(page) ? route() : renderCounts(); }
+    if (e.key === "wradar-clicked") { loadClicks(); if (BOARDS.includes(page)) redrawBoard(); }  // focus stays where it was
   });
   sync();
   refresh();
