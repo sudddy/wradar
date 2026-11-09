@@ -2,6 +2,7 @@
 
 The rules are in test_rules.py, the source parsers in test_sources.py; both share the helpers here."""
 import json
+import os
 import tempfile
 import unittest
 from datetime import timedelta
@@ -267,6 +268,14 @@ class Main(unittest.TestCase):
         with mock.patch.dict(f.FEEDS, fake=("Fake", lambda: [job(title="Full Stack Engineer", description=down)], "https://x.test")):
             src, rows = f.run_source(("feed", "fake"), R, CUTOFF, {s.same_job(old): old})
         self.assertEqual(rows, [old])
+
+    def test_adzuna_waits_for_both_keys(self):  # before the secrets exist: no calls, and nothing on How it works
+        with mock.patch.dict(os.environ, ADZUNA_APP_ID="test-app-id", ADZUNA_APP_KEY=""):
+            data, _, tasks = self.scan({})
+        self.assertEqual((("feed", "adzuna") in tasks, "adzuna" in {x["name"] for x in data["sources"]}), (False, False))
+        with mock.patch.dict(os.environ, ADZUNA_APP_ID="test-app-id", ADZUNA_APP_KEY="test-app-key"):  # placeholders
+            data, _, tasks = self.scan({})
+        self.assertEqual((("feed", "adzuna") in tasks, "adzuna" in {x["name"] for x in data["sources"]}), (True, True))
 
     def test_a_lone_surrogate_does_not_stop_the_scan(self):
         data, _, _ = self.scan({}, company="Acme \ud83d")
