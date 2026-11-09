@@ -379,6 +379,8 @@ details.more summary { cursor: pointer; font-size: 14px; color: var(--muted); ma
   .resbar { flex-wrap: wrap; padding-block: 2px 8px; min-height: 35px; }
   .jitem { padding: 12px 14px; gap: 12px; align-items: start; }
   .jlist .adz { right: 14px; bottom: 12px; }
+  .adzrow .jitem { padding-bottom: 41px; }  /* the badge gets its own line, so the facts keep the width */
+  .adzrow .jfacts { padding-right: 0; }
   .match { width: 42px; height: 42px; font-size: 16.5px; }
   .pager .btn { min-height: 44px; }
   .pages .btn { min-width: 40px; }
