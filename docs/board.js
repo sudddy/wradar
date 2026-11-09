@@ -158,7 +158,7 @@ const matchNum = j => (j.score == null ? "" : `<span class="match ${tier(j.score
 
 const rowPlace = j => j.where.filter(w => w !== j.mode).join(" / ");
 const rowWhen = j => (j.delisted ? (olderIn ? "No longer listed" : "") : isNew(j) ? "New" : postedText(j));  // it may still be in older.js
-const rowLabel = j => [`${j.title} at ${j.company}`, j.score != null && `match ${j.score}, ${tier(j.score)}`, payLabel(j.salary), j.mode, rowPlace(j), rowWhen(j), statusText(j)].filter(Boolean).join(", ");
+const rowLabel = j => [`${j.title} at ${j.company}`, j.score != null && `match ${j.score}, ${tier(j.score)}`, payLabel(j.salary), j.mode, rowPlace(j), rowWhen(j), markText(j)].filter(Boolean).join(", ");
 
 function item(j, n, stop) {
   const s = statusOf(j), on = j.key === tab().sel, pay = payLabel(j.salary);
@@ -166,7 +166,7 @@ function item(j, n, stop) {
   return `<li><button type="button" class="jitem${s === "applied" ? " applied" : ""}" data-n="${n}" aria-current="${on}" tabindex="${j.key === stop ? 0 : -1}" aria-label="${esc(rowLabel(j))}">
     ${matchNum(j)}
     <span class="jtext">
-      <span class="jline"><span class="jtitle">${esc(j.title)}</span>${s ? `<span class="tag ${s}">${esc(statusText(j))}</span>` : ""}</span>
+      <span class="jline"><span class="jtitle">${esc(j.title)}</span>${markTag(j)}</span>
       <span class="jline"><span class="jco">${esc(j.company)}</span><span class="jwhen${isNew(j) ? " fresh" : ""}">${esc(rowWhen(j))}</span></span>
       <span class="jline jfacts">${pay ? `<span class="jpay">${esc(pay)}</span>` : ""}${facts}</span>
     </span>
@@ -326,7 +326,7 @@ function detail(j) {
   // One card per question: what and where, how well you fit, what to say, what it asks for, the rest.
   return `${dnav(j)}
     <section class="card dmain">
-      <header class="dhead"><p class="dco">${esc(j.company)}</p><h2 id="dtitle" tabindex="-1">${esc(j.title)}</h2>${j.delisted ? "" : pills(j)}</header>
+      <header class="dhead"><p class="dco"><span>${esc(j.company)}</span>${markTag(j, true)}</p><h2 id="dtitle" tabindex="-1">${esc(j.title)}</h2>${j.delisted ? "" : pills(j)}</header>
       ${actions(j)}
       ${rows.some(r => r.key === j.key) ? "" : note("This job isn't in the current list.")}
       ${j.delisted ? note(olderIn ? "This job wasn't in the last scan, so it may be closed." : LOOKING) : isOlder(j) ? note(`Posted ${postedText(j)}. Check the job is still open before you spend time on it.`) : ""}
@@ -367,6 +367,13 @@ function openRow(j) {
   history.replaceState(null, "", "#" + page);
   pushed = true;
   location.hash = hashFor(page, j.key);
+}
+
+// A row opened by click, tap or Enter is marked Clicked; arrow keys, Previous and Next, and links don't mark.
+function clickRow(j) {
+  markClicked(j);
+  renderList();  // its tag shows at once, and select() puts focus back on the row
+  openRow(j);
 }
 
 function closeDetail() {

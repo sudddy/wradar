@@ -369,6 +369,7 @@ function init() {
   addRows(first);
   loadResume();
   loadTracker();
+  loadClicks();
   $("#updated").textContent = `Scanned ${agoShort(D.generated_at)}`;
   $("#updated").title = new Date(D.generated_at).toLocaleString();
   initScan();
@@ -420,7 +421,7 @@ function init() {
   $("#filtersbtn").addEventListener("click", () => showMore($("#fmore").hidden));
   document.addEventListener("click", e => { if (!$("#fmore").hidden && !e.composedPath().includes($("#filters"))) showMore(false); });
   $("#pager").addEventListener("click", e => { const b = e.target.closest("button[data-pg]"); if (b && +b.dataset.pg !== tab().pg) turnPage(+b.dataset.pg); });
-  $("#list").addEventListener("click", e => { const b = e.target.closest(".jitem"); if (b) openRow(rows[+b.dataset.n]); });
+  $("#list").addEventListener("click", e => { const b = e.target.closest(".jitem"); if (b) clickRow(rows[+b.dataset.n]); });  // Enter on a row is a click too
   $("#list").addEventListener("keydown", e => {
     const d = { ArrowDown: 1, ArrowUp: -1 }[e.key];
     if (d && e.target.closest(".jitem")) { e.preventDefault(); step(d); }

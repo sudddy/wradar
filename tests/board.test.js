@@ -199,6 +199,17 @@ test("showing a hidden job again brings back its Applied or Saved mark", () => {
   assert.deepEqual(tracker.toggle(tracker.mark({}, a, "hidden", "2026-10-02T00:00:00Z"), a, "hidden", "2026-10-03T00:00:00Z"), {});
 });
 
+test("Clicked keeps the date a job was first opened, and only the newest past the cap", () => {
+  assert.equal(tracker.CLICKS_KEPT, 2000);
+  const once = tracker.addClick({}, "acme|engineer", "2026-11-01T00:00:00.000Z");
+  assert.deepEqual(once, { "acme|engineer": "2026-11-01T00:00:00.000Z" });
+  assert.equal(tracker.addClick(once, "acme|engineer", "2026-11-05T00:00:00.000Z"), once);
+  let c = {};
+  for (const d of [3, 1, 5, 2, 4]) c = tracker.addClick(c, `k${d}`, `2026-11-0${d}T00:00:00.000Z`, 3);
+  assert.deepEqual(Object.keys(c).sort(), ["k3", "k4", "k5"]);
+  assert.deepEqual(Object.keys(tracker.addClick({}, "__proto__", "2026-11-01T00:00:00.000Z")), ["__proto__"]);  // a key is data, never a prototype
+});
+
 test("Undo puts back exactly what was there", () => {
   const a = { key: "a", title: "A" };
   const applied = tracker.mark({}, a, "applied", "2026-10-01T00:00:00Z");

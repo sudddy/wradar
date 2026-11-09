@@ -184,3 +184,61 @@ test("Applications pages a long list too", () => {
   turn(page, 1);
   assert.ok(shows(page, 29) && !shows(page, 0));
 });
+
+// ---- Clicked ----
+const open = (page, n) => page.$("#list").fire("click", { target: { closest: () => ({ dataset: { n: String(n) } }) } });  // a click, a tap or Enter on the row
+const clicks = page => JSON.parse(page.storage.get("wradar-clicked") || "{}");
+const rowHtml = (page, i) => page.$("#list").innerHTML.split("<li").find(li => li.includes(`>Backend Engineer ${i}<`));
+
+test("opening a row marks it Clicked: a tag in the row, and the date at the top of its detail", () => {
+  for (const wide of [true, false]) {
+    const page = openPage({ wide, data: pageData({ jobs: many(30) }) });
+    open(page, 3);
+    const stored = clicks(page), day = page.run("shortDate(new Date().toISOString())");
+    assert.deepEqual(Object.keys(stored), [keyOf(3)]);
+    assert.ok(Date.now() - Date.parse(stored[keyOf(3)]) < 6e4);
+    assert.match(rowHtml(page, 3), /Backend Engineer 3<\/span><span class="tag clicked">Clicked<\/span>/);
+    assert.match(rowHtml(page, 3), /aria-label="[^"]*, Clicked"/);
+    assert.doesNotMatch(rowHtml(page, 4), /Clicked/);
+    assert.match(page.$("#detail").innerHTML, new RegExp(`<p class="dco"><span>Co3</span><span class="tag clicked">Clicked ${day}</span></p>`));
+  }
+});
+
+test("arrow keys, the detail's Previous and Next, a page change and a link don't mark a job", () => {
+  const page = openPage({ data: pageData({ jobs: many(30) }), at: board.hashFor("jobs", keyOf(5)) });
+  arrow(page, "ArrowDown");
+  page.run("act('next')");
+  page.run("act('prev')");
+  turn(page, 1);
+  page.go(board.hashFor("jobs", keyOf(2)));
+  assert.equal(page.storage.has("wradar-clicked"), false);
+  assert.doesNotMatch(page.$("#list").innerHTML + page.$("#detail").innerHTML, /Clicked/);
+});
+
+test("Saved, Applied or Hidden shows instead of Clicked, in the row and the detail alike", () => {
+  const page = openPage({ data: pageData({ jobs: many(5) }) });
+  open(page, 0);
+  page.run("setMark(rows[0], 'saved')");
+  assert.match(rowHtml(page, 0), /<span class="tag saved">Saved<\/span>/);
+  assert.match(page.$("#detail").innerHTML, /<span>Co0<\/span><span class="tag saved">Saved<\/span>/);
+  assert.doesNotMatch(rowHtml(page, 0) + page.$("#detail").innerHTML, /Clicked/);
+  page.run("setMark(rows[0], 'applied')");
+  assert.match(rowHtml(page, 0), /<span class="tag applied">Applied [A-Z][a-z]{2} \d{1,2}<\/span>/);
+  page.run("setMark(rows[0], 'applied')");  // unmarked: Clicked shows again
+  assert.match(rowHtml(page, 0), /<span class="tag clicked">Clicked<\/span>/);
+});
+
+test("wradar-clicked holds job keys and dates only, the latest 2,000, and keeps what another tab marked", () => {
+  const minute = i => new Date(Date.UTC(2026, 0, 1) + i * 6e4).toISOString();
+  const before = { ...Object.fromEntries(Array.from({ length: 2000 }, (_, i) => [`old${i}|job`, minute(i)])), "bad|number": 5, "bad|text": "soon" };
+  const storage = new Map([["wradar-clicked", JSON.stringify(before)]]);
+  const a = openPage({ storage, data: pageData({ jobs: many(5) }) }), b = openPage({ storage, data: pageData({ jobs: many(5) }) });
+  open(a, 0);
+  open(b, 1);
+  const stored = clicks(a);
+  assert.equal(Object.keys(stored).length, 2000);
+  assert.ok(Object.hasOwn(stored, keyOf(0)) && Object.hasOwn(stored, keyOf(1)));
+  assert.ok(!Object.hasOwn(stored, "old0|job") && !Object.hasOwn(stored, "old1|job") && Object.hasOwn(stored, "old2|job"));
+  assert.ok(Object.entries(stored).every(([k, v]) => k.includes("|") && !k.startsWith("bad") && typeof v === "string" && !isNaN(Date.parse(v))));
+  assert.equal(a.run("clickedOn(rows[2])"), null);
+});
