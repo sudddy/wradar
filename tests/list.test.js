@@ -61,7 +61,8 @@ test("the list shows 25 rows a page, with Previous, the page numbers and Next un
   assert.equal(page.$("#pager").hidden, false);
   assert.equal(page.$("#list").innerHTML.match(/class="jitem/g).length, 25);
   assert.ok(shows(page, 24) && !shows(page, 25));
-  assert.match(pager, /<p class="showing">Showing 1–25 of 60<\/p>/);
+  assert.match(pager, /<p class="prange">Showing 1–25 of 60<\/p>/);
+  assert.doesNotMatch(read("docs/app.css"), /(^|[\s,}])\.showing\s*[{,]/);  // "showing" is the board's open-detail state, so no rule may style it alone
   assert.match(pager, /data-pg="-1" aria-label="Previous page" disabled>Previous<\/button>/);
   assert.match(pager, /data-pg="1" aria-label="Next page">Next<\/button>/);
   assert.match(pager, /aria-label="Page 1" aria-current="page">1<\/button>/);

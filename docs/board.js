@@ -199,7 +199,7 @@ function renderPager() {
   const end = (pg, cls, label, text) => `<button type="button" class="btn line ${cls}" data-pg="${pg}" aria-label="${label}"${pg < 0 || pg >= pages ? " disabled" : ""}>${text}</button>`;
   const num = n => (n ? `<li><button type="button" class="btn line" data-pg="${n - 1}" aria-label="Page ${n}"${n - 1 === t.pg ? ' aria-current="page"' : ""}>${n.toLocaleString()}</button></li>`
     : '<li class="gap" aria-hidden="true">…</li>');
-  $("#pager").innerHTML = `${end(t.pg - 1, "pprev", "Previous page", "Previous")}<p class="showing">${showingText()}</p>${end(t.pg + 1, "pnext", "Next page", "Next")}
+  $("#pager").innerHTML = `${end(t.pg - 1, "pprev", "Previous page", "Previous")}<p class="prange">${showingText()}</p>${end(t.pg + 1, "pnext", "Next page", "Next")}
     <ol class="pages">${pageList(t.pg + 1, pages).map(num).join("")}</ol>`;
 }
 
