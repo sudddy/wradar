@@ -18,12 +18,13 @@ const mineRows = (t, seg, live) => Object.entries(t)
   .sort((a, b) => b[1].at.localeCompare(a[1].at))
   .map(([key, e]) => live.get(key) || { ...e, key, delisted: true });
 
-// Clicked: a job opened from its row, kept as {key: when first opened}, nothing else. Past the cap the oldest go, so the store can't grow without limit.
+// Clicked: a job opened from its row, kept as {key: when first opened}, nothing else. Past the cap the oldest go, so the store can't grow without limit;
+// the job just opened always stays, even if its date ties or a clock set back makes it look older.
 const CLICKS_KEPT = 2000;
 function addClick(c, key, at, cap = CLICKS_KEPT) {
   if (Object.hasOwn(c, key)) return c;
-  const all = Object.entries({ ...c, [key]: at });
-  return Object.fromEntries(all.length > cap ? all.sort((a, b) => b[1].localeCompare(a[1])).slice(0, cap) : all);
+  const old = Object.entries(c);
+  return Object.fromEntries([...(old.length < cap ? old : old.sort((a, b) => b[1].localeCompare(a[1])).slice(0, cap - 1)), [key, at]]);
 }
 
 if (typeof module !== "undefined") module.exports = { mark, toggle, putBack, mineRows, addClick, CLICKS_KEPT };

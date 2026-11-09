@@ -210,6 +210,12 @@ test("Clicked keeps the date a job was first opened, and only the newest past th
   assert.deepEqual(Object.keys(tracker.addClick({}, "__proto__", "2026-11-01T00:00:00.000Z")), ["__proto__"]);  // a key is data, never a prototype
 });
 
+test("past the cap, the job just opened stays Clicked, even with equal dates or a clock set back", () => {
+  const d = "2026-11-01T00:00:00.000Z", later = "2026-12-01T00:00:00.000Z";
+  assert.deepEqual(Object.keys(tracker.addClick({ a: d, b: d, c: d }, "new", d, 3)).sort(), ["a", "b", "new"]);
+  assert.deepEqual(Object.keys(tracker.addClick({ a: later, b: later }, "new", d, 2)).sort(), ["a", "new"]);
+});
+
 test("Undo puts back exactly what was there", () => {
   const a = { key: "a", title: "A" };
   const applied = tracker.mark({}, a, "applied", "2026-10-01T00:00:00Z");
