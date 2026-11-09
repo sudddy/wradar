@@ -284,6 +284,12 @@ class Adzuna(unittest.TestCase):
                                  "Zero min": pay(52000, 52000, "year"), "Negative min": pay(30, 30, "hour"),
                                  "Swapped": pay(50000, 60000, "year"), "Strings": None}))
 
+    def test_an_ad_with_no_employer_is_left_out(self):  # every such Cashier would be the one job "|cashier"
+        nameless = [ad(i, title="Cashier", company=c) for i, c in enumerate((None, {}, {"display_name": ""}, {"display_name": " "}))]
+        self.serve({("us", "part_time"): [nameless + [ad(9, title="Cashier")]]})
+        src, rows = f.run_source(("feed", "adzuna"), R, CUTOFF, {})
+        self.assertEqual((src["ok"], src["seen"], [j["company"] for j in rows]), (True, 1, ["Acme Health"]))
+
     def test_a_refused_call_is_the_sources_error_and_never_shows_the_key(self):
         for code, reply in ((429, b""), (400, b'{"exception": "BAD_REQUEST", "display": "Bad parameter"}')):
             def refuse(url, body=None, code=code, reply=reply):

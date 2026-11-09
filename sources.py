@@ -288,7 +288,7 @@ def adzuna_job(j, country, cur, ask):
     said = {ADZUNA_ASKS[ask]: ask} | {k: j[k] for k in ADZUNA_ASKS.values() if j.get(k)}
     pay = sorted(v for v in (j.get("salary_min"), j.get("salary_max")) if isinstance(v, (int, float)) and v > 0)
     stated = pay and str(j.get("salary_is_predicted")) == "0"  # Adzuna estimates pay for many ads; only stated pay is kept
-    return dict(title=j["title"], company=(j.get("company") or {}).get("display_name") or "", url=j["redirect_url"],
+    return dict(title=j["title"], company=j["company"]["display_name"], url=j["redirect_url"],
                 posted=j.get("created"), description=j.get("description", ""), dept=(j.get("category") or {}).get("label"),
                 location=adzuna_place(j.get("location") or {}, country), type=" ".join(said.values()),
                 salary=structured_pay(pay[0], pay[-1], cur, "hour" if pay[-1] <= 400 else "year") if stated else None)
@@ -303,7 +303,8 @@ def adzuna(pages, per_page, max_days):
             for page in range(1, pages + 1):
                 results = get_json(adzuna_url(keys, country, page, ask, per_page, max_days))["results"]
                 for j in results:
-                    jobs.setdefault(j["id"], adzuna_job(j, name, cur, ask))  # an ad both asks find: the first stays
+                    if ((j.get("company") or {}).get("display_name") or "").strip():  # else one title's ads merge as one job
+                        jobs.setdefault(j["id"], adzuna_job(j, name, cur, ask))  # an ad both asks find: the first stays
                 if len(results) < per_page:
                     break
     return list(jobs.values())
