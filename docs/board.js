@@ -237,7 +237,7 @@ function renderBoard(follow = false) {
   if (at >= 0 && (link || follow)) t.pg = pageOf(at);
   t.pg = Math.max(0, Math.min(t.pg, pageOf(rows.length - 1)));  // fewer rows, fewer pages
   if (!link && pageOf(at) !== t.pg) t.sel = wide() && rows.length ? rows[t.pg * PER_PAGE].key : null;  // a job off this page, or not listed, gives way
-  if (!mine) renderFilters(got.loose);
+  if (!mine) renderFilters(got);
   $("#count").textContent = countText(mine ? rows.length : pool().length, got.noPay, got.noMode);
   renderList();
   $("#detail").innerHTML = detail(rowOf(t.sel));

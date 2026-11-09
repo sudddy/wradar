@@ -17,6 +17,7 @@ const wide = () => matchMedia("(min-width: 821px)").matches;
 const roomy = () => matchMedia("(min-width: 1024px)").matches;  // every quick filter fits on one line
 const LADDER = D?.rules?.ladder || ["Junior", "Mid", "Senior", "Staff+"];  // data from before the ladder has these four
 const DAYS = [2, 3, 7, FRESH_DAYS];  // the Posted choices; Over 30 days ago is #older
+const TYPES = ["Full-time", "Contract", "Part-time", "Internship"];  // the Job type chips after Any, which also holds Not specified
 const FIELDS = ["Engineering", "Data & research", "Product", "Design", "Sales", "Customer", "Marketing", "People", "Finance", "Legal & compliance",
   "Operations", "IT & security", "Healthcare", "Education", "Other"];
 const fieldOf = role => (D.rules.fields ? D.rules.fields[role] || "Other" : "Engineering");  // data from before fields is all engineering
@@ -136,12 +137,13 @@ const pool = () => unhidden(page === "older" ? D.older : D.jobs.filter(j => stat
 const newest = (a, b) => postedAt(b) - postedAt(a);
 const byMatch = (a, b) => b.score - a.score || b.fit.tie - a.fit.tie || newest(a, b);
 
-// One pass serves the list and the skill chips, which count the jobs before the chosen skills narrow them.
+// One pass serves the list and the chips: the skill chips count the jobs before the chosen skills narrow them, the Job type chips before the type does.
 function listed({ jobs = pool() } = {}) {
-  const loose = jobs.filter(j => matches(j, state, { tech: false }));
+  const anyType = { ...state, type: "" }, typed = jobs.filter(j => matches(j, anyType, { tech: false }));
+  const loose = state.type ? typed.filter(j => j.type === state.type) : typed;
   const got = knownOnly(loose.filter(j => hasTech(j, state)), state.pay, state.work);
   got.kept.sort(me && state.sort === "score" ? byMatch : newest);
-  return { ...got, loose };
+  return { ...got, loose, typed };
 }
 
 // ---- Step bar: the main navigation, 1 Your resume, 2 Matching jobs, 3 Applications ----
@@ -162,7 +164,7 @@ function renderSteps() {
 const press = (group, v) => $(group).querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === v));
 
 function activeFilters() {
-  const more = ["type", "src", "pay"].filter(k => state[k]).length + (state.min && me ? 1 : 0) + (state.techs.length ? 1 : 0);
+  const more = ["src", "pay"].filter(k => state[k]).length + (state.min && me ? 1 : 0) + (state.techs.length ? 1 : 0);
   return more + (roomy() ? 0 : ["where", "role", "level", "work"].filter(k => state[k]).length);
 }
 
@@ -174,7 +176,15 @@ function renderTechs(loose) {
   $("#techs").innerHTML = shown.map(k => `<button type="button" class="tchip" data-k="${esc(k)}" aria-pressed="${state.techs.includes(k)}">${esc(k)}<span>${(counts[k] || 0).toLocaleString()}</span></button>`).join("");
 }
 
-function renderFilters(loose) {
+// Each Job type chip counts the jobs it would list, with the other filters as they are.
+function renderTypes(typed) {
+  const kept = knownOnly(typed.filter(j => hasTech(j, state)), state.pay, state.work).kept, n = { "": kept.length };
+  kept.forEach(j => { n[j.type] = (n[j.type] || 0) + 1; });
+  ["", ...TYPES].forEach(v => { $("#n-t" + (v || "any").toLowerCase()).textContent = (n[v] || 0).toLocaleString(); });
+  press("#types", state.type);
+}
+
+function renderFilters({ loose, typed }) {
   const n = activeFilters();
   $("#nfilters").textContent = n ? `(${n})` : "";
   $("#minlabel").classList.toggle("off", !me);
@@ -182,6 +192,7 @@ function renderFilters(loose) {
   press("#ages", page === "older" ? "older" : String(state.days));
   $("#sort").value = me ? state.sort : "new";  // with no resume the list is newest first, whatever was picked
   $("#sort").disabled = !me;
+  renderTypes(typed);
   renderTechs(loose);
 }
 
@@ -367,10 +378,11 @@ function init() {
   $("#techlist").innerHTML = ALL_SKILLS.map(k => `<option value="${esc(k)}"></option>`).join("");
 
   const sync = () => {
-    ["q", "role", "level", "type", "src", "sort", "work"].forEach(k => { $("#" + k).value = state[k]; state[k] = $("#" + k).value; });
+    ["q", "role", "level", "src", "sort", "work"].forEach(k => { $("#" + k).value = state[k]; state[k] = $("#" + k).value; });
     $("#pay").value = state.pay; state.pay = +$("#pay").value;
     $("#min").value = state.min; $("#minv").textContent = state.min;
     if (!DAYS.includes(state.days)) state.days = FRESH_DAYS;  // a choice saved by an older version
+    if (!TYPES.includes(state.type)) state.type = "";  // Not specified, which the old Job type list offered, is under Any
     $("#hideapplied").checked = state.hideApplied;
     press("#where", state.where); press("#mode", state.mode);
   };
@@ -383,7 +395,7 @@ function init() {
   // The box as it reads when the pause ends, since Clear filters may have emptied it; the page may no longer be a list.
   const search = later(() => { state.q = $("#q").value; if (BOARDS.includes(page)) changed(); });
   $("#q").addEventListener("input", search);
-  ["role", "level", "type", "src", "sort", "work"].forEach(k => $("#" + k).addEventListener("change", e => set(k, e.target.value)));
+  ["role", "level", "src", "sort", "work"].forEach(k => $("#" + k).addEventListener("change", e => set(k, e.target.value)));
   $("#pay").addEventListener("change", e => set("pay", +e.target.value));
   $("#min").addEventListener("input", e => { $("#minv").textContent = e.target.value; set("min", +e.target.value); });
   $("#ages").addEventListener("click", e => {  // Over 30 days ago is its own page, with its warning
@@ -395,6 +407,7 @@ function init() {
   $("#hideapplied").addEventListener("change", e => set("hideApplied", e.target.checked));
   $("#where").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { press("#where", b.dataset.v); set("where", b.dataset.v); } });
   $("#mode").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { press("#mode", b.dataset.v); set("mode", b.dataset.v); } });
+  $("#types").addEventListener("click", e => { const b = e.target.closest("button"); if (b) set("type", b.dataset.v); });  // renderTypes presses it
   $("#mineseg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { mineSeg = b.dataset.v; changed(); } });
   $("#techs").addEventListener("click", e => {
     const b = e.target.closest(".tchip"); if (!b) return;

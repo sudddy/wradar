@@ -1,5 +1,5 @@
 "use strict";
-// The job list on the stub DOM (tests/page-stub.js): its pages.
+// The job list on the stub DOM (tests/page-stub.js): the Job type chips and the pages.
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const board = require("../docs/board.js");
@@ -11,6 +11,50 @@ const keyOf = i => `co${i}|backend engineer ${i}`;
 const turn = (page, pg) => page.$("#pager").fire("click", { target: { closest: () => ({ dataset: { pg: String(pg) } }) } });
 const arrow = (page, key) => page.$("#list").fire("keydown", { key, target: { closest: () => true } });
 const shows = (page, i) => page.$("#list").innerHTML.includes(`>Backend Engineer ${i}<`);
+
+// ---- Job type chips ----
+const kinds = () => pageData({ jobs: [row(0), row(1, { type: "Contract" }), row(2, { type: "Contract", where: ["Canada"] }), row(3, { type: "Part-time" }),
+  row(4, { type: "Internship" }), row(5, { type: "Not specified" }), row(6, { salary: null })] });
+const pickType = (page, v) => page.$("#types").fire("click", { target: { closest: () => ({ dataset: { v } }) } });
+const typeCounts = page => ["any", "full-time", "contract", "part-time", "internship"].map(t => page.$("#n-t" + t).textContent);
+
+test("each Job type chip counts what it would list, and one click lists it", () => {
+  const page = openPage({ data: kinds() });
+  assert.deepEqual(typeCounts(page), ["7", "2", "2", "1", "1"]);
+  pickType(page, "Contract");
+  assert.equal(page.$("#count").textContent, "2 of 7 jobs");
+  assert.ok(shows(page, 1) && shows(page, 2) && !shows(page, 0));
+  assert.deepEqual(typeCounts(page), ["7", "2", "2", "1", "1"]);  // the chips don't count the type chosen
+  assert.equal(JSON.parse(page.storage.get("wradar-filters")).type, "Contract");
+  pickType(page, "Part-time");
+  assert.equal(page.$("#count").textContent, "1 of 7 jobs");
+  pickType(page, "");
+  assert.equal(page.$("#count").textContent, "7 jobs");  // Any keeps Not specified
+});
+
+test("the Job type counts follow the other filters", () => {
+  const page = openPage({ data: kinds() });
+  page.$("#where").fire("click", { target: { closest: () => ({ dataset: { v: "Canada" } }) } });
+  assert.deepEqual(typeCounts(page), ["1", "0", "1", "0", "0"]);
+  page.$("#where").fire("click", { target: { closest: () => ({ dataset: { v: "" } }) } });
+  page.$("#pay").fire("change", { target: { value: "120000" } });
+  assert.deepEqual(typeCounts(page), ["6", "1", "2", "1", "1"]);  // the job with no pay listed is left out
+  pickType(page, "Full-time");
+  assert.equal(page.$("#count").textContent.split(",")[0], "1 of 7 jobs");
+});
+
+test("a saved job type keeps working, a saved Not specified reads as Any, and Clear filters resets it", () => {
+  const saved = type => openPage({ data: kinds(), storage: new Map([["wradar-filters", JSON.stringify({ v: 2, type })]]) });
+  assert.equal(saved("Contract").$("#count").textContent, "2 of 7 jobs");
+  const old = saved("Not specified");
+  assert.equal(old.run("state.type"), "");
+  assert.equal(old.$("#count").textContent, "7 jobs");
+  const page = saved("Internship");
+  assert.equal(page.$("#nfilters").textContent, "");  // the chips are always in view, so More filters doesn't count them
+  page.$("#reset").fire("click");
+  assert.equal(page.run("state.type"), "");
+  assert.equal(page.$("#count").textContent, "7 jobs");
+});
 
 test("the list shows 25 rows a page, with Previous, the page numbers and Next under it", () => {
   const page = openPage({ data: pageData({ jobs: many(60) }) }), pager = page.$("#pager").innerHTML;

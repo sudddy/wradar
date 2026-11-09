@@ -64,9 +64,6 @@
         <label class="field">Minimum pay
           <select id="pay"><option value="0">Any pay</option><option value="60000">60k or more</option><option value="80000">80k or more</option><option value="100000">100k or more</option><option value="120000">120k or more</option><option value="150000">150k or more</option><option value="180000">180k or more</option><option value="200000">200k or more</option><option value="250000">250k or more</option><option value="300000">300k or more</option></select>
         </label>
-        <label class="field">Job type
-          <select id="type"><option value="">Any job type</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Not specified</option></select>
-        </label>
         <label class="field">Source
           <select id="src"><option value="">All sources</option></select>
         </label>
@@ -88,6 +85,12 @@
         <span class="flabel" id="postedlabel">Posted</span>
         <div class="seg ages" id="ages" role="group" aria-labelledby="postedlabel">
           <button type="button" data-v="2"><span class="lastw">Last </span>2 days <span id="n-d2"></span></button><button type="button" data-v="3"><span class="lastw">Last </span>3 days <span id="n-d3"></span></button><button type="button" data-v="7"><span class="lastw">Last </span>7 days <span id="n-d7"></span></button><button type="button" data-v="30"><span class="lastw">Last </span>30 days <span id="n-jobs"></span></button><button type="button" data-v="older">Over 30 days ago <span id="n-older"></span></button>
+        </div>
+      </div>
+      <div class="fline">
+        <span class="flabel" id="typelabel">Job type</span>
+        <div class="seg types" id="types" role="group" aria-labelledby="typelabel">
+          <button type="button" data-v="">Any <span id="n-tany"></span></button><button type="button" data-v="Full-time">Full-time <span id="n-tfull-time"></span></button><button type="button" data-v="Contract">Contract <span id="n-tcontract"></span></button><button type="button" data-v="Part-time">Part-time <span id="n-tpart-time"></span></button><button type="button" data-v="Internship">Internship <span id="n-tinternship"></span></button>
         </div>
       </div>
       <div class="fline fquick">
