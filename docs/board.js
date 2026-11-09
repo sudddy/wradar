@@ -302,9 +302,9 @@ function pills(j) {
     rowPlace(j) && `<li>${esc(rowPlace(j))}</li>`, `<li>Posted ${esc(postedText(j))}</li>`].filter(Boolean).join("")}</ul>`;
 }
 
-function actions(j) {
+function actions(j) {  // an Adzuna job's link is an adzuna.com redirect, so its button says so
   const link = /^https?:\/\//.test(j.url)
-    ? `<a class="btn" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer" data-do="open"><span class="onwide">Apply on company site</span><span class="onphone">Apply</span><span class="sr"> (opens in a new tab)</span></a>`
+    ? `<a class="btn" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer" data-do="open"><span class="onwide">${j.source === "Adzuna" ? "Apply on Adzuna" : "Apply on company site"}</span><span class="onphone">Apply</span><span class="sr"> (opens in a new tab)</span></a>`
     : '<span class="na">No link for this posting</span>';
   const mark = (s, label) => `<button type="button" class="btn line mark" data-do="${s}" aria-pressed="${statusOf(j) === s}">${label}</button>`;
   const ask = statusOf(j) === "applied" ? "" : `<p class="dask" id="dask" hidden><span>Did you apply?</span>

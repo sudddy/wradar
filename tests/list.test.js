@@ -245,7 +245,7 @@ test("wradar-clicked holds job keys and dates only, the latest 2,000, and keeps 
 });
 
 // ---- Adzuna ----
-test("an Adzuna job carries the word Adzuna, linked to its site for the job's country, beside the row's button and atop its detail", () => {
+test("an Adzuna job carries the word Adzuna, linked to its site for the job's country, beside the row's button and atop its detail, and applies on Adzuna", () => {
   const jobs = [row(0, { source: "Adzuna", where: ["US"] }), row(1, { source: "Adzuna", where: ["Canada"] }), row(2, { source: "Adzuna", where: ["Remote", "US", "Canada"] }), row(3)];
   const page = withResume(openPage({ data: pageData({ jobs }) }));
   page.run("state.sort = 'new'; renderBoard()");
@@ -258,8 +258,12 @@ test("an Adzuna job carries the word Adzuna, linked to its site for the job's co
   assert.doesNotMatch(rowHtml(page, 3), /adz/i);
   page.run("select(rows[1].key)");
   assert.match(page.$("#detail").innerHTML, new RegExp(`<p class="dco"><span>Co1</span>${badge("ca")}${label.replace(/[()]/g, "\\$&")}</p>`));
+  assert.match(page.$("#detail").innerHTML, /<span class="onwide">Apply on Adzuna<\/span>/);  // its link is an Adzuna redirect
+  assert.doesNotMatch(page.$("#detail").innerHTML, /Apply on company site/);
+  assert.match(page.$("#detail").innerHTML, /<dt>Found on<\/dt><dd>Adzuna<\/dd>/);  // text: the badge above is the link
   page.run("select(rows[3].key)");
   assert.doesNotMatch(page.$("#detail").innerHTML, /adzuna/i);
+  assert.match(page.$("#detail").innerHTML, /<span class="onwide">Apply on company site<\/span>/);
   page.go("#resume");
   assert.match(page.$("#mybest").innerHTML, new RegExp(`</button>${badge("ca")}>`));
   assert.match(read("docs/app.css"), /\.adz \{[^}]*min-width: 116px; min-height: 23px;/);
