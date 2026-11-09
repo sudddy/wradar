@@ -73,7 +73,7 @@ h1, h2, h3, h4 { text-wrap: balance; margin: 0; }
 .btn:disabled { cursor: default; opacity: .45; }
 .btn.line { background: var(--pane); color: var(--ink); border-color: var(--line); }
 .btn.line:hover:not(:disabled) { border-color: var(--muted); }
-.btn.line[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
+.btn.line[aria-pressed="true"], .btn.line[aria-current="page"] { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
 .btn.big { padding: 12px 22px; font-size: 16px; border-radius: 12px; }
 .mark[aria-pressed="true"]::before { content: "✓"; content: "✓" / ""; font-weight: 700; }  /* the glyph is decoration; aria-pressed says it */
 .onphone, .st .short { display: none; }
@@ -223,6 +223,12 @@ textarea { width: 100%; min-height: 180px; background: var(--pane); border: 1px 
 .jpay { flex: none; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 .jfact { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .more { display: flex; margin: 12px auto 0; }
+.pager { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-top: 12px; }
+.pager .btn { padding: 5px 12px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.showing { margin: 0; text-align: center; font-size: 13.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pages { grid-column: 1 / -1; list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.pages .btn { min-width: 36px; padding-inline: 8px; }
+.pages .gap { min-width: 20px; align-self: center; text-align: center; color: var(--muted); }
 
 /* The detail is a column of cards, two wide where the space allows: one card per question about the job. */
 .detail { position: sticky; top: calc(var(--top-h) + env(safe-area-inset-top, 0px) + 12px); max-height: calc(100dvh - var(--top-h) - 24px); overflow: auto;
@@ -362,6 +368,8 @@ details.more summary { cursor: pointer; font-size: 14px; color: var(--muted); ma
   .resbar { flex-wrap: wrap; padding-block: 2px 8px; min-height: 35px; }
   .jitem { padding: 12px 14px; gap: 12px; align-items: start; }
   .match { width: 42px; height: 42px; font-size: 16.5px; }
+  .pager .btn { min-height: 44px; }
+  .pages .btn { min-width: 40px; }
   .detail { display: none; position: fixed; inset: 0; z-index: 30; max-height: none; grid-template-columns: minmax(0, 1fr); gap: 12px; background: var(--bg); overscroll-behavior: contain;
     padding: 0 max(16px, env(safe-area-inset-right, 0px)) calc(96px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
   .board.showing .detail { display: grid; }

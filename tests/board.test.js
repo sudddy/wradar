@@ -132,6 +132,24 @@ test("a deep link survives the characters a key can hold", () => {
   assert.deepEqual(board.parseHash("#jobs/%E0%A4%A"), { view: "jobs", key: null });
 });
 
+test("the pager shows every page up to seven, else the first, the last and the current page's neighbours", () => {
+  assert.equal(board.PER_PAGE, 25);
+  assert.deepEqual(board.pageList(1, 1), [1]);
+  assert.deepEqual(board.pageList(3, 7), [1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(board.pageList(1, 54), [1, 2, 3, 4, 5, null, 54]);
+  assert.deepEqual(board.pageList(5, 54), [1, null, 4, 5, 6, null, 54]);
+  assert.deepEqual(board.pageList(10, 54), [1, null, 9, 10, 11, null, 54]);
+  assert.deepEqual(board.pageList(54, 54), [1, null, 50, 51, 52, 53, 54]);
+  for (let total = 1; total < 40; total++) {
+    for (let cur = 1; cur <= total; cur++) {
+      const list = board.pageList(cur, total), nums = list.filter(Boolean);
+      assert.ok(list.length <= 7 && nums.includes(cur) && list[0] === 1 && list.at(-1) === total, `${cur} of ${total}`);
+      list.forEach((n, i) => n === null && assert.ok(list[i + 1] - list[i - 1] > 2, `a gap hides two pages or more: ${list}`));
+      nums.forEach((n, i) => i && assert.ok(n > nums[i - 1]));
+    }
+  }
+});
+
 test("a tracker snapshot survives a delisted job", () => {
   const live = { ...job(), key: "acme|software engineer" };
   const t = tracker.mark({}, live, "applied", "2026-10-28T10:00:00Z");

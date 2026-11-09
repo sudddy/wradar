@@ -80,7 +80,19 @@ function parseHash(hash) {
 }
 const hashFor = (view, key) => `#${view}/${encodeURIComponent(key)}`;
 
-if (typeof module !== "undefined") module.exports = { jobKey, age, within, isNew, splitAge, annualPay, payLabel, knownOnly, matches, topN, savedFilters, parseHash, hashFor };
+// ---- Pages: 25 rows each ----
+const PER_PAGE = 25;
+const pageOf = n => Math.floor(n / PER_PAGE);  // -1 for a job not in the list
+
+// Page numbers from 1, null for a gap: the first, the last and the current one's neighbours, in seven places at most so the pager keeps its width.
+function pageList(cur, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  if (cur <= 4) return [1, 2, 3, 4, 5, null, total];
+  if (cur >= total - 3) return [1, null, total - 4, total - 3, total - 2, total - 1, total];
+  return [1, null, cur - 1, cur, cur + 1, null, total];
+}
+
+if (typeof module !== "undefined") module.exports = { jobKey, age, within, isNew, splitAge, annualPay, payLabel, knownOnly, matches, topN, savedFilters, parseHash, hashFor, PER_PAGE, pageList };
 
 // ---- Loading: jobs.js at init, then older.js, the rows past 30 days, after the first paint ----
 let olderIn = false;  // until older.js has loaded or failed, a job not found may be in it
@@ -109,6 +121,7 @@ function loadOlder() {
 
 // The match stats count every row, so they are built again and every job scored again.
 // Only what the older rows change is drawn again, with focus kept: Your resume keeps its own pane, which may hold text being pasted.
+// The new scores may reorder the list, so the selected job keeps its place and the page turns to it.
 function joinOlder(rows) {
   const sel = BOARDS.includes(page) && tab().sel, waited = sel && !byKey.has(sel);
   olderIn = true;
@@ -126,7 +139,7 @@ function joinOlder(rows) {
 function redrawBoard(sel, waited) {
   const was = document.activeElement, inList = $("#list").contains(was), inDetail = $("#detail").contains(was);
   const covered = $("#board").classList.contains("showing") && !wide() && (!was || was === document.body);
-  renderBoard();
+  renderBoard(true);
   if (inDetail || covered) $("#dtitle")?.focus({ preventScroll: true });
   else if (inList) focusBoard();
   if (!waited) return;
@@ -135,7 +148,7 @@ function redrawBoard(sel, waited) {
 }
 
 // ---- Rows ----
-const nav = Object.fromEntries(BOARDS.map(v => [v, { sel: null, limit: 40, y: 0 }]));  // each tab keeps its own place
+const nav = Object.fromEntries(BOARDS.map(v => [v, { sel: null, pg: 0, y: 0 }]));  // each tab keeps its own place; pg, its page from 0, lasts until a reload
 let page = "jobs", rows = [], pushed = false;
 const tab = () => nav[page];
 const announce = text => { $("#live").textContent = text; };
@@ -169,10 +182,34 @@ function emptyText() {
 }
 
 function renderList() {
-  const t = tab(), shown = rows.slice(0, t.limit);
+  const t = tab(), first = t.pg * PER_PAGE, shown = rows.slice(first, first + PER_PAGE);
   const stop = shown.some(j => j.key === t.sel) ? t.sel : shown[0]?.key;  // the one row Tab lands on; arrows do the rest
-  $("#list").innerHTML = shown.map((j, n) => item(j, n, stop)).join("") || `<li class="empty">${emptyText()}</li>`;
-  $("#more").hidden = rows.length <= t.limit;
+  $("#list").innerHTML = shown.map((j, n) => item(j, first + n, stop)).join("") || `<li class="empty">${emptyText()}</li>`;
+  renderPager();
+}
+
+const showingText = () => { const first = tab().pg * PER_PAGE; return `Showing ${(first + 1).toLocaleString()}–${Math.min(first + PER_PAGE, rows.length).toLocaleString()} of ${rows.length.toLocaleString()}`; };
+
+// Previous, the range shown and Next, then the page numbers: two rows, so it fits a narrow list and a phone, in the order Tab takes.
+function renderPager() {
+  const t = tab(), pages = Math.ceil(rows.length / PER_PAGE);
+  $("#pager").hidden = pages < 2;
+  const end = (pg, cls, label, text) => `<button type="button" class="btn line ${cls}" data-pg="${pg}" aria-label="${label}"${pg < 0 || pg >= pages ? " disabled" : ""}>${text}</button>`;
+  const num = n => (n ? `<li><button type="button" class="btn line" data-pg="${n - 1}" aria-label="Page ${n}"${n - 1 === t.pg ? ' aria-current="page"' : ""}>${n.toLocaleString()}</button></li>`
+    : '<li class="gap" aria-hidden="true">…</li>');
+  $("#pager").innerHTML = `${end(t.pg - 1, "pprev", "Previous page", "Previous")}<p class="showing">${showingText()}</p>${end(t.pg + 1, "pnext", "Next page", "Next")}
+    <ol class="pages">${pageList(t.pg + 1, pages).map(num).join("")}</ol>`;
+}
+
+// Focus goes to the new page's first row, which a wide screen also selects, after any page change.
+function turnPage(pg) {
+  tab().pg = pg;
+  history.replaceState(null, "", "#" + page);  // a key in the hash would turn the page back to that job
+  renderBoard();
+  const first = $("#list .jitem");
+  first?.scrollIntoView({ block: "nearest" });
+  first?.focus({ preventScroll: true });
+  announce(showingText());
 }
 
 function countText(total, noPay, noMode) {
@@ -180,7 +217,8 @@ function countText(total, noPay, noMode) {
   return (rows.length === total ? plural(total, "job") : `${rows.length.toLocaleString()} of ${plural(total, "job")}`) + left(noPay, "pay") + left(noMode, "work mode");
 }
 
-function renderBoard() {
+// follow: the page turns to the selected job, as it does for a link.
+function renderBoard(follow = false) {
   const t = tab(), mine = page === "mine", shown = t.sel;
   store.set("wradar-filters", state);
   $("#boardtitle").textContent = mine ? "Applications" : me ? "Matching jobs" : "All jobs";
@@ -195,9 +233,10 @@ function renderBoard() {
   renderCounts();
   const got = mine ? { kept: mineRows(tracker, mineSeg, byKey), noPay: 0, noMode: 0 } : listed();
   rows = got.kept;
-  const at = rows.findIndex(j => j.key === t.sel);
-  if (parseHash(location.hash).key) t.limit = Math.max(t.limit, at + 1);  // only a link may reach down the list
-  else if (at < 0 || at >= t.limit) t.sel = wide() && rows.length ? rows[0].key : null;
+  const link = !!parseHash(location.hash).key, at = rows.findIndex(j => j.key === t.sel);
+  if (at >= 0 && (link || follow)) t.pg = pageOf(at);
+  t.pg = Math.max(0, Math.min(t.pg, pageOf(rows.length - 1)));  // fewer rows, fewer pages
+  if (!link && pageOf(at) !== t.pg) t.sel = wide() && rows.length ? rows[t.pg * PER_PAGE].key : null;  // a job off this page, or not listed, gives way
   if (!mine) renderFilters(got.loose);
   $("#count").textContent = countText(mine ? rows.length : pool().length, got.noPay, got.noMode);
   renderList();
@@ -300,7 +339,7 @@ function detail(j) {
 function select(key) {
   const t = tab(), at = rows.findIndex(j => j.key === key);
   t.sel = key;
-  if (at >= t.limit) { t.limit = at + 40; renderList(); }
+  if (at >= 0 && pageOf(at) !== t.pg) { t.pg = pageOf(at); renderList(); }  // stepping past either end of a page turns it
   document.querySelectorAll("#list .jitem").forEach(b => {
     const on = +b.dataset.n === at;
     b.setAttribute("aria-current", on);
@@ -316,7 +355,8 @@ function select(key) {
 }
 
 function step(d) {
-  const next = rows[rows.findIndex(j => j.key === tab().sel) + d];
+  const t = tab(), at = rows.findIndex(j => j.key === t.sel);
+  const next = at < 0 ? rows[t.pg * PER_PAGE] : rows[at + d];  // with nothing selected, this page's first row
   if (next) select(next.key);
 }
 

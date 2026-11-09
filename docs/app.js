@@ -80,7 +80,7 @@ function useResume(name, text) {
   status = ""; pasting = false; justRead = true; state.sort = "score";
   store.set("wradar-filters", state);  // Your resume doesn't save the filters, and a reload must keep Role and the flag
   if (!location.hash.slice(1)) history.replaceState(null, "", "#resume");  // read on the welcome: stay to check it, not jump to the jobs
-  nav.jobs.y = nav.older.y = 0;  // the lists now sort by match, so an old scroll spot would land on other jobs
+  nav.jobs.y = nav.older.y = nav.jobs.pg = nav.older.pg = 0;  // the lists now sort by match, so an old scroll spot or page would land on other jobs
   store.set("wradar-resume", me);
   refresh();
   announce(`Your resume is in. ${plural(me.skills.length, "skill")} read.`);
@@ -374,8 +374,8 @@ function init() {
     $("#hideapplied").checked = state.hideApplied;
     press("#where", state.where); press("#mode", state.mode);
   };
-  const changed = () => {  // a filter change ends any deep link, so the list picks the selection again
-    tab().limit = 40;
+  const changed = () => {  // a filter change ends any deep link, so the list picks the selection again, from page 1
+    nav.jobs.pg = nav.older.pg = tab().pg = 0;  // Matching jobs and Over 30 days ago share the filters
     if (parseHash(location.hash).key) history.replaceState(null, "", "#" + page);
     renderBoard();
   };
@@ -389,7 +389,7 @@ function init() {
   $("#ages").addEventListener("click", e => {  // Over 30 days ago is its own page, with its warning
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.v === "older") return void (location.hash = "#older");
-    state.days = +b.dataset.v; nav.jobs.limit = 40;
+    state.days = +b.dataset.v; nav.jobs.pg = 0;
     page === "jobs" ? changed() : (location.hash = "#jobs");
   });
   $("#hideapplied").addEventListener("change", e => set("hideApplied", e.target.checked));
@@ -406,7 +406,7 @@ function init() {
   $("#reset").addEventListener("click", () => { Object.assign(state, DEFAULTS, { techs: [], sort: state.sort, hideApplied: state.hideApplied, autoRole: state.autoRole }); sync(); changed(); });
   $("#filtersbtn").addEventListener("click", () => showMore($("#fmore").hidden));
   document.addEventListener("click", e => { if (!$("#fmore").hidden && !e.composedPath().includes($("#filters"))) showMore(false); });
-  $("#more").addEventListener("click", () => { tab().limit += 40; renderList(); });
+  $("#pager").addEventListener("click", e => { const b = e.target.closest("button[data-pg]"); if (b && +b.dataset.pg !== tab().pg) turnPage(+b.dataset.pg); });
   $("#list").addEventListener("click", e => { const b = e.target.closest(".jitem"); if (b) openRow(rows[+b.dataset.n]); });
   $("#list").addEventListener("keydown", e => {
     const d = { ArrowDown: 1, ArrowUp: -1 }[e.key];
@@ -426,7 +426,7 @@ function init() {
     // Each redraw replaces the pane, so focus goes back where the person was working.
     if (id === "pastebtn") { pasting = !pasting; renderMe(); $(pasting ? "#pastetext" : "#pastebtn")?.focus(); }
     if (id === "usepaste") { const t = $("#pastetext").value; reads++; t.trim() ? useResume(PASTED, t) : (status = "Paste your resume text first.", renderMe(), $("#pastetext")?.focus()); }  // reads++: a file still loading no longer counts
-    if (id === "forget") { reads++; me = null; status = ""; nav.jobs.y = nav.older.y = 0; store.set("wradar-resume", null); refresh(); $("#pick")?.focus(); }  // reads++ drops a read still going
+    if (id === "forget") { reads++; me = null; status = ""; nav.jobs.y = nav.older.y = nav.jobs.pg = nav.older.pg = 0; store.set("wradar-resume", null); refresh(); $("#pick")?.focus(); }  // reads++ drops a read still going
     const k = e.target.closest(".xchip button")?.dataset.k;
     if (k) { me.skills = me.skills.filter(s => s !== k); delete me.evidence[k]; saveMe(); $("#addskill")?.focus(); }
   });
