@@ -1,5 +1,6 @@
 "use strict";
 // wradar tracker: Saved, Applied and Hidden, one per job, kept in this browser with a snapshot so a job that leaves the feed still shows.
+// Clicked, the weakest mark, keeps only the job's key and a date.
 const MINE_EMPTY = {
   all: "Nothing here yet. Use Save or Applied on a job to keep it here.",
   saved: "Nothing saved yet. Use Save on a job to keep it here.",
@@ -17,15 +18,38 @@ const mineRows = (t, seg, live) => Object.entries(t)
   .sort((a, b) => b[1].at.localeCompare(a[1].at))
   .map(([key, e]) => live.get(key) || { ...e, key, delisted: true });
 
-if (typeof module !== "undefined") module.exports = { mark, toggle, putBack, mineRows };
+// Clicked: a job opened from its row, kept as {key: when first opened}, nothing else. Past the cap the oldest go, so the store can't grow without limit;
+// the job just opened always stays, even if its date ties or a clock set back makes it look older.
+const CLICKS_KEPT = 2000;
+function addClick(c, key, at, cap = CLICKS_KEPT) {
+  if (Object.hasOwn(c, key)) return c;
+  const old = Object.entries(c);
+  return Object.fromEntries([...(old.length < cap ? old : old.sort((a, b) => b[1].localeCompare(a[1])).slice(0, cap - 1)), [key, at]]);
+}
 
+if (typeof module !== "undefined") module.exports = { mark, toggle, putBack, mineRows, addClick, CLICKS_KEPT };
+
+let clicks = {};
 const statusOf = j => tracker[j.key]?.s || null;
 const shortDate = iso => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 const STATUS_TEXT = { applied: e => `Applied ${shortDate(e.at)}`, saved: () => "Saved", hidden: () => "Hidden" };
 const statusText = j => (statusOf(j) ? STATUS_TEXT[statusOf(j)](tracker[j.key]) : "");
+const clickedOn = j => (Object.hasOwn(clicks, j.key) ? clicks[j.key] : null);  // a link's key may be "constructor"
+
+// A job shows one mark, the strongest: Applied, Saved or Hidden, else Clicked, which the detail dates and a row has no room to.
+const markText = (j, dated) => statusText(j) || (clickedOn(j) ? `Clicked${dated ? " " + shortDate(clickedOn(j)) : ""}` : "");
+const markTag = (j, dated) => (markText(j) ? `<span class="tag ${statusOf(j) || "clicked"}">${esc(markText(j, dated))}</span>` : "");
 
 // Read again before every change, so a mark here never wipes one made in another tab.
 const loadTracker = () => { tracker = store.get("wradar-tracker") || tracker; };
+// Only dates, whatever else is there. Where storage is blocked it gives nothing, so the marks made since the page loaded stay.
+const loadClicks = () => { clicks = Object.fromEntries(Object.entries(store.get("wradar-clicked") || clicks).filter(([, at]) => typeof at === "string" && !isNaN(Date.parse(at)))); };
+
+function markClicked(j) {
+  loadClicks();
+  clicks = addClick(clicks, j.key, new Date().toISOString());
+  store.set("wradar-clicked", clicks);
+}
 
 function commit(next) {
   tracker = next;

@@ -82,7 +82,7 @@ test("a resume read on the welcome keeps its Role after a reload", () => {
 test("Level follows the ladder, and data from before the ladder and fields still loads", () => {
   const page = openPage({ data: fields() });
   assert.equal(page.$("#level").innerHTML, "<option>Intern</option><option>Mid</option><option>Director</option>");
-  assert.match(read("docs/index.html"), /<option>Contract<\/option><option>Internship<\/option>/);
+  assert.match(read("docs/index.html"), /data-v="Contract">Contract <span id="n-tcontract"><\/span><\/button>.*data-v="Internship">Internship /);
   const { ladder, roles, fields: f, segment, ...rules } = REAL.rules;
   const old = openPage({ data: { ...fields(), rules: { ...rules, scan_url: "" } } });  // and no older.js
   assert.equal(old.$("#level").innerHTML, "<option>Mid</option>");
